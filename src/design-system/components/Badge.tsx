@@ -63,7 +63,7 @@ export function Badge({
         </span>
       )}
       {icon}
-      <span>{children}</span>
+      <span className="inline-flex items-center gap-1.5 leading-none">{children}</span>
     </div>
   );
 }

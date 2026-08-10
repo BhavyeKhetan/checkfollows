@@ -213,3 +213,24 @@ body {
   border: 1px solid #E2E2DC;
   font-family: var(--font-geist-mono), monospace;
 }
+
+/* Ramp Infinite Marquee Animation for Ticker Bar */
+@keyframes ramp-marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ramp-marquee {
+  display: flex;
+  width: max-content;
+  animation: ramp-marquee 28s linear infinite;
+}
+
+.animate-ramp-marquee:hover {
+  animation-play-state: paused;
+}
+

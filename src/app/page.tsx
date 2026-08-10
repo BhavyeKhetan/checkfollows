@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,25 +36,25 @@ import {
   AccordionItem,
 } from "@/design-system";
 
-// ─── Mock demo data ────────────────────────────────────────────────
+// ─── Mock demo data with Real Avatar Photos ────────────────────────
 
 const DEMO_FOLLOWING: FollowEntry[] = [
-  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: null, isVerified: false, isPrivate: true },
-  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: null, isVerified: true, isPrivate: false },
-  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: null, isVerified: true, isPrivate: false },
+  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: "/images/demo/emma.jpg", isVerified: false, isPrivate: false },
+  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
+  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: false },
+  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: true },
+  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: "/images/demo/isabella.jpg", isVerified: true, isPrivate: false },
+  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
+  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: "/images/testimonials/elena.jpg", isVerified: false, isPrivate: false },
+  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: "/images/testimonials/marcus.jpg", isVerified: true, isPrivate: false },
 ];
 
 const DEMO_FOLLOWERS: FollowEntry[] = [
-  { id: "f1", username: "sarah.jane", fullName: "Sarah Jane", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "f2", username: "ava.taylor", fullName: "Ava Taylor", avatarUrl: null, isVerified: true, isPrivate: false },
-  { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: null, isVerified: false, isPrivate: true },
-  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "f1", username: "sarah.jane", fullName: "Sarah Jane", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
+  { id: "f2", username: "ava.taylor", fullName: "Ava Taylor", avatarUrl: "/images/demo/emma.jpg", isVerified: true, isPrivate: false },
+  { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
+  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: true },
+  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: false },
 ];
 
 // ─── Testimonials Data with Real Avatars ───────────────────────────
@@ -97,7 +97,7 @@ function FollowCard({
 }) {
   return (
     <div className="flex items-center gap-3.5 p-3.5 rounded-xl hover:bg-[#F8F8F5] transition-all cursor-pointer group border border-transparent hover:border-[#E2E2DC]">
-      <Avatar username={entry.username} isVerified={entry.isVerified} size="md" />
+      <Avatar src={entry.avatarUrl} username={entry.username} isVerified={entry.isVerified} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="font-bold text-sm truncate text-[#121212] group-hover:text-[#000000] transition-colors">
@@ -174,8 +174,11 @@ export default function Home() {
   const [showDemo, setShowDemo] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // Landing page interactive state
   const [showEmptyPrompt, setShowEmptyPrompt] = useState(false);
   const [showStickySearch, setShowStickySearch] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
 
@@ -248,7 +251,7 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Empty prompt animation: after 4s of idle with empty input, show the prompt
+  // Empty prompt animation
   useEffect(() => {
     if (searchState.status !== "idle" || searchInput.trim()) {
       const timer = setTimeout(() => setShowEmptyPrompt(false), 0);
@@ -258,22 +261,16 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [searchState.status, searchInput]);
 
-  // Mobile sticky search: show when hero scrolls past
+  // Mobile sticky search
   useEffect(() => {
     const handleScroll = () => {
       if (!heroRef.current) return;
       const rect = heroRef.current.getBoundingClientRect();
-      // Show sticky bar when hero bottom is above viewport
       setShowStickySearch(rect.bottom < 0);
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
-  const focusInput = useCallback(() => {
-    inputRef.current?.focus();
-    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const renderResultSection = () => {
@@ -301,6 +298,7 @@ export default function Home() {
           <Card variant="highlight" className="mb-4">
             <div className="flex items-center gap-4">
               <Avatar
+                src={searchState.profile.avatarUrl}
                 username={searchState.profile.username}
                 isVerified={searchState.profile.isVerified}
                 size="lg"
@@ -366,8 +364,7 @@ export default function Home() {
                 ))}
               </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#FFFFFF] via-[#FFFFFF]/95 to-transparent pt-16 pb-8 px-4 text-center">
-                <Badge variant="lime" dot pulse className="mb-2">
-                  <Lock className="w-3 h-3 mr-1" />
+                <Badge variant="lime" icon={<Lock className="w-3.5 h-3.5 shrink-0" />} dot pulse className="mb-3 px-3 py-1">
                   {displayList.length - 3}+ accounts hidden
                 </Badge>
                 <p className="text-xs text-[#555555] mb-4 max-w-xs font-medium">
@@ -573,19 +570,11 @@ export default function Home() {
               variant="primary"
               size="sm"
               onClick={() => {
-                focusInput();
+                inputRef.current?.focus();
+                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
               }}
             >
               Check followers anonymously
-            </Button>
-            <Button
-              variant="dark"
-              size="sm"
-              onClick={() => {
-                focusInput();
-              }}
-            >
-              Inspect handle
             </Button>
           </div>
 
@@ -685,59 +674,48 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="mt-6 text-lg sm:text-xl text-[#555555] max-w-xl mx-auto leading-relaxed font-medium"
+            className="mt-6 text-lg sm:text-xl text-[#555555] max-w-xl mx-auto leading-relaxed font-medium text-center"
           >
             Enter any Instagram handle to inspect recent follows, new followers, and activity order changes in seconds.
           </motion.p>
 
-          {/* Hero Search Box — prominent, animated */}
+          {/* Hero Search Box */}
           <motion.div
             ref={heroRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-12 max-w-xl mx-auto"
+            className="mt-10 w-full max-w-lg mx-auto"
           >
-            <div className={`relative rounded-2xl transition-shadow duration-500 ${showEmptyPrompt ? "shadow-[0_0_0_3px_rgba(210,255,82,0.4),0_8px_32px_rgba(0,0,0,0.1)]" : "shadow-[0_4px_24px_rgba(0,0,0,0.08)]"}`}>
-              {/* Pulsing border ring when idle */}
-              {showEmptyPrompt && (
-                <motion.div
-                  className="absolute -inset-[3px] rounded-2xl pointer-events-none"
-                  animate={{ opacity: [0.3, 0.7, 0.3] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                  style={{ boxShadow: "0 0 0 3px rgba(210,255,82,0.5), 0 0 30px rgba(210,255,82,0.15)" }}
-                />
-              )}
-              <Card padding="lg" className="shadow-none border-[#E2E2DC] relative z-10 bg-[#FFFFFF]">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 relative">
-                    <Input
-                      ref={inputRef}
-                      type="text"
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Enter Instagram handle..."
-                      leftIcon={<span className="text-[#121212] font-extrabold text-lg">@</span>}
-                      className="border-none bg-transparent py-4 text-lg font-medium placeholder:text-[#9CA3AF] focus:ring-0"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                    />
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    onClick={handleSearch}
-                    isLoading={searchState.status === "loading"}
-                    disabled={!searchInput.trim()}
-                    rightIcon={<ArrowRight className="w-5 h-5" />}
-                    className="sm:w-auto font-extrabold text-base shadow-lg hover:shadow-xl"
-                  >
-                    Check followers anonymously
-                  </Button>
+            <Card padding="sm" className="shadow-[0_4px_24px_rgba(0,0,0,0.06)] bg-[#FFFFFF] border-[#E2E2DC]">
+              <div className="flex flex-col gap-3.5">
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    type="text"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Enter Instagram handle..."
+                    leftIcon={<span className="text-[#121212] font-bold text-base">@</span>}
+                    className="border-none bg-transparent py-3 text-base focus:ring-0"
+                    spellCheck={false}
+                    autoCapitalize="off"
+                  />
                 </div>
-              </Card>
-            </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleSearch}
+                  isLoading={searchState.status === "loading"}
+                  disabled={!searchInput.trim()}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                  className="w-full font-bold text-[#121212] py-3.5"
+                >
+                  Check followers anonymously
+                </Button>
+              </div>
+            </Card>
 
             {/* Empty prompt animation */}
             <AnimatePresence>
@@ -746,15 +724,15 @@ export default function Home() {
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  className="flex items-center justify-center gap-2 mt-3 text-sm font-semibold text-[#555555]"
+                  className="flex items-center justify-center gap-2 mt-3 text-xs font-semibold text-[#555555]"
                 >
                   <motion.span
                     animate={{ y: [0, -4, 0] }}
                     transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
                   >
-                    <ArrowDown className="w-4 h-4 text-[#C2F84F]" />
+                    <ArrowDown className="w-3.5 h-3.5 text-[#047857]" />
                   </motion.span>
-                  Type a public Instagram handle above to get started
+                  Type an Instagram handle above to get started
                 </motion.div>
               )}
             </AnimatePresence>
@@ -779,24 +757,46 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Ramp Light Live Ticker Bar ── */}
-      <section className="bg-[#FFFFFF] border-b border-[#E2E2DC] py-3.5 px-4 overflow-x-auto">
-        <div className="max-w-6xl mx-auto flex items-center justify-between whitespace-nowrap gap-8 text-xs font-mono text-[#555555]">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#E7F256] border border-black/30 animate-pulse" />
-            <span className="font-bold text-[#121212]">LIVE METRICS:</span>
+      {/* ── Ramp Light Infinite Marquee Ticker Bar ── */}
+      <section className="bg-[#FFFFFF] border-b border-[#E2E2DC] py-3.5 overflow-hidden">
+        <div className="animate-ramp-marquee flex items-center whitespace-nowrap gap-8 text-xs font-mono text-[#555555]">
+          <div className="flex items-center gap-8 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E7F256] border border-black/30 animate-pulse" />
+              <span className="font-bold text-[#121212]">LIVE METRICS:</span>
+            </div>
+            <div>
+              PROFILES CHECKED TODAY: <strong className="text-[#121212] font-bold">2,809,713</strong>
+            </div>
+            <div>
+              RECENT FOLLOWS DETECTED: <strong className="text-[#121212] font-bold">2,552,293</strong>
+            </div>
+            <div>
+              INSTAGRAM LOGIN NEEDED: <strong className="text-[#121212] font-bold">ZERO</strong>
+            </div>
+            <div>
+              PRIVACY STATUS: <strong className="text-[#121212] font-bold">100% ANONYMOUS</strong>
+            </div>
           </div>
-          <div>
-            PROFILES CHECKED TODAY: <strong className="text-[#121212] font-bold">2,809,713</strong>
-          </div>
-          <div>
-            RECENT FOLLOWS DETECTED: <strong className="text-[#121212] font-bold">2,552,293</strong>
-          </div>
-          <div>
-            INSTAGRAM LOGIN NEEDED: <strong className="text-[#121212] font-bold">ZERO</strong>
-          </div>
-          <div>
-            PRIVACY STATUS: <strong className="text-[#121212] font-bold">100% ANONYMOUS</strong>
+
+          {/* Duplicate set for seamless infinite loop */}
+          <div className="flex items-center gap-8 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E7F256] border border-black/30 animate-pulse" />
+              <span className="font-bold text-[#121212]">LIVE METRICS:</span>
+            </div>
+            <div>
+              PROFILES CHECKED TODAY: <strong className="text-[#121212] font-bold">2,809,713</strong>
+            </div>
+            <div>
+              RECENT FOLLOWS DETECTED: <strong className="text-[#121212] font-bold">2,552,293</strong>
+            </div>
+            <div>
+              INSTAGRAM LOGIN NEEDED: <strong className="text-[#121212] font-bold">ZERO</strong>
+            </div>
+            <div>
+              PRIVACY STATUS: <strong className="text-[#121212] font-bold">100% ANONYMOUS</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -1008,7 +1008,7 @@ export default function Home() {
               {/* Demo Profile Header */}
               <Card variant="highlight" className="mb-4">
                 <div className="flex items-center gap-4">
-                  <Avatar username="johndoe" size="lg" limeHalo />
+                  <Avatar src="/images/demo/johndoe.jpg" username="johndoe" size="lg" limeHalo />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-extrabold text-lg text-[#121212]">John Doe</h3>
                     <p className="text-xs text-[#555555]">@johndoe</p>
@@ -1052,8 +1052,7 @@ export default function Home() {
                     ))}
                   </div>
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#FFFFFF] via-[#FFFFFF]/95 to-transparent pt-16 pb-8 px-4 text-center">
-                    <Badge variant="lime" dot pulse className="mb-2">
-                      <Lock className="w-3 h-3 mr-1" />
+                    <Badge variant="lime" icon={<Lock className="w-3.5 h-3.5 shrink-0" />} dot pulse className="mb-3 px-3 py-1">
                       {demoList.length - 3}+ accounts hidden
                     </Badge>
                     <p className="text-xs text-[#555555] mb-4 max-w-xs font-medium">
@@ -1189,7 +1188,8 @@ export default function Home() {
               size="lg"
               leftIcon={<Search className="w-5 h-5" />}
               onClick={() => {
-                focusInput();
+                inputRef.current?.focus();
+                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
               }}
             >
               Inspect an Account Anonymously
@@ -1200,6 +1200,33 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* ── Mobile Floating Sticky Search CTA ── */}
+      <AnimatePresence>
+        {showStickySearch && searchState.status === "idle" && (
+          <motion.div
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed bottom-4 left-4 right-4 sm:hidden z-40"
+          >
+            <Card padding="sm" className="bg-[#FFFFFF]/95 backdrop-blur-md shadow-2xl border-[#E2E2DC] border-2">
+              <Button
+                variant="primary"
+                fullWidth
+                size="md"
+                leftIcon={<Search className="w-4 h-4" />}
+                onClick={() => {
+                  inputRef.current?.focus();
+                  inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              >
+                Check followers anonymously
+              </Button>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Footer ── */}
       <footer className="py-10 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC]">
@@ -1223,46 +1250,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-
-      {/* ── Sticky Mobile Search Bar ── */}
-      <AnimatePresence>
-        {showStickySearch && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-[#FFFFFF] border-t border-[#E2E2DC] shadow-[0_-4px_24px_rgba(0,0,0,0.08)] sm:hidden"
-          >
-            <div className="flex gap-2 max-w-lg mx-auto">
-              <div className="flex-1 relative">
-                <Input
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Enter Instagram handle..."
-                  leftIcon={<span className="text-[#121212] font-bold">@</span>}
-                  className="border-[#E2E2DC] bg-[#F9F9F7] py-3 text-sm"
-                  spellCheck={false}
-                  autoCapitalize="off"
-                />
-              </div>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSearch}
-                isLoading={searchState.status === "loading"}
-                disabled={!searchInput.trim()}
-                pill={false}
-                className="font-bold"
-              >
-                <Search className="w-4 h-4" />
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
