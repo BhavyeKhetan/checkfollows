@@ -1,15 +1,24 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY || "",
-  {
-    apiVersion: "2025-06-16.basil" as any,
-    typescript: true,
-  }
-);
+let _stripe: Stripe | null = null;
 
-export const SUBSCRIPTION_PRICE_ID =
-  process.env.STRIPE_PRICE_ID || "price_placeholder";
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
+    _stripe = new Stripe(key, {
+      apiVersion: "2025-06-16.basil" as any,
+      typescript: true,
+    });
+  }
+  return _stripe;
+}
+
+export function getStripePriceId(): string {
+  const id = process.env.STRIPE_PRICE_ID;
+  if (!id) throw new Error("STRIPE_PRICE_ID is not configured");
+  return id;
+}
 
 export const WEEKLY_PRICE = 12.99;
 
