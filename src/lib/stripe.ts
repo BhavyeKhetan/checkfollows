@@ -7,7 +7,6 @@ export function getStripe(): Stripe {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error("STRIPE_SECRET_KEY is not configured");
     _stripe = new Stripe(key, {
-      apiVersion: "2025-06-16.basil" as any,
       typescript: true,
     });
   }

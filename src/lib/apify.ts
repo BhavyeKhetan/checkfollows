@@ -97,31 +97,31 @@ export async function fetchInstagramProfile(
 }
 
 function normalizeProfile(
-  items: Record<string, any>[],
+  items: Record<string, unknown>[],
   username: string
 ): InstagramProfile | null {
   if (!items || items.length === 0) return null;
 
   // Try multiple possible response shapes
-  const item = items[0];
-  const data = item?.data || item?.graphql?.user || item;
+  const item = items[0] as Record<string, unknown>;
+  const graphql = item?.graphql as Record<string, unknown> | undefined;
+  const data = (item?.data || graphql?.user || item) as Record<string, unknown> | undefined;
 
   if (!data || (!data.username && !data.full_name && !data.id)) return null;
 
+  const edgeFollowedBy = data.edge_followed_by as { count?: number } | undefined;
+  const edgeFollow = data.edge_follow as { count?: number } | undefined;
+
   return {
-    username: data.username || username,
-    fullName: data.full_name || data.fullName || null,
-    avatarUrl:
-      data.profile_pic_url_hd ||
-      data.profile_pic_url ||
-      data.avatarUrl ||
-      null,
-    followerCount: data.edge_followed_by?.count || data.follower_count || data.followersCount || 0,
-    followingCount: data.edge_follow?.count || data.following_count || data.followingCount || 0,
-    isPrivate: data.is_private || data.isPrivate || false,
-    isVerified: data.is_verified || data.isVerified || false,
-    biography: data.biography || data.bio || null,
-    externalUrl: data.external_url || data.externalUrl || null,
+    username: String(data.username || username),
+    fullName: (data.full_name || data.fullName) ? String(data.full_name || data.fullName) : null,
+    avatarUrl: (data.profile_pic_url_hd || data.profile_pic_url || data.avatarUrl) ? String(data.profile_pic_url_hd || data.profile_pic_url || data.avatarUrl) : null,
+    followerCount: edgeFollowedBy?.count || Number(data.follower_count || data.followersCount) || 0,
+    followingCount: edgeFollow?.count || Number(data.following_count || data.followingCount) || 0,
+    isPrivate: Boolean(data.is_private || data.isPrivate),
+    isVerified: Boolean(data.is_verified || data.isVerified),
+    biography: (data.biography || data.bio) ? String(data.biography || data.bio) : null,
+    externalUrl: (data.external_url || data.externalUrl) ? String(data.external_url || data.externalUrl) : null,
   };
 }
 
@@ -185,59 +185,51 @@ export async function fetchFollowData(
 }
 
 function normalizeFollowData(
-  items: Record<string, any>[]
+  items: Record<string, unknown>[]
 ): ApiFollowsResponse {
   if (!items || items.length === 0) {
     return { success: false, error: "No data returned" };
   }
 
-  const data = items[0];
-  const user =
-    data?.graphql?.user ||
-    data?.data?.user ||
-    data?.data ||
-    data;
+  const data = items[0] as Record<string, unknown>;
+  const graphql = data?.graphql as Record<string, unknown> | undefined;
+  const innerData = data?.data as Record<string, unknown> | undefined;
 
-  // Extract edges in order (usually newest-first)
-  const followingEdges =
-    user?.edge_follow?.edges ||
-    user?.following?.edges ||
-    user?.following ||
-    [];
+  const user = (graphql?.user || innerData?.user || innerData || data) as Record<string, unknown> | undefined;
 
-  const followerEdges =
-    user?.edge_followed_by?.edges ||
-    user?.followers?.edges ||
-    user?.followers ||
-    [];
+  const edgeFollow = user?.edge_follow as { edges?: unknown[] } | undefined;
+  const followingObj = user?.following as { edges?: unknown[] } | unknown[] | undefined;
+  const followingEdges = edgeFollow?.edges || (Array.isArray(followingObj) ? followingObj : (followingObj as { edges?: unknown[] })?.edges) || [];
 
-  const normalizeEdge = (edge: any): FollowEntry | null => {
-    const node = edge?.node || edge;
-    if (!node?.username) return null;
+  const edgeFollowedBy = user?.edge_followed_by as { edges?: unknown[] } | undefined;
+  const followersObj = user?.followers as { edges?: unknown[] } | unknown[] | undefined;
+  const followerEdges = edgeFollowedBy?.edges || (Array.isArray(followersObj) ? followersObj : (followersObj as { edges?: unknown[] })?.edges) || [];
+
+  const normalizeEdge = (edge: unknown): FollowEntry | null => {
+    const rawNode = (edge as { node?: Record<string, unknown> })?.node || edge;
+    if (!rawNode || typeof rawNode !== "object") return null;
+    const node = rawNode as Record<string, unknown>;
+    if (!node.username) return null;
     return {
-      id: node.id || node.username || String(Math.random()),
-      username: node.username,
-      fullName: node.full_name || node.fullName || null,
-      avatarUrl:
-        node.profile_pic_url ||
-        node.profile_pic_url_hd ||
-        node.avatarUrl ||
-        null,
-      isVerified: node.is_verified || node.isVerified || false,
-      isPrivate: node.is_private || node.isPrivate || false,
+      id: String(node.id || node.username || Math.random()),
+      username: String(node.username),
+      fullName: (node.full_name || node.fullName) ? String(node.full_name || node.fullName) : null,
+      avatarUrl: (node.profile_pic_url || node.profile_pic_url_hd || node.avatarUrl) ? String(node.profile_pic_url || node.profile_pic_url_hd || node.avatarUrl) : null,
+      isVerified: Boolean(node.is_verified || node.isVerified),
+      isPrivate: Boolean(node.is_private || node.isPrivate),
     };
   };
 
   // Limit to 50 entries each for performance
   const following = followingEdges
     .map(normalizeEdge)
-    .filter(Boolean)
-    .slice(0, 50) as FollowEntry[];
+    .filter((x): x is FollowEntry => x !== null)
+    .slice(0, 50);
 
   const followers = followerEdges
     .map(normalizeEdge)
-    .filter(Boolean)
-    .slice(0, 50) as FollowEntry[];
+    .filter((x): x is FollowEntry => x !== null)
+    .slice(0, 50);
 
   return {
     success: true,

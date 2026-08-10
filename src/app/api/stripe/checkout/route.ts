@@ -17,7 +17,7 @@ export async function GET() {
     });
 
     return NextResponse.redirect(session.url || baseUrl, 303);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Stripe checkout error:", error);
     return NextResponse.json(
       { error: "Failed to create checkout session" },
