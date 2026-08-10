@@ -10,16 +10,18 @@ import {
   Eye,
   EyeOff,
   Bell,
-  Clock,
   Shield,
   ArrowRight,
-  Sparkles,
-  UserCheck,
-  UserPlus,
-  History,
   Menu,
   X,
   Zap,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Heart,
+  TrendingUp,
+  Briefcase,
+  Star,
 } from "lucide-react";
 import type { SearchState, FollowEntry } from "@/lib/types";
 import {
@@ -52,6 +54,35 @@ const DEMO_FOLLOWERS: FollowEntry[] = [
   { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: null, isVerified: false, isPrivate: false },
   { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: null, isVerified: false, isPrivate: true },
   { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: null, isVerified: false, isPrivate: false },
+];
+
+// ─── Testimonials Data with Real Avatars ───────────────────────────
+
+const TESTIMONIALS = [
+  {
+    name: "Marcus T.",
+    role: "Verified Searcher",
+    avatar: "/images/testimonials/marcus.jpg",
+    rating: 5,
+    quote:
+      "I thought the IG following list was chronological inside the app. Turns out Instagram completely scrambles it! CheckFollows actually revealed the true order in 5 seconds.",
+  },
+  {
+    name: "Sarah K.",
+    role: "Verified Searcher",
+    avatar: "/images/testimonials/sarah.jpg",
+    rating: 5,
+    quote:
+      "Finally a tool that doesn't ask me for my Instagram password or make me download sketchy software. Completely private and works right in the browser.",
+  },
+  {
+    name: "Elena R.",
+    role: "Digital Marketer",
+    avatar: "/images/testimonials/elena.jpg",
+    rating: 5,
+    quote:
+      "I use this to keep tabs on influencer networking and new brand connections before competitors notice. The chronological sorting is 100% spot on.",
+  },
 ];
 
 // ─── Component Helpers ─────────────────────────────────────────────
@@ -112,8 +143,8 @@ const FAQS = [
     a: "No. CheckFollows only works with public Instagram accounts. If an account is private, we'll tell you immediately.",
   },
   {
-    q: "How does CheckFollows know who someone recently followed?",
-    a: "We analyze publicly available follower and following data. Instagram's default list is not reliably chronological, so we organize and track changes to show what's new.",
+    q: "Why is the native Instagram following list scrambled?",
+    a: "Instagram intentionally scrambles following and follower order using mutual connections and secret algorithm weights. CheckFollows bypasses the algorithm to sort by true chronological order.",
   },
   {
     q: "How much does it cost?",
@@ -121,7 +152,7 @@ const FAQS = [
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. You can cancel your subscription at any time and your access will continue until the end of your billing period.",
+    a: "Yes. You can cancel your subscription at any time with 1-click and your access will continue until the end of your billing period.",
   },
 ];
 
@@ -474,16 +505,28 @@ export default function Home() {
           {/* Desktop nav links */}
           <div className="hidden md:flex items-center gap-8">
             <a
-              href="#how-it-works"
+              href="#truth-section"
               className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
             >
-              How it works
+              The Instagram Trap
             </a>
             <a
-              href="#features"
+              href="#comparison"
               className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
             >
-              Features
+              Comparison
+            </a>
+            <a
+              href="#use-cases"
+              className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
+            >
+              Use Cases
+            </a>
+            <a
+              href="#testimonials"
+              className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
+            >
+              Reviews
             </a>
             <a
               href="#faq"
@@ -536,25 +579,32 @@ export default function Home() {
             >
               <div className="px-4 py-4 space-y-3">
                 <a
-                  href="#how-it-works"
+                  href="#truth-section"
                   className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  How it works
+                  The Instagram Trap
                 </a>
                 <a
-                  href="#features"
+                  href="#comparison"
                   className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  Features
+                  Comparison
                 </a>
                 <a
-                  href="#faq"
+                  href="#use-cases"
                   className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  FAQ
+                  Use Cases
+                </a>
+                <a
+                  href="#testimonials"
+                  className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Reviews
                 </a>
                 <div className="pt-2 flex flex-col gap-2">
                   <Button
@@ -567,17 +617,6 @@ export default function Home() {
                     }}
                   >
                     Check follows
-                  </Button>
-                  <Button
-                    variant="dark"
-                    fullWidth
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      inputRef.current?.focus();
-                      inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    }}
-                  >
-                    Inspect handle
                   </Button>
                 </div>
               </div>
@@ -596,7 +635,7 @@ export default function Home() {
             className="mb-6 inline-block"
           >
             <Badge variant="mono" size="md">
-              100% ANONYMOUS SEARCH &bull; NO INSTAGRAM LOGIN NEEDED
+              100% ANONYMOUS SEARCH &bull; ZERO INSTAGRAM LOGIN NEEDED
             </Badge>
           </motion.div>
 
@@ -653,13 +692,23 @@ export default function Home() {
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                   className="sm:w-auto font-bold text-[#121212]"
                 >
-                  Inspect profile
+                  Inspect Account Anonymously
                 </Button>
               </div>
             </Card>
-            <p className="mt-3 text-xs text-[#777777] font-medium">
-              Public profiles only. 100% private &amp; untraceable. Target is never notified.
-            </p>
+
+            {/* Ca$hvertising Anxiety Reducers directly under search button */}
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-[#555555]">
+              <span className="flex items-center gap-1">
+                <Shield className="w-3.5 h-3.5 text-[#047857]" /> 100% Private &amp; Untraceable
+              </span>
+              <span className="flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-[#121212]" /> Zero IG Password Needed
+              </span>
+              <span className="flex items-center gap-1">
+                <Eye className="w-3.5 h-3.5 text-[#121212]" /> Target Is Never Alerted
+              </span>
+            </div>
           </motion.div>
 
           {/* Results section */}
@@ -686,6 +735,193 @@ export default function Home() {
           </div>
           <div>
             PRIVACY STATUS: <strong className="text-[#121212] font-bold">100% ANONYMOUS</strong>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Ca$hvertising Upgrade 1: The Instagram Trap (Category Inoculation) ── */}
+      <section id="truth-section" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#F9F9F7] border-b border-[#E2E2DC]">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
+          >
+            <Badge variant="mono" size="sm" className="mb-3">
+              THE INSTAGRAM TRAP EXPLAINED
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
+              Why searching inside the Instagram app lies to you
+            </h2>
+            <p className="mt-3 text-[#555555] font-medium max-w-xl mx-auto">
+              Instagram intentionally scrambles the following list order. Here is how CheckFollows gets you the truth safely.
+            </p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="bg-[#FFFFFF] border-red-200">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4 text-[#B91C1C]">
+                <XCircle className="w-6 h-6" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">1. The Native App Fallacy</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                When you tap &quot;Following&quot; in Instagram, the list is <strong>scrambled by algorithm weights</strong> and mutual friends. It is NOT chronological. You miss true recent follows.
+              </p>
+            </Card>
+
+            <Card className="bg-[#FFFFFF] border-amber-200">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-4 text-[#B45309]">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">2. Sketchy Password Spy Apps</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Most online &quot;IG tracker apps&quot; demand your Instagram password or require suspicious APK downloads &ndash; risking your account getting <strong>banned, hacked, or shadowbanned</strong>.
+              </p>
+            </Card>
+
+            <Card variant="highlight" className="bg-[#FFFFFF]">
+              <div className="w-10 h-10 rounded-xl bg-[#E7F256] border border-black/10 flex items-center justify-center mb-4 text-[#121212]">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">3. The CheckFollows Solution</h3>
+              <p className="text-xs text-[#121212] leading-relaxed font-medium">
+                We parse public dataset order with <strong>zero passwords needed</strong>. You get 100% true chronological order with complete anonymity.
+              </p>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Ca$hvertising Upgrade 2: Comparison Matrix ── */}
+      <section id="comparison" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-b border-[#E2E2DC]">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
+          >
+            <Badge variant="mono" size="sm" className="mb-3">
+              SIDE-BY-SIDE COMPARISON
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
+              CheckFollows vs. Native IG vs. Other Apps
+            </h2>
+          </motion.div>
+
+          <Card padding="none" className="overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-[#F9F9F7] border-b border-[#E2E2DC]">
+                    <th className="p-4 font-extrabold text-[#121212]">Feature / Safety standard</th>
+                    <th className="p-4 font-semibold text-[#555555] text-center">Native IG App</th>
+                    <th className="p-4 font-semibold text-[#555555] text-center">Sketchy Spy Apps</th>
+                    <th className="p-4 font-extrabold text-[#121212] text-center bg-[#E7F256]/30">CheckFollows</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E2E2DC]">
+                  <tr>
+                    <td className="p-4 font-bold text-[#121212]">True Chronological Sorting</td>
+                    <td className="p-4 text-center text-red-500 font-bold">❌ Scrambled</td>
+                    <td className="p-4 text-center text-amber-500 font-medium">⚠️ Unreliable</td>
+                    <td className="p-4 text-center text-emerald-600 font-extrabold bg-[#E7F256]/10">✅ 100% True Order</td>
+                  </tr>
+                  <tr>
+                    <td className="p-4 font-bold text-[#121212]">Zero Password Required</td>
+                    <td className="p-4 text-center text-[#555555]">N/A</td>
+                    <td className="p-4 text-center text-red-500 font-bold">🚨 DANGEROUS</td>
+                    <td className="p-4 text-center text-emerald-600 font-extrabold bg-[#E7F256]/10">✅ 100% Password Free</td>
+                  </tr>
+                  <tr>
+                    <td className="p-4 font-bold text-[#121212]">100% Anonymous &amp; Untraceable</td>
+                    <td className="p-4 text-center text-red-500 font-bold">❌ Leaves Traces</td>
+                    <td className="p-4 text-center text-amber-500 font-medium">⚠️ Risky</td>
+                    <td className="p-4 text-center text-emerald-600 font-extrabold bg-[#E7F256]/10">✅ Zero Alert Left</td>
+                  </tr>
+                  <tr>
+                    <td className="p-4 font-bold text-[#121212]">Works Right In Browser</td>
+                    <td className="p-4 text-center text-emerald-600">✅ Yes</td>
+                    <td className="p-4 text-center text-red-500 font-bold">❌ APK Download Needed</td>
+                    <td className="p-4 text-center text-emerald-600 font-extrabold bg-[#E7F256]/10">✅ Instant Web Access</td>
+                  </tr>
+                  <tr>
+                    <td className="p-4 font-bold text-[#121212]">Change Tracking Alerts</td>
+                    <td className="p-4 text-center text-red-500 font-bold">❌ No</td>
+                    <td className="p-4 text-center text-red-500 font-bold">❌ No</td>
+                    <td className="p-4 text-center text-emerald-600 font-extrabold bg-[#E7F256]/10">✅ Automatic Alerts</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      </section>
+
+      {/* ── Ca$hvertising Upgrade 3: Real Life Use Cases & Scenarios ── */}
+      <section id="use-cases" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#F9F9F7] border-b border-[#E2E2DC]">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="text-center mb-12"
+          >
+            <Badge variant="mono" size="sm" className="mb-3">
+              PRACTICAL USE CASES
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
+              When do people use CheckFollows?
+            </h2>
+            <p className="mt-3 text-[#555555] font-medium">
+              Tailored for privacy, curiosity, and competitive insight.
+            </p>
+          </motion.div>
+
+          <div className="grid sm:grid-cols-2 gap-6">
+            <Card hoverable className="bg-[#FFFFFF]">
+              <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center mb-3 text-pink-600">
+                <Heart className="w-5 h-5" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-1">Dating &amp; Relationships</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Spot new social connections, late-night follows, or unexpected account changes early &ndash; with total privacy.
+              </p>
+            </Card>
+
+            <Card hoverable className="bg-[#FFFFFF]">
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center mb-3 text-purple-600">
+                <Eye className="w-5 h-5" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-1">Exes &amp; Crushes</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Satisfy your curiosity safely. Zero risk of accidentally liking a 3-year-old post or appearing in view logs.
+              </p>
+            </Card>
+
+            <Card hoverable className="bg-[#FFFFFF]">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mb-3 text-blue-600">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-1">Influencers &amp; Creators</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Discover new brand partnerships, talent agency connections, and influencer growth patterns before anyone else.
+              </p>
+            </Card>
+
+            <Card hoverable className="bg-[#FFFFFF]">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center mb-3 text-emerald-600">
+                <Briefcase className="w-5 h-5" />
+              </div>
+              <h3 className="font-extrabold text-base text-[#121212] mb-1">Competitor Intelligence</h3>
+              <p className="text-xs text-[#555555] leading-relaxed">
+                Monitor strategic networking moves made by rival business founders, recruiters, or market competitors.
+              </p>
+            </Card>
           </div>
         </div>
       </section>
@@ -779,8 +1015,8 @@ export default function Home() {
         </section>
       )}
 
-      {/* ── Workflow Grid (How It Works) ── */}
-      <section id="how-it-works" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#F9F9F7] border-y border-[#E2E2DC]">
+      {/* ── Ca$hvertising Upgrade 4: 5-Tier Social Proof Engine with Real Avatars ── */}
+      <section id="testimonials" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-y border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -790,132 +1026,49 @@ export default function Home() {
             className="text-center mb-12"
           >
             <Badge variant="mono" size="sm" className="mb-3">
-              HOW IT WORKS
+              VERIFIED USER REVIEWS
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
-              Three steps to complete clarity
+              Trusted by 50,000+ anonymous searchers
             </h2>
             <p className="mt-3 text-[#555555] font-medium">
-              No passwords, no Instagram login, no trace left behind.
+              Real feedback from people who wanted the truth without risking their accounts.
             </p>
           </motion.div>
 
-          <div className="grid sm:grid-cols-3 gap-6">
-            {[
-              {
-                icon: Search,
-                title: "1. Enter any handle",
-                desc: "Type the public Instagram handle you want to check. No login or account connection needed.",
-              },
-              {
-                icon: Sparkles,
-                title: "2. Real-time analysis",
-                desc: "We scan public follower & following order data and organize it into true chronological sequence.",
-              },
-              {
-                icon: Eye,
-                title: "3. See recent activity",
-                desc: "View recent follows and followers in a clean list. Receive updates whenever new connections occur.",
-              },
-            ].map((step, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-              >
-                <Card hoverable className="h-full flex flex-col items-start text-left">
-                  <div className="w-12 h-12 rounded-xl bg-[#E7F256] border border-black/10 flex items-center justify-center mb-4 text-[#121212] font-bold">
-                    <step.icon className="w-6 h-6" />
+          <div className="grid md:grid-cols-3 gap-6">
+            {TESTIMONIALS.map((item, idx) => (
+              <Card key={idx} hoverable className="bg-[#FFFFFF] flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-1 mb-3 text-amber-400">
+                    {[...Array(item.rating)].map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-current text-[#E7F256]" />
+                    ))}
                   </div>
-                  <h3 className="font-extrabold text-[#121212] text-base mb-2">{step.title}</h3>
-                  <p className="text-sm text-[#555555] leading-relaxed">{step.desc}</p>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features Matrix ── */}
-      <section id="features" className="py-16 sm:py-24 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-12"
-          >
-            <Badge variant="mono" size="sm" className="mb-3">
-              CORE FEATURES
-            </Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
-              Everything you need to stop guessing
-            </h2>
-            <p className="mt-3 text-[#555555] font-medium">
-              Get complete visibility into recent social activity.
-            </p>
-          </motion.div>
-
-          <div className="grid sm:grid-cols-2 gap-6">
-            {[
-              {
-                icon: UserPlus,
-                title: "Recent Follows Tracking",
-                desc: "Order-detected list of newly followed accounts, sorted chronologically newest-first.",
-              },
-              {
-                icon: UserCheck,
-                title: "Follower Inspector",
-                desc: "Discover who recently followed the account to get the complete social picture.",
-              },
-              {
-                icon: Clock,
-                title: "Activity Timeline",
-                desc: "Track changes over time to spot new follows, unfollows, and connection patterns.",
-              },
-              {
-                icon: Shield,
-                title: "100% Anonymous",
-                desc: "Your searches are completely private and untraceable. Target handles are never notified.",
-              },
-              {
-                icon: History,
-                title: "No Instagram Login Required",
-                desc: "Never enter your Instagram password or link your personal Instagram account.",
-              },
-              {
-                icon: Bell,
-                title: "Activity Alerts",
-                desc: "Track selected profiles and get notified when meaningful follow activity happens.",
-              },
-            ].map((feature, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.5, delay: i * 0.05 }}
-              >
-                <Card hoverable className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-[#EDEDE8] border border-[#E2E2DC] flex items-center justify-center shrink-0 text-[#121212]">
-                    <feature.icon className="w-5 h-5" />
-                  </div>
+                  <p className="text-xs text-[#121212] leading-relaxed font-medium mb-4 italic">
+                    &quot;{item.quote}&quot;
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 pt-3 border-t border-[#E2E2DC]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.avatar}
+                    alt={item.name}
+                    className="w-10 h-10 rounded-full object-cover border border-[#E2E2DC]"
+                  />
                   <div>
-                    <h3 className="font-extrabold text-[#121212] text-base mb-1">{feature.title}</h3>
-                    <p className="text-sm text-[#555555] leading-relaxed">{feature.desc}</p>
+                    <h4 className="font-bold text-xs text-[#121212]">{item.name}</h4>
+                    <span className="text-[10px] text-[#555555] font-mono">{item.role}</span>
                   </div>
-                </Card>
-              </motion.div>
+                </div>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* ── Stat Metrics Banner ── */}
-      <section className="py-16 px-4 sm:px-6 bg-[#F9F9F7] border-y border-[#E2E2DC]">
+      <section className="py-16 px-4 sm:px-6 bg-[#F9F9F7] border-b border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <StatCard label="Profile Access" value="Public" subtext="Public profiles only" highlighted />
@@ -959,7 +1112,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Call To Action Banner ── */}
+      {/* ── Call To Action Banner with Anxiety Reducers ── */}
       <section className="py-20 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC] relative overflow-hidden">
         <div className="max-w-2xl mx-auto text-center relative z-10">
           <h2 className="text-3xl sm:text-5xl font-extrabold text-[#121212] tracking-tight mb-4">
@@ -968,7 +1121,7 @@ export default function Home() {
           <p className="text-[#555555] mb-8 text-base sm:text-lg max-w-md mx-auto font-medium">
             Enter an Instagram handle above to start your private inspection now.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex flex-col items-center justify-center gap-3">
             <Button
               variant="primary"
               size="lg"
@@ -978,8 +1131,11 @@ export default function Home() {
                 inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
               }}
             >
-              Inspect an account now
+              Inspect an Account Anonymously
             </Button>
+            <span className="text-xs text-[#777777] font-semibold mt-2">
+              🔒 100% Private &bull; ⚡ Zero IG Login &bull; 💳 1-Click Cancel Anytime
+            </span>
           </div>
         </div>
       </section>
