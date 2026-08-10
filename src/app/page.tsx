@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,6 +12,7 @@ import {
   Bell,
   Shield,
   ArrowRight,
+  ArrowDown,
   Menu,
   X,
   Zap,
@@ -173,7 +174,10 @@ export default function Home() {
   const [showDemo, setShowDemo] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [showEmptyPrompt, setShowEmptyPrompt] = useState(false);
+  const [showStickySearch, setShowStickySearch] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = async () => {
     const username = searchInput.replace(/^@/, "").trim();
@@ -242,6 +246,34 @@ export default function Home() {
   useEffect(() => {
     const timer = setTimeout(() => setShowDemo(true), 2000);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Empty prompt animation: after 4s of idle with empty input, show the prompt
+  useEffect(() => {
+    if (searchState.status !== "idle" || searchInput.trim()) {
+      const timer = setTimeout(() => setShowEmptyPrompt(false), 0);
+      return () => clearTimeout(timer);
+    }
+    const timer = setTimeout(() => setShowEmptyPrompt(true), 4000);
+    return () => clearTimeout(timer);
+  }, [searchState.status, searchInput]);
+
+  // Mobile sticky search: show when hero scrolls past
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!heroRef.current) return;
+      const rect = heroRef.current.getBoundingClientRect();
+      // Show sticky bar when hero bottom is above viewport
+      setShowStickySearch(rect.bottom < 0);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const focusInput = useCallback(() => {
+    inputRef.current?.focus();
+    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, []);
 
   const renderResultSection = () => {
@@ -541,18 +573,16 @@ export default function Home() {
               variant="primary"
               size="sm"
               onClick={() => {
-                inputRef.current?.focus();
-                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                focusInput();
               }}
             >
-              Check follows
+              Check followers anonymously
             </Button>
             <Button
               variant="dark"
               size="sm"
               onClick={() => {
-                inputRef.current?.focus();
-                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                focusInput();
               }}
             >
               Inspect handle
@@ -616,7 +646,7 @@ export default function Home() {
                       inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                     }}
                   >
-                    Check follows
+                    Check followers anonymously
                   </Button>
                 </div>
               </div>
@@ -627,12 +657,12 @@ export default function Home() {
 
       {/* ── CheckFollows Hero Section ── */}
       <section className="relative ramp-grid-bg pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6 border-b border-[#E2E2DC]">
-        <div className="max-w-4xl mx-auto text-left sm:text-center relative">
+        <div className="max-w-4xl mx-auto text-center relative flex flex-col items-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-6 inline-block"
+            className="mb-6 flex justify-center"
           >
             <Badge variant="mono" size="md">
               100% ANONYMOUS SEARCH &bull; ZERO INSTAGRAM LOGIN NEEDED
@@ -643,7 +673,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[#121212] leading-[1.05] max-w-3xl mx-auto"
+            className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-[#121212] leading-[1.05] max-w-3xl mx-auto text-center"
           >
             See who they <br className="hidden sm:block" />
             <span className="bg-[#E7F256] text-[#121212] px-2.5 py-0.5 rounded-xl border border-black/10 inline-block">
@@ -660,44 +690,76 @@ export default function Home() {
             Enter any Instagram handle to inspect recent follows, new followers, and activity order changes in seconds.
           </motion.p>
 
-          {/* Hero Search Box */}
+          {/* Hero Search Box — prominent, animated */}
           <motion.div
+            ref={heroRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-10 max-w-lg mx-auto"
+            className="mt-12 max-w-xl mx-auto"
           >
-            <Card padding="sm" className="shadow-[0_4px_24px_rgba(0,0,0,0.06)] bg-[#FFFFFF] border-[#E2E2DC]">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    ref={inputRef}
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Enter Instagram handle (e.g. alex)"
-                    leftIcon={<span className="text-[#121212] font-bold text-base">@</span>}
-                    className="border-none bg-transparent py-3 text-base focus:ring-0"
-                    spellCheck={false}
-                    autoCapitalize="off"
-                  />
+            <div className={`relative rounded-2xl transition-shadow duration-500 ${showEmptyPrompt ? "shadow-[0_0_0_3px_rgba(210,255,82,0.4),0_8px_32px_rgba(0,0,0,0.1)]" : "shadow-[0_4px_24px_rgba(0,0,0,0.08)]"}`}>
+              {/* Pulsing border ring when idle */}
+              {showEmptyPrompt && (
+                <motion.div
+                  className="absolute -inset-[3px] rounded-2xl pointer-events-none"
+                  animate={{ opacity: [0.3, 0.7, 0.3] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  style={{ boxShadow: "0 0 0 3px rgba(210,255,82,0.5), 0 0 30px rgba(210,255,82,0.15)" }}
+                />
+              )}
+              <Card padding="lg" className="shadow-none border-[#E2E2DC] relative z-10 bg-[#FFFFFF]">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1 relative">
+                    <Input
+                      ref={inputRef}
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Enter Instagram handle..."
+                      leftIcon={<span className="text-[#121212] font-extrabold text-lg">@</span>}
+                      className="border-none bg-transparent py-4 text-lg font-medium placeholder:text-[#9CA3AF] focus:ring-0"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                    />
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={handleSearch}
+                    isLoading={searchState.status === "loading"}
+                    disabled={!searchInput.trim()}
+                    rightIcon={<ArrowRight className="w-5 h-5" />}
+                    className="sm:w-auto font-extrabold text-base shadow-lg hover:shadow-xl"
+                  >
+                    Check followers anonymously
+                  </Button>
                 </div>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleSearch}
-                  isLoading={searchState.status === "loading"}
-                  disabled={!searchInput.trim()}
-                  rightIcon={<ArrowRight className="w-4 h-4" />}
-                  className="sm:w-auto font-bold text-[#121212]"
-                >
-                  Inspect Account Anonymously
-                </Button>
-              </div>
-            </Card>
+              </Card>
+            </div>
 
-            {/* Ca$hvertising Anxiety Reducers directly under search button */}
+            {/* Empty prompt animation */}
+            <AnimatePresence>
+              {showEmptyPrompt && searchState.status === "idle" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="flex items-center justify-center gap-2 mt-3 text-sm font-semibold text-[#555555]"
+                >
+                  <motion.span
+                    animate={{ y: [0, -4, 0] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    <ArrowDown className="w-4 h-4 text-[#C2F84F]" />
+                  </motion.span>
+                  Type a public Instagram handle above to get started
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Trust badges */}
             <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-[#555555]">
               <span className="flex items-center gap-1">
                 <Shield className="w-3.5 h-3.5 text-[#047857]" /> 100% Private &amp; Untraceable
@@ -1127,8 +1189,7 @@ export default function Home() {
               size="lg"
               leftIcon={<Search className="w-5 h-5" />}
               onClick={() => {
-                inputRef.current?.focus();
-                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                focusInput();
               }}
             >
               Inspect an Account Anonymously
@@ -1162,6 +1223,46 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* ── Sticky Mobile Search Bar ── */}
+      <AnimatePresence>
+        {showStickySearch && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-[#FFFFFF] border-t border-[#E2E2DC] shadow-[0_-4px_24px_rgba(0,0,0,0.08)] sm:hidden"
+          >
+            <div className="flex gap-2 max-w-lg mx-auto">
+              <div className="flex-1 relative">
+                <Input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Enter Instagram handle..."
+                  leftIcon={<span className="text-[#121212] font-bold">@</span>}
+                  className="border-[#E2E2DC] bg-[#F9F9F7] py-3 text-sm"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                />
+              </div>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleSearch}
+                isLoading={searchState.status === "loading"}
+                disabled={!searchInput.trim()}
+                pill={false}
+                className="font-bold"
+              >
+                <Search className="w-4 h-4" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
