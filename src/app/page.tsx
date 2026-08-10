@@ -657,7 +657,7 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="mt-6 text-lg sm:text-xl text-[#555555] max-w-xl mx-auto leading-relaxed font-medium"
           >
-            Enter any public Instagram handle to inspect recent follows, new followers, and activity order changes in seconds.
+            Enter any Instagram handle to inspect recent follows, new followers, and activity order changes in seconds.
           </motion.p>
 
           {/* Hero Search Box */}
