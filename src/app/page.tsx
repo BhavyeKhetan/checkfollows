@@ -149,7 +149,7 @@ const FAQS = [
   },
   {
     q: "How much does it cost?",
-    a: "CheckFollows is $12.99/week. You can search, preview results, and then subscribe to unlock the full list, followers, and change tracking.",
+    a: "Search and preview profile results for free. You only unlock when you want full access to all recent activity, follower lists, and automatic change alerts.",
   },
   {
     q: "Can I cancel anytime?",
@@ -378,7 +378,7 @@ export default function Home() {
                     router.push("/api/stripe/checkout");
                   }}
                 >
-                  Unlock for $12.99/week
+                  Unlock full list
                 </Button>
               </div>
             </div>
@@ -812,13 +812,13 @@ export default function Home() {
             className="text-center mb-12"
           >
             <Badge variant="mono" size="sm" className="mb-3">
-              THE INSTAGRAM TRAP EXPLAINED
+              THE TRUTH ABOUT INSTAGRAM
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#121212] tracking-tight">
               Why searching inside the Instagram app lies to you
             </h2>
             <p className="mt-3 text-[#555555] font-medium max-w-xl mx-auto">
-              Instagram intentionally scrambles the following list order. Here is how CheckFollows gets you the truth safely.
+              Instagram hides the real order of who someone follows. Here is what is actually happening.
             </p>
           </motion.div>
 
@@ -827,9 +827,9 @@ export default function Home() {
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-4 text-[#B91C1C]">
                 <XCircle className="w-6 h-6" />
               </div>
-              <h3 className="font-extrabold text-base text-[#121212] mb-2">1. The Native App Fallacy</h3>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">1. Instagram mixes up the list</h3>
               <p className="text-xs text-[#555555] leading-relaxed">
-                When you tap &quot;Following&quot; in Instagram, the list is <strong>scrambled by algorithm weights</strong> and mutual friends. It is NOT chronological. You miss true recent follows.
+                When you check someone&apos;s Following list on Instagram, the app <strong>scrambles the order</strong>. It puts mutual friends at the top instead of who they followed last. You&apos;re looking at a fake list.
               </p>
             </Card>
 
@@ -837,9 +837,9 @@ export default function Home() {
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-4 text-[#B45309]">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="font-extrabold text-base text-[#121212] mb-2">2. Sketchy Password Spy Apps</h3>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">2. Fake apps steal your password</h3>
               <p className="text-xs text-[#555555] leading-relaxed">
-                Most online &quot;IG tracker apps&quot; demand your Instagram password or require suspicious APK downloads &ndash; risking your account getting <strong>banned, hacked, or shadowbanned</strong>.
+                Other tracker apps ask for your Instagram username and password. That&apos;s a scam that gets your account <strong>hacked, locked, or banned</strong>.
               </p>
             </Card>
 
@@ -847,9 +847,9 @@ export default function Home() {
               <div className="w-10 h-10 rounded-xl bg-[#E7F256] border border-black/10 flex items-center justify-center mb-4 text-[#121212]">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="font-extrabold text-base text-[#121212] mb-2">3. The CheckFollows Solution</h3>
+              <h3 className="font-extrabold text-base text-[#121212] mb-2">3. CheckFollows shows the real order</h3>
               <p className="text-xs text-[#121212] leading-relaxed font-medium">
-                We parse public dataset order with <strong>zero passwords needed</strong>. You get 100% true chronological order with complete anonymity.
+                We show you who they followed in <strong>exact order from newest to oldest</strong>. No password needed, and they will never know you checked.
               </p>
             </Card>
           </div>
@@ -1066,7 +1066,7 @@ export default function Home() {
                         inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
                       }}
                     >
-                      Unlock for $12.99/week
+                      Unlock full list
                     </Button>
                   </div>
                 </div>
@@ -1135,7 +1135,7 @@ export default function Home() {
             <StatCard label="Profile Access" value="Public" subtext="Public profiles only" highlighted />
             <StatCard label="Instagram Login" value="Zero" change="100% Safe" changeType="positive" />
             <StatCard label="Privacy Rating" value="100%" subtext="Untraceable search" />
-            <StatCard label="Billing" value="$12.99" change="Cancel Anytime" changeType="neutral" />
+            <StatCard label="Results" value="Instant" change="No Password Needed" changeType="positive" />
           </div>
         </div>
       </section>
