@@ -175,12 +175,20 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
-  // Landing page interactive state
+  // Focus & highlight state when CTA buttons are clicked
+  const [isHighlighted, setIsHighlighted] = useState(false);
   const [showEmptyPrompt, setShowEmptyPrompt] = useState(false);
   const [showStickySearch, setShowStickySearch] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
+
+  const triggerFocusAndHighlight = () => {
+    setIsHighlighted(true);
+    inputRef.current?.focus();
+    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setIsHighlighted(false), 2500);
+  };
 
   const handleSearch = async () => {
     const username = searchInput.replace(/^@/, "").trim();
@@ -569,10 +577,7 @@ export default function Home() {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => {
-                inputRef.current?.focus();
-                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
+              onClick={triggerFocusAndHighlight}
             >
               Check followers anonymously
             </Button>
@@ -631,8 +636,7 @@ export default function Home() {
                     fullWidth
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      inputRef.current?.focus();
-                      inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      triggerFocusAndHighlight();
                     }}
                   >
                     Check followers anonymously
@@ -645,7 +649,7 @@ export default function Home() {
       </nav>
 
       {/* ── CheckFollows Hero Section ── */}
-      <section className="relative ramp-grid-bg pt-16 pb-20 sm:pt-24 sm:pb-28 px-4 sm:px-6 border-b border-[#E2E2DC]">
+      <section className="relative ramp-grid-bg pt-14 pb-20 sm:pt-20 sm:pb-28 px-4 sm:px-6 border-b border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto text-center relative flex flex-col items-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -674,10 +678,31 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="mt-6 text-lg sm:text-xl text-[#555555] max-w-xl mx-auto leading-relaxed font-medium text-center"
+            className="mt-6 text-lg sm:text-xl text-[#555555] max-w-xl mx-auto leading-relaxed font-medium text-center mb-8"
           >
             Enter any Instagram handle to inspect recent follows, new followers, and activity order changes in seconds.
           </motion.p>
+
+          {/* ── Big Directional Pointer & Arrow ── */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, delay: 0.25 }}
+            className="flex flex-col items-center justify-center mb-3 text-center"
+          >
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              className="flex flex-col items-center gap-1 cursor-pointer"
+              onClick={triggerFocusAndHighlight}
+            >
+              <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E7F256] text-[#121212] font-black text-xs uppercase tracking-wider border border-black/15 shadow-md">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#121212] animate-ping shrink-0" />
+                Type instagram handle below
+              </span>
+              <ArrowDown className="w-8 h-8 text-[#121212] stroke-[3]" />
+            </motion.div>
+          </motion.div>
 
           {/* Hero Search Box */}
           <motion.div
@@ -685,37 +710,49 @@ export default function Home() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-10 w-full max-w-lg mx-auto"
+            className="w-full max-w-lg mx-auto"
           >
-            <Card padding="sm" className="shadow-[0_4px_24px_rgba(0,0,0,0.06)] bg-[#FFFFFF] border-[#E2E2DC]">
-              <div className="flex flex-col gap-3.5">
-                <div className="relative">
-                  <Input
-                    ref={inputRef}
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Enter Instagram handle..."
-                    leftIcon={<span className="text-[#121212] font-bold text-base">@</span>}
-                    className="border-none bg-transparent py-3 text-base focus:ring-0"
-                    spellCheck={false}
-                    autoCapitalize="off"
-                  />
+            <motion.div
+              animate={isHighlighted ? { scale: [1, 1.03, 1], transition: { duration: 0.3 } } : {}}
+              className="w-full"
+            >
+              <Card
+                padding="sm"
+                className={`transition-all duration-300 bg-[#FFFFFF] ${
+                  isHighlighted
+                    ? "ring-4 ring-[#E7F256] shadow-[0_0_40px_rgba(231,242,86,0.6)] border-[#121212]"
+                    : "shadow-[0_4px_24px_rgba(0,0,0,0.06)] border-[#E2E2DC]"
+                }`}
+              >
+                <div className="flex flex-col gap-3.5">
+                  <div className={`relative rounded-xl transition-all duration-300 ${isHighlighted ? "bg-[#E7F256]/30 p-1" : ""}`}>
+                    <Input
+                      ref={inputRef}
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Enter Instagram handle... (e.g. alex)"
+                      leftIcon={<span className="text-[#121212] font-black text-lg">@</span>}
+                      className={`border-none bg-transparent py-3 text-base focus:ring-0 ${isHighlighted ? "placeholder:text-[#121212] font-bold" : ""}`}
+                      spellCheck={false}
+                      autoCapitalize="off"
+                    />
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleSearch}
+                    isLoading={searchState.status === "loading"}
+                    disabled={!searchInput.trim()}
+                    rightIcon={<ArrowRight className="w-4 h-4" />}
+                    className="w-full font-bold text-[#121212] py-3.5"
+                  >
+                    Check followers anonymously
+                  </Button>
                 </div>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleSearch}
-                  isLoading={searchState.status === "loading"}
-                  disabled={!searchInput.trim()}
-                  rightIcon={<ArrowRight className="w-4 h-4" />}
-                  className="w-full font-bold text-[#121212] py-3.5"
-                >
-                  Check followers anonymously
-                </Button>
-              </div>
-            </Card>
+              </Card>
+            </motion.div>
 
             {/* Empty prompt animation */}
             <AnimatePresence>
@@ -1061,10 +1098,7 @@ export default function Home() {
                     <Button
                       variant="primary"
                       leftIcon={<Eye className="w-4 h-4" />}
-                      onClick={() => {
-                        inputRef.current?.focus();
-                        inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }}
+                      onClick={triggerFocusAndHighlight}
                     >
                       Unlock full list
                     </Button>
@@ -1187,10 +1221,7 @@ export default function Home() {
               variant="primary"
               size="lg"
               leftIcon={<Search className="w-5 h-5" />}
-              onClick={() => {
-                inputRef.current?.focus();
-                inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
+              onClick={triggerFocusAndHighlight}
             >
               Inspect an Account Anonymously
             </Button>
@@ -1216,10 +1247,7 @@ export default function Home() {
                 fullWidth
                 size="md"
                 leftIcon={<Search className="w-4 h-4" />}
-                onClick={() => {
-                  inputRef.current?.focus();
-                  inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                }}
+                onClick={triggerFocusAndHighlight}
               >
                 Check followers anonymously
               </Button>
