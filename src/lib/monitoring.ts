@@ -167,24 +167,64 @@ async function getLatestValidSnapshot(
   return null;
 }
 
-// ─── Get nth-oldest snapshot ──────────────────────────────
+// ─── Store baseline snapshot (for initial scan) ───────────
 
-async function getNthOldestSnapshot(
-  supabase: ReturnType<typeof createServerClient>,
+async function storeBaselineSnapshot(
   targetId: string,
-  type: "following" | "followers",
-  n: number
-): Promise<SnapshotRow | null> {
-  const { data: snapshots } = await supabase
-    .from("follow_snapshots")
-    .select("id, target_id, snapshot_type, account_ids, account_usernames, captured_at, scan_id")
-    .eq("target_id", targetId)
-    .eq("snapshot_type", type)
-    .order("captured_at", { ascending: false })
-    .limit(n + 1);
+  entries: InstagramUserEntry[],
+  providerName: string
+): Promise<string> {
+  const supabase = createServerClient();
 
-  if (!snapshots || snapshots.length <= n) return null;
-  return snapshots[n];
+  // Create scan record
+  const { data: scan } = await supabase
+    .from("scans")
+    .insert({
+      target_id: targetId,
+      status: "running",
+      started_at: new Date().toISOString(),
+      provider: providerName,
+      api_cost: 0,
+      target_count: 1,
+      profiles_returned: entries.length,
+      suspect: false,
+    })
+    .select("id")
+    .single();
+
+  if (!scan) throw new Error("Failed to create scan record");
+
+  // Store snapshot
+  await supabase.from("follow_snapshots").insert({
+    target_id: targetId,
+    snapshot_type: "following",
+    account_ids: buildUserIdList(entries),
+    account_usernames: buildUsernameList(entries),
+    scan_id: scan.id,
+  });
+
+  // Mark scan complete
+  await supabase
+    .from("scans")
+    .update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", scan.id);
+
+  // Set last_scanned_at + next_scan_at on target
+  await supabase
+    .from("instagram_targets")
+    .update({
+      last_scanned_at: new Date().toISOString(),
+      next_scan_at: new Date(
+        Date.now() + 24 * 60 * 60 * 1000
+      ).toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", targetId);
+
+  return scan.id;
 }
 
 // ─── Upsert Target ────────────────────────────────────────
@@ -451,37 +491,28 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
         }
       }
 
-      // STOPPED_FOLLOWING: require two observations
-      // The older snapshot (index 2, 3rd from top) is the one whose candidate events
-      // should now be confirmed if the account is still absent
-      const olderSnapshot = await getNthOldestSnapshot(
-        supabase,
-        targetId,
-        "following",
-        2
-      );
+      // STOPPED_FOLLOWING: candidate → confirmed after one more valid scan
+      // Check events from the previous snapshot: if account is still absent, confirm.
+      // Two observations: (1) account disappeared in prev scan, (2) still missing now.
+      const { data: candidateRemovals } = await supabase
+        .from("follow_events")
+        .select("id, instagram_id")
+        .eq("target_id", targetId)
+        .eq("confirmed", false)
+        .eq("event_type", "STOPPED_FOLLOWING")
+        .eq("current_snapshot_id", prevSnapshot.id);
 
-      if (olderSnapshot) {
-        const { data: candidateRemovals } = await supabase
-          .from("follow_events")
-          .select("id, instagram_id")
-          .eq("target_id", targetId)
-          .eq("confirmed", false)
-          .eq("event_type", "STOPPED_FOLLOWING")
-          .eq("current_snapshot_id", olderSnapshot.id);
+      if (candidateRemovals && candidateRemovals.length > 0) {
+        const currentIds = new Set(entries.map((u) => u.userId));
+        const toConfirm = candidateRemovals
+          .filter((evt) => !currentIds.has(evt.instagram_id))
+          .map((evt) => evt.id);
 
-        if (candidateRemovals && candidateRemovals.length > 0) {
-          const currentIds = new Set(entries.map((u) => u.userId));
-          const toConfirm = candidateRemovals
-            .filter((evt) => !currentIds.has(evt.instagram_id))
-            .map((evt) => evt.id);
-
-          if (toConfirm.length > 0) {
-            await supabase
-              .from("follow_events")
-              .update({ confirmed: true })
-              .in("id", toConfirm);
-          }
+        if (toConfirm.length > 0) {
+          await supabase
+            .from("follow_events")
+            .update({ confirmed: true })
+            .in("id", toConfirm);
         }
       }
     }
@@ -778,6 +809,11 @@ export async function processDueScans(): Promise<{
 
 // ─── Initial Scan (new user search) ───────────────────────
 
+/**
+ * Performs the initial BASELINE scan for a new username.
+ * Fetches following list once and stores it as the baseline snapshot.
+ * No follow events are generated (baseline = no change history yet).
+ */
 export async function initialScan(username: string): Promise<{
   target: {
     id: string;
@@ -832,7 +868,9 @@ export async function initialScan(username: string): Promise<{
     throw new Error("Failed to create target record");
   }
 
-  const scanResult = await scanFollowing(target.id);
+  // Store the baseline snapshot directly — no need for a second Apify call.
+  // We already have the entries from the batchScan above.
+  const scanId = await storeBaselineSnapshot(target.id, entries, provider.name);
 
   return {
     target: {
@@ -841,7 +879,7 @@ export async function initialScan(username: string): Promise<{
       follower_count: 0,
     },
     following: entries,
-    scanId: scanResult.scanId,
+    scanId: scanId,
   };
 }
 
