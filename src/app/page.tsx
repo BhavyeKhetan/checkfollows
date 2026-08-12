@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -39,22 +39,22 @@ import {
 // ─── Mock demo data with Real Avatar Photos ────────────────────────
 
 const DEMO_FOLLOWING: FollowEntry[] = [
-  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: "/images/demo/emma.jpg", isVerified: false, isPrivate: false },
-  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
-  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: false },
-  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: true },
-  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: "/images/demo/isabella.jpg", isVerified: true, isPrivate: false },
-  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
-  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: "/images/testimonials/elena.jpg", isVerified: false, isPrivate: false },
-  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: "/images/testimonials/marcus.jpg", isVerified: true, isPrivate: false },
+  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: null, isVerified: false, isPrivate: true },
+  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: null, isVerified: true, isPrivate: false },
+  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: null, isVerified: true, isPrivate: false },
 ];
 
 const DEMO_FOLLOWERS: FollowEntry[] = [
-  { id: "f1", username: "sarah.jane", fullName: "Sarah Jane", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
-  { id: "f2", username: "ava.taylor", fullName: "Ava Taylor", avatarUrl: "/images/demo/emma.jpg", isVerified: true, isPrivate: false },
-  { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
-  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: true },
-  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: false },
+  { id: "f1", username: "sarah.jane", fullName: "Sarah Jane", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "f2", username: "ava.taylor", fullName: "Ava Taylor", avatarUrl: null, isVerified: true, isPrivate: false },
+  { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: null, isVerified: false, isPrivate: true },
+  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: null, isVerified: false, isPrivate: false },
 ];
 
 // ─── Testimonials Data with Real Avatars ───────────────────────────
@@ -63,7 +63,6 @@ const TESTIMONIALS = [
   {
     name: "Marcus T.",
     role: "Verified Searcher",
-    avatar: "/images/testimonials/marcus.jpg",
     rating: 5,
     quote:
       "I thought the IG following list was chronological inside the app. Turns out Instagram completely scrambles it! CheckFollows actually revealed the true order in 5 seconds.",
@@ -71,7 +70,6 @@ const TESTIMONIALS = [
   {
     name: "Sarah K.",
     role: "Verified Searcher",
-    avatar: "/images/testimonials/sarah.jpg",
     rating: 5,
     quote:
       "Finally a tool that doesn't ask me for my Instagram password or make me download sketchy software. Completely private and works right in the browser.",
@@ -79,12 +77,60 @@ const TESTIMONIALS = [
   {
     name: "Elena R.",
     role: "Digital Marketer",
-    avatar: "/images/testimonials/elena.jpg",
     rating: 5,
     quote:
       "I use this to keep tabs on influencer networking and new brand connections before competitors notice. The chronological sorting is 100% spot on.",
   },
 ];
+
+// ─── LocalStorage helpers ──────────────────────────────────────────
+
+const STORAGE_KEY = "checkfollows_search_state";
+const PAID_FLAG_KEY = "checkfollows_paid";
+const PAID_EXPIRY_DAYS = 30;
+
+function saveSearchState(state: { username: string; profile: unknown; following: unknown[]; followers: unknown[] }) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function loadSearchState(): { username: string; profile: unknown; following: unknown[]; followers: unknown[] } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function clearSearchState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+}
+
+function isPaidSession(): boolean {
+  try {
+    const raw = localStorage.getItem(PAID_FLAG_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    // Check expiry
+    if (data.expiresAt && Date.now() > data.expiresAt) {
+      localStorage.removeItem(PAID_FLAG_KEY);
+      return false;
+    }
+    return data.paid === true;
+  } catch {
+    return false;
+  }
+}
+
+function markPaidSession() {
+  const expiresAt = Date.now() + PAID_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+  try {
+    localStorage.setItem(PAID_FLAG_KEY, JSON.stringify({ paid: true, expiresAt }));
+  } catch { /* ignore */ }
+}
 
 // ─── Component Helpers ─────────────────────────────────────────────
 
@@ -161,6 +207,7 @@ const FAQS = [
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -179,16 +226,115 @@ export default function Home() {
   const [isHighlighted, setIsHighlighted] = useState(false);
   const [showEmptyPrompt, setShowEmptyPrompt] = useState(false);
   const [showStickySearch, setShowStickySearch] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
+  const hasRestoredRef = useRef(false);
 
-  const triggerFocusAndHighlight = () => {
+  const triggerFocusAndHighlight = useCallback(() => {
     setIsHighlighted(true);
     inputRef.current?.focus();
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => setIsHighlighted(false), 2500);
-  };
+  }, []);
+
+  // ── Stripe success redirect handler ───────────────────────────
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+
+    const success = searchParams.get("success");
+    const sessionId = searchParams.get("session_id");
+
+    if (success === "true" && sessionId) {
+      markPaidSession();
+
+      const saved = loadSearchState();
+      if (saved?.username) {
+        setSearchInput(saved.username);
+        if (saved.profile) {
+          setSearchState({
+            status: "full",
+            profile: saved.profile as SearchState["profile"],
+            recentFollowing: saved.following as FollowEntry[],
+            recentFollowers: saved.followers as FollowEntry[],
+            error: null,
+          });
+
+          fetch(`/api/instagram/follows?username=${encodeURIComponent(saved.username)}&full=true`)
+            .then((r) => r.json())
+            .then((data) => {
+              if (data.success) {
+                setSearchState((prev) => ({
+                  ...prev,
+                  status: "full",
+                  recentFollowing: (data.following || []).map(
+                    (u: Record<string, unknown>) => ({
+                      id: u.instagramId as string,
+                      username: u.username as string,
+                      fullName: u.fullName as string | null,
+                      avatarUrl: u.avatarUrl as string | null,
+                      isVerified: u.isVerified as boolean,
+                      isPrivate: u.isPrivate as boolean,
+                    })
+                  ),
+                }));
+              }
+            })
+            .catch(() => {});
+        }
+        router.replace("/", { scroll: false });
+      }
+    } else if (searchParams.get("canceled") === "true") {
+      const saved = loadSearchState();
+      if (saved?.username) {
+        setSearchInput(saved.username);
+        if (saved.profile) {
+          setSearchState({
+            status: "preview",
+            profile: saved.profile as SearchState["profile"],
+            recentFollowing: saved.following as FollowEntry[],
+            recentFollowers: saved.followers as FollowEntry[],
+            error: null,
+          });
+        }
+        clearSearchState();
+        router.replace("/", { scroll: false });
+      }
+    }
+  }, [searchParams, router]);
+
+  const handleUnlock = useCallback(async () => {
+    if (!searchState.profile || isCheckingOut) return;
+    setIsCheckingOut(true);
+
+    saveSearchState({
+      username: searchInput.replace(/^@/, "").trim(),
+      profile: searchState.profile,
+      following: searchState.recentFollowing || [],
+      followers: searchState.recentFollowers || [],
+    });
+
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: searchInput.replace(/^@/, "").trim(),
+          targetId: (searchState.profile as unknown as Record<string, unknown>)?.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setIsCheckingOut(false);
+      }
+    } catch {
+      setIsCheckingOut(false);
+    }
+  }, [searchState.profile, searchInput, isCheckingOut, searchState.recentFollowing, searchState.recentFollowers]);
 
   const handleSearch = async () => {
     const username = searchInput.replace(/^@/, "").trim();
@@ -382,9 +528,8 @@ export default function Home() {
                   variant="primary"
                   size="md"
                   leftIcon={<Eye className="w-4 h-4" />}
-                  onClick={() => {
-                    router.push("/api/stripe/checkout");
-                  }}
+                  onClick={handleUnlock}
+                  isLoading={isCheckingOut}
                 >
                   Unlock full list
                 </Button>
@@ -1045,7 +1190,7 @@ export default function Home() {
               {/* Demo Profile Header */}
               <Card variant="highlight" className="mb-4">
                 <div className="flex items-center gap-4">
-                  <Avatar src="/images/demo/johndoe.jpg" username="johndoe" size="lg" limeHalo />
+                  <Avatar src={null} username="johndoe" size="lg" limeHalo />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-extrabold text-lg text-[#121212]">John Doe</h3>
                     <p className="text-xs text-[#555555]">@johndoe</p>
@@ -1145,12 +1290,7 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 pt-3 border-t border-[#E2E2DC]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.avatar}
-                    alt={item.name}
-                    className="w-10 h-10 rounded-full object-cover border border-[#E2E2DC]"
-                  />
+                  <Avatar src={null} username={item.name} size="md" />
                   <div>
                     <h4 className="font-bold text-xs text-[#121212]">{item.name}</h4>
                     <span className="text-[10px] text-[#555555] font-mono">{item.role}</span>
