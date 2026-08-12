@@ -17,8 +17,14 @@
  */
 
 import { createServerClient } from "@/lib/supabase/server";
-import { getInstagramProvider } from "@/lib/instagram/provider";
-import type { InstagramUserEntry } from "@/lib/instagram/provider";
+import {
+  getMonitoringProvider,
+  getPreviewProvider,
+} from "@/lib/instagram/provider";
+import type {
+  InstagramUserEntry,
+  InstagramProfile,
+} from "@/lib/instagram/provider";
 
 // ─── Config ───────────────────────────────────────────────
 
@@ -305,7 +311,7 @@ export async function upsertInstagramTarget(profile: {
 
 export async function scanFollowing(targetId: string): Promise<ScanResult> {
   const supabase = createServerClient();
-  const provider = getInstagramProvider();
+  const provider = getMonitoringProvider();
 
   const { data: target } = await supabase
     .from("instagram_targets")
@@ -589,7 +595,7 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
 
 export async function scanFollowers(targetId: string): Promise<ScanResult> {
   const supabase = createServerClient();
-  const provider = getInstagramProvider();
+  const provider = getMonitoringProvider();
 
   const { data: target } = await supabase
     .from("instagram_targets")
@@ -807,14 +813,93 @@ export async function processDueScans(): Promise<{
   return { scanned, failed, suspect, results };
 }
 
-// ─── Initial Scan (new user search) ───────────────────────
+// ─── Preview Lookup (unpaid landing-page search) ─────────
+
+const PREVIEW_CAP = parseInt(process.env.PREVIEW_FOLLOW_CAP || "10", 10);
 
 /**
- * Performs the initial BASELINE scan for a new username.
- * Fetches following list once and stores it as the baseline snapshot.
- * No follow events are generated (baseline = no change history yet).
+ * Lightweight preview for unpaid landing-page searches.
+ * Uses the cheap apify/instagram-profile-scraper for profile data,
+ * then optionally fetches a small capped preview (10-20) of following/followers.
+ * Does NOT store a baseline snapshot — that happens after payment.
  */
-export async function initialScan(username: string): Promise<{
+export async function previewLookup(username: string): Promise<{
+  profile: InstagramProfile;
+  target: {
+    id: string;
+    instagram_id: string;
+    username: string;
+    full_name: string | null;
+    avatar_url: string | null;
+    is_private: boolean;
+    is_verified: boolean;
+    following_count: number;
+    follower_count: number;
+  } | null;
+  followingPreview: InstagramUserEntry[];
+  followersPreview: InstagramUserEntry[];
+}> {
+  const previewProvider = getPreviewProvider();
+  const monitoringProvider = getMonitoringProvider();
+  const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
+
+  // Step 1: Fetch profile using the cheap preview actor
+  const profile = await previewProvider.fetchProfile(cleanUsername);
+
+  if (profile.isPrivate) {
+    throw new Error("This account is private");
+  }
+
+  // Step 2: Upsert target (or update existing)
+  const target = await upsertInstagramTarget(profile);
+
+  // Step 3: Fetch small capped previews of following/followers
+  let followingPreview: InstagramUserEntry[] = [];
+  let followersPreview: InstagramUserEntry[] = [];
+
+  try {
+    // Use the monitoring provider with a cap for preview
+    const [followingResult, followersResult] = await Promise.all([
+      monitoringProvider.batchScan({
+        usernames: [cleanUsername],
+        dataToScrape: "Followings",
+        maxResultsPerUser: PREVIEW_CAP,
+      }),
+      monitoringProvider.batchScan({
+        usernames: [cleanUsername],
+        dataToScrape: "Followers",
+        maxResultsPerUser: PREVIEW_CAP,
+      }),
+    ]);
+
+    if (followingResult.success) {
+      followingPreview = followingResult.entries.get(cleanUsername) || [];
+    }
+    if (followersResult.success) {
+      followersPreview = followersResult.entries.get(cleanUsername) || [];
+    }
+  } catch {
+    // Preview fetches are best-effort — don't fail the whole lookup
+    console.warn("Preview follow fetch failed for", cleanUsername);
+  }
+
+  return {
+    profile,
+    target,
+    followingPreview,
+    followersPreview,
+  };
+}
+
+// ─── Full Baseline Scan (after payment) ──────────────────
+
+/**
+ * Performs the full BASELINE scan for a paid user.
+ * Fetches the COMPLETE following list and stores it as the baseline snapshot.
+ * No follow events are generated (baseline = no change history yet).
+ * Enables monitoring for daily re-scans.
+ */
+export async function fullBaselineScan(username: string): Promise<{
   target: {
     id: string;
     instagram_id: string;
@@ -829,7 +914,7 @@ export async function initialScan(username: string): Promise<{
   following: InstagramUserEntry[];
   scanId: string;
 }> {
-  const provider = getInstagramProvider();
+  const provider = getMonitoringProvider();
   const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
 
   const result = await provider.batchScan({
@@ -872,6 +957,9 @@ export async function initialScan(username: string): Promise<{
   // We already have the entries from the batchScan above.
   const scanId = await storeBaselineSnapshot(target.id, entries, provider.name);
 
+  // Enable daily monitoring
+  await enableMonitoring(target.id);
+
   return {
     target: {
       ...target,
@@ -881,6 +969,11 @@ export async function initialScan(username: string): Promise<{
     following: entries,
     scanId: scanId,
   };
+}
+
+/** @deprecated Use previewLookup() for unpaid or fullBaselineScan() for paid */
+export async function initialScan(username: string) {
+  return fullBaselineScan(username);
 }
 
 // ─── Query: Get Events ────────────────────────────────────

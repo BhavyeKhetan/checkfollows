@@ -1,17 +1,20 @@
 /**
- * Combined search endpoint — profile + following + first scan (BASELINE).
- * POST { username: string } → returns profile + following list.
+ * Two-stage search endpoint:
+ *   POST { username, stage?: "preview" | "full" }
  *
- * With Apify: the first scan is the BASELINE — no events generated.
- * Historical change detection begins after the second scan.
+ *   stage=preview (default): Lightweight profile lookup + capped 10-20 following preview.
+ *     Uses apify/instagram-profile-scraper (cheap). No baseline stored.
+ *
+ *   stage=full (paid): Complete following scrape + baseline snapshot + enable monitoring.
+ *     Uses dead00/instagram-followers-following-scraper-no-cookies.
  */
 
 import { NextResponse } from "next/server";
-import { initialScan, getEventsForTarget } from "@/lib/monitoring";
+import { previewLookup, fullBaselineScan, getEventsForTarget } from "@/lib/monitoring";
 
 export async function POST(request: Request) {
   try {
-    const { username } = await request.json();
+    const { username, stage } = await request.json();
 
     if (!username) {
       return NextResponse.json(
@@ -29,9 +32,38 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await initialScan(cleanUsername);
+    // ─── PREVIEW stage (unpaid, default) ──────────────────
+    if (stage !== "full") {
+      const result = await previewLookup(cleanUsername);
 
-    // Get any existing events (for returning users — empty on first scan)
+      return NextResponse.json({
+        success: true,
+        stage: "preview",
+        target: result.target,
+        profile: result.profile,
+        followingPreview: result.followingPreview.map((u) => ({
+          instagramId: u.userId,
+          username: u.username,
+          fullName: u.fullName,
+          avatarUrl: u.avatarUrl,
+          isVerified: u.isVerified,
+          isPrivate: u.isPrivate,
+        })),
+        followersPreview: result.followersPreview.map((u) => ({
+          instagramId: u.userId,
+          username: u.username,
+          fullName: u.fullName,
+          avatarUrl: u.avatarUrl,
+          isVerified: u.isVerified,
+          isPrivate: u.isPrivate,
+        })),
+        previewCap: result.followingPreview.length, // actual count returned
+      });
+    }
+
+    // ─── FULL stage (paid) ───────────────────────────────
+    const result = await fullBaselineScan(cleanUsername);
+
     const events = await getEventsForTarget(result.target.id, {
       limit: 50,
       confirmedOnly: true,
@@ -39,6 +71,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      stage: "full",
       target: result.target,
       following: result.following.map((u) => ({
         instagramId: u.userId,
@@ -60,8 +93,7 @@ export async function POST(request: Request) {
         confirmed: e.confirmed,
       })),
       scanId: result.scanId,
-      // First scan = baseline, no historical changes yet
-      isBaseline: events.length === 0,
+      isBaseline: true,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Search failed";

@@ -359,50 +359,73 @@ export default function Home() {
     setSearchState({ status: "loading", profile: null, recentFollowing: null, recentFollowers: null, error: null });
 
     try {
-      const profileRes = await fetch(
-        `/api/instagram/profile?username=${encodeURIComponent(username)}`
-      );
-      const profileData = await profileRes.json();
+      // Use the two-stage combined search API — stage=preview for unpaid users
+      const res = await fetch("/api/instagram/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, stage: "preview" }),
+      });
+      const data = await res.json();
 
-      if (!profileRes.ok || !profileData.success) {
-        if (profileData.isPrivate) {
+      if (!res.ok || !data.success) {
+        if (data.error === "private_account") {
           setSearchState((prev) => ({
             ...prev,
             status: "private",
-            profile: profileData.profile,
+            profile: data.profile || null,
             error: null,
           }));
-        } else if (profileData.notFound) {
+        } else if (data.error === "not_found") {
           setSearchState((prev) => ({ ...prev, status: "not_found", error: null }));
         } else {
           setSearchState((prev) => ({
             ...prev,
             status: "error",
-            error: profileData.error || "Something went wrong",
+            error: data.error || "Something went wrong",
           }));
         }
         return;
       }
 
-      setSearchState((prev) => ({
-        ...prev,
+      // Map response to our SearchState format
+      const profile = data.profile || data.target;
+      setSearchState({
         status: "preview",
-        profile: profileData.profile,
+        profile: profile
+          ? {
+              username: profile.username,
+              fullName: profile.full_name || profile.fullName || null,
+              avatarUrl: profile.avatar_url || profile.avatarUrl || null,
+              followerCount: profile.followerCount ?? profile.follower_count ?? 0,
+              followingCount: profile.followingCount ?? profile.following_count ?? 0,
+              isPrivate: profile.is_private ?? profile.isPrivate ?? false,
+              isVerified: profile.is_verified ?? profile.isVerified ?? false,
+              biography: profile.biography ?? null,
+              externalUrl: profile.external_url ?? profile.externalUrl ?? null,
+            }
+          : null,
+        recentFollowing: (data.followingPreview || []).map(
+          (u: Record<string, unknown>) => ({
+            id: u.instagramId as string,
+            username: u.username as string,
+            fullName: u.fullName as string | null,
+            avatarUrl: u.avatarUrl as string | null,
+            isVerified: u.isVerified as boolean,
+            isPrivate: u.isPrivate as boolean,
+          })
+        ),
+        recentFollowers: (data.followersPreview || []).map(
+          (u: Record<string, unknown>) => ({
+            id: u.instagramId as string,
+            username: u.username as string,
+            fullName: u.fullName as string | null,
+            avatarUrl: u.avatarUrl as string | null,
+            isVerified: u.isVerified as boolean,
+            isPrivate: u.isPrivate as boolean,
+          })
+        ),
         error: null,
-      }));
-
-      const followsRes = await fetch(
-        `/api/instagram/follows?username=${encodeURIComponent(username)}`
-      );
-      const followsData = await followsRes.json();
-
-      if (followsData.success) {
-        setSearchState((prev) => ({
-          ...prev,
-          recentFollowing: followsData.recentFollowing || [],
-          recentFollowers: followsData.recentFollowers || [],
-        }));
-      }
+      });
     } catch {
       setSearchState((prev) => ({
         ...prev,

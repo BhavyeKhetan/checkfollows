@@ -2,18 +2,23 @@
  * Instagram Provider Interface + Factory
  *
  * Architecture:
- *   All provider-specific code lives in /providers/*.ts.
- *   The rest of the app calls getInstagramProvider().
+ *   Two providers for two different use cases:
  *
- * Supported providers:
- *   - apify: dead00/instagram-followers-following-scraper-no-cookies (primary)
- *   - hikerapi: HikerAPI v2 (fallback, kept for reference)
+ *   getPreviewProvider()  — apify/instagram-profile-scraper
+ *     Cheap profile-only lookup for unpaid landing-page searches.
+ *     Returns profile data (counts, bio, avatar) — no follow lists.
+ *
+ *   getMonitoringProvider() — dead00/instagram-followers-following-scraper-no-cookies
+ *     Full following/followers scrape for paid users.
+ *     $0.20/1,000 profiles. Baseline, diffs, daily monitoring.
+ *
+ *   HikerAPI code preserved in src/lib/hikerapi.ts (reference only).
  */
 
-// ─── Common types used across providers ───────────────────
+// ─── Common types ─────────────────────────────────────────
 
 export interface InstagramProfile {
-  userId: string; // Instagram numeric ID (PK)
+  userId: string;
   username: string;
   fullName: string | null;
   avatarUrl: string | null;
@@ -35,21 +40,15 @@ export interface InstagramUserEntry {
 }
 
 export interface ScanInput {
-  /** Single username OR array of usernames for batch */
   usernames: string[];
-  /** "Followings" | "Followers" */
   dataToScrape: "Followings" | "Followers";
-  /** 0 = no limit */
   maxResultsPerUser?: number;
 }
 
 export interface ScanOutput {
   success: boolean;
-  /** Map of sourceUsername → list of entries */
   entries: Map<string, InstagramUserEntry[]>;
-  /** Total profiles returned across all targets */
   totalProfilesReturned: number;
-  /** Provider-specific run metadata */
   runMetadata: {
     provider: string;
     actorId?: string;
@@ -60,51 +59,53 @@ export interface ScanOutput {
   };
 }
 
-// ─── Provider interface ───────────────────────────────────
+// ─── Monitoring provider interface ────────────────────────
 
 export interface InstagramProvider {
   readonly name: string;
-
-  /** Fetch a single profile by username */
   fetchProfile(username: string): Promise<InstagramProfile>;
-
-  /** Fetch following list for a user (by Instagram numeric userId) */
   fetchFollowing(userId: string): Promise<InstagramUserEntry[]>;
-
-  /** Fetch followers list for a user (by Instagram numeric userId) */
   fetchFollowers(userId: string): Promise<InstagramUserEntry[]>;
-
-  /** Run a batch scan for multiple usernames — returns entries grouped by sourceUsername */
   batchScan(input: ScanInput): Promise<ScanOutput>;
 }
 
-// ─── Factory ──────────────────────────────────────────────
+// ─── Preview provider interface ───────────────────────────
 
-let cachedProvider: InstagramProvider | null = null;
-
-export function getInstagramProvider(): InstagramProvider {
-  if (cachedProvider) return cachedProvider as InstagramProvider;
-
-  const providerName = process.env.INSTAGRAM_PROVIDER || "apify";
-
-  // Dynamic import to avoid bundling unused providers
-  switch (providerName) {
-    case "hikerapi":
-      // Kept for reference — needs valid HikerAPI key
-      throw new Error(
-        "HikerAPI is disabled. Set INSTAGRAM_PROVIDER=apify or configure HikerAPI key."
-      );
-    case "apify":
-    default: {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createApifyProvider } = require("./providers/apify");
-      cachedProvider = createApifyProvider();
-      return cachedProvider as InstagramProvider;
-    }
-  }
+export interface PreviewProvider {
+  readonly name: string;
+  fetchProfile(username: string): Promise<InstagramProfile>;
+  fetchProfiles(usernames: string[]): Promise<InstagramProfile[]>;
 }
 
-/** Reset cached provider (useful for tests) */
-export function resetProvider(): void {
-  cachedProvider = null;
+// ─── Factories ────────────────────────────────────────────
+
+let cachedMonitoringProvider: InstagramProvider | null = null;
+let cachedPreviewProvider: PreviewProvider | null = null;
+
+export function getMonitoringProvider(): InstagramProvider {
+  if (cachedMonitoringProvider) return cachedMonitoringProvider as InstagramProvider;
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createApifyProvider } = require("./providers/apify");
+  cachedMonitoringProvider = createApifyProvider();
+  return cachedMonitoringProvider as InstagramProvider;
+}
+
+export function getPreviewProvider(): PreviewProvider {
+  if (cachedPreviewProvider) return cachedPreviewProvider as PreviewProvider;
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { createPreviewProvider } = require("./providers/preview");
+  cachedPreviewProvider = createPreviewProvider();
+  return cachedPreviewProvider as PreviewProvider;
+}
+
+/** @deprecated Use getMonitoringProvider() or getPreviewProvider() instead */
+export function getInstagramProvider(): InstagramProvider {
+  return getMonitoringProvider();
+}
+
+export function resetProviders(): void {
+  cachedMonitoringProvider = null;
+  cachedPreviewProvider = null;
 }
