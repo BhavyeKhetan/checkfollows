@@ -12,7 +12,7 @@ const FEATURES = [
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
   "Track multiple accounts",
-  "Email change alerts (Pro)",
+  "Email change alerts",
   "No Instagram login required",
   "Cancel anytime — keep access until period end",
 ];

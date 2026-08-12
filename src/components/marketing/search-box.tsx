@@ -6,10 +6,8 @@ import { Input, Button } from "@/design-system";
 
 export function SearchBox({
   placeholder = "Enter Instagram handle... (e.g. alex)",
-  compact = false,
 }: {
   placeholder?: string;
-  compact?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +25,7 @@ export function SearchBox({
         e.preventDefault();
         submit();
       }}
-      className={`w-full ${compact ? "max-w-md" : "max-w-lg"} mx-auto`}
+      className="w-full max-w-lg mx-auto"
     >
       <div className="flex flex-col gap-3.5 rounded-2xl border border-[#E2E2DC] bg-[#FFFFFF] shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-3.5">
         <Input

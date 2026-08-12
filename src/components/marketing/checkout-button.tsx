@@ -20,10 +20,12 @@ export function CheckoutButton({
   className?: string;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCheckout = async () => {
     if (loading) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -34,24 +36,31 @@ export function CheckoutButton({
       if (data.url) {
         window.location.href = data.url;
       } else {
+        setError("Checkout couldn't be started. Please try again.");
         setLoading(false);
       }
     } catch {
+      setError("Network error. Please try again.");
       setLoading(false);
     }
   };
 
   return (
-    <Button
-      variant={variant}
-      size={size}
-      fullWidth={fullWidth}
-      isLoading={loading}
-      onClick={handleCheckout}
-      rightIcon={!loading ? <ArrowRight className="w-4 h-4" /> : undefined}
-      className={className}
-    >
-      {label}
-    </Button>
+    <div className={fullWidth ? "w-full" : ""}>
+      <Button
+        variant={variant}
+        size={size}
+        fullWidth={fullWidth}
+        isLoading={loading}
+        onClick={handleCheckout}
+        rightIcon={!loading ? <ArrowRight className="w-4 h-4" /> : undefined}
+        className={className}
+      >
+        {label}
+      </Button>
+      {error && (
+        <p className="mt-2 text-xs font-semibold text-[#B91C1C] text-center">{error}</p>
+      )}
+    </div>
   );
 }

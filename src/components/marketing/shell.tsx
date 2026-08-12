@@ -1,12 +1,6 @@
 import Link from "next/link";
 import { Zap } from "lucide-react";
-
-const NAV_LINKS = [
-  { href: "/#truth-section", label: "The Instagram Trap" },
-  { href: "/#comparison", label: "Comparison" },
-  { href: "/#use-cases", label: "Use Cases" },
-  { href: "/pricing", label: "Pricing" },
-];
+import { NavBar } from "@/components/marketing/nav-bar";
 
 const TOOL_LINKS = [
   { href: "/see-who-someone-follows", label: "See who someone follows" },
@@ -34,38 +28,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
       {/* Header */}
-      <nav className="sticky top-0 z-50 ramp-glass">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-            </div>
-            <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href + link.label}
-                href={link.href}
-                className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-
-          <Link
-            href="/"
-            className="hidden sm:inline-flex items-center justify-center font-semibold transition-all duration-200 rounded-full text-xs px-3.5 py-2 gap-1.5 bg-[#E7F256] text-[#121212] hover:bg-[#DAE64A] active:bg-[#C7D337] border border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-          >
-            Check followers anonymously
-          </Link>
-        </div>
-      </nav>
+      <NavBar />
 
       <main className="flex-1">{children}</main>
 
