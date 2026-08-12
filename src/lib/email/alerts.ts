@@ -92,11 +92,13 @@ export async function notifySubscribers(
   const { createServerClient } = await import("@/lib/supabase/server");
   const supabase = createServerClient();
 
+  // Only pro-tier subscribers get email alerts
   const { data: subscribers } = await supabase
     .from("subscriptions")
     .select("email")
     .eq("target_id", targetId)
-    .eq("active", true);
+    .eq("active", true)
+    .eq("plan", "pro");
 
   if (!subscribers || subscribers.length === 0) return 0;
 

@@ -70,16 +70,10 @@ async function startRun(
 ): Promise<string> {
   const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs?token=${encodeURIComponent(config.token)}`;
 
-  // Use directUrls (full Instagram profile URLs) which is the standard input format
-  const directUrls = usernames.map(
-    (u) => `https://www.instagram.com/${encodeURIComponent(u)}/`
-  );
-
   const input = {
-    directUrls,
+    usernames,
     // Only fetch profile data, not posts
     scrapePosts: false,
-    scrapeStories: false,
     scrapeHighlights: false,
   };
 
