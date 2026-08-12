@@ -1,16 +1,50 @@
 /**
- * HikerAPI — Primary Instagram data provider for CheckFollows.
+ * HikerAPI v2 — Primary Instagram data provider for CheckFollows.
  *
  * Endpoints:
- *   GET /user/by/username?username=xxx     → profile info + Instagram user ID
- *   GET /user/following?id=INSTAGRAM_ID    → paginated following list
- *   GET /user/followers?id=INSTAGRAM_ID    → paginated followers list
+ *   GET /v2/user/by/username?username=xxx       → { user: { pk, username, full_name, ... } }
+ *   GET /v2/user/following?user_id=N            → { response: [...], next_page_id: "..." }
+ *   GET /v2/user/followers?user_id=N            → { response: [...], next_page_id: "..." }
  *
- * Docs: https://hikerapi.com/instagram-followers-api
+ * Auth: x-access-key header
+ * Docs: https://hikerapi.com
  */
 
-const HIKER_BASE = process.env.HIKERAPI_BASE_URL || "https://api.hikerapi.com/v1";
+const HIKER_BASE = process.env.HIKERAPI_BASE_URL || "https://api.hikerapi.com/v2";
 const HIKER_KEY = process.env.HIKERAPI_API_KEY || "";
+
+// ─── v2 Response types ────────────────────────────────────
+
+interface HikerV2ProfileResponse {
+  user: {
+    pk: number;
+    username: string;
+    full_name: string;
+    is_private: boolean;
+    is_verified: boolean;
+    profile_pic_url: string;
+    follower_count: number;
+    following_count: number;
+    biography: string;
+    external_url: string;
+  };
+}
+
+interface HikerV2UserEntry {
+  pk: number;
+  username: string;
+  full_name: string;
+  is_private: boolean;
+  is_verified: boolean;
+  profile_pic_url: string;
+}
+
+interface HikerV2ListResponse {
+  response: HikerV2UserEntry[];
+  next_page_id: string | null;
+}
+
+// ─── Public types (used by monitoring.ts) ────────────────
 
 export interface HikerProfile {
   pk: string;
@@ -34,17 +68,12 @@ export interface HikerUserEntry {
   profile_pic_url: string;
 }
 
-interface HikerPaginatedResponse<T> {
-  users: T[];
-  pagination_token: string | null;
-  big_list: boolean;
-  page_size: number;
-}
+// ─── Helpers ──────────────────────────────────────────────
 
 function headers(): Record<string, string> {
   return {
     "x-access-key": HIKER_KEY,
-    "Content-Type": "application/json",
+    accept: "application/json",
   };
 }
 
@@ -56,6 +85,34 @@ class HikerAPIError extends Error {
     this.status = status;
   }
 }
+
+function toPublicProfile(raw: HikerV2ProfileResponse["user"]): HikerProfile {
+  return {
+    pk: String(raw.pk),
+    username: raw.username,
+    full_name: raw.full_name,
+    is_private: raw.is_private,
+    is_verified: raw.is_verified,
+    profile_pic_url: raw.profile_pic_url,
+    follower_count: raw.follower_count,
+    following_count: raw.following_count,
+    biography: raw.biography || "",
+    external_url: raw.external_url || "",
+  };
+}
+
+function toPublicEntry(raw: HikerV2UserEntry): HikerUserEntry {
+  return {
+    pk: String(raw.pk),
+    username: raw.username,
+    full_name: raw.full_name,
+    is_private: raw.is_private,
+    is_verified: raw.is_verified,
+    profile_pic_url: raw.profile_pic_url,
+  };
+}
+
+// ─── Public API functions ─────────────────────────────────
 
 export async function fetchProfileByUsername(
   username: string
@@ -72,7 +129,12 @@ export async function fetchProfileByUsername(
     );
   }
 
-  return res.json();
+  const data: HikerV2ProfileResponse = await res.json();
+  if (!data.user) {
+    throw new HikerAPIError("Profile not found", 404);
+  }
+
+  return toPublicProfile(data.user);
 }
 
 export async function fetchFollowing(
@@ -80,12 +142,12 @@ export async function fetchFollowing(
   maxPages = 20
 ): Promise<HikerUserEntry[]> {
   const all: HikerUserEntry[] = [];
-  let token: string | null = null;
+  let nextPageId: string | null = null;
   let pages = 0;
 
   do {
-    const params = new URLSearchParams({ id: instagramUserId });
-    if (token) params.set("pagination_token", token);
+    const params = new URLSearchParams({ user_id: instagramUserId });
+    if (nextPageId) params.set("next_page_id", nextPageId);
 
     const url = `${HIKER_BASE}/user/following?${params.toString()}`;
     const res = await fetch(url, { headers: headers() });
@@ -98,13 +160,14 @@ export async function fetchFollowing(
       );
     }
 
-    const data: HikerPaginatedResponse<HikerUserEntry> = await res.json();
-    all.push(...data.users);
-    token = data.pagination_token;
+    const data: HikerV2ListResponse = await res.json();
+    if (data.response) {
+      all.push(...data.response.map(toPublicEntry));
+    }
+    nextPageId = data.next_page_id;
     pages++;
 
-    // Safety: stop if no token or we've hit the limit
-    if (!token || pages >= maxPages) break;
+    if (!nextPageId || pages >= maxPages) break;
   } while (true);
 
   return all;
@@ -115,12 +178,12 @@ export async function fetchFollowers(
   maxPages = 20
 ): Promise<HikerUserEntry[]> {
   const all: HikerUserEntry[] = [];
-  let token: string | null = null;
+  let nextPageId: string | null = null;
   let pages = 0;
 
   do {
-    const params = new URLSearchParams({ id: instagramUserId });
-    if (token) params.set("pagination_token", token);
+    const params = new URLSearchParams({ user_id: instagramUserId });
+    if (nextPageId) params.set("next_page_id", nextPageId);
 
     const url = `${HIKER_BASE}/user/followers?${params.toString()}`;
     const res = await fetch(url, { headers: headers() });
@@ -133,28 +196,15 @@ export async function fetchFollowers(
       );
     }
 
-    const data: HikerPaginatedResponse<HikerUserEntry> = await res.json();
-    all.push(...data.users);
-    token = data.pagination_token;
+    const data: HikerV2ListResponse = await res.json();
+    if (data.response) {
+      all.push(...data.response.map(toPublicEntry));
+    }
+    nextPageId = data.next_page_id;
     pages++;
 
-    if (!token || pages >= maxPages) break;
+    if (!nextPageId || pages >= maxPages) break;
   } while (true);
 
   return all;
-}
-
-/**
- * Test if HikerAPI is configured and reachable.
- */
-export async function testConnection(): Promise<boolean> {
-  if (!HIKER_KEY) return false;
-  try {
-    const res = await fetch(`${HIKER_BASE}/user/by/username?username=instagram`, {
-      headers: headers(),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
