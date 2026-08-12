@@ -232,6 +232,8 @@ export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
   const hasRestoredRef = useRef(false);
 
+  const checkingOutRef = useRef(false);
+
   const triggerFocusAndHighlight = useCallback(() => {
     setIsHighlighted(true);
     inputRef.current?.focus();
@@ -239,18 +241,18 @@ export default function Home() {
     setTimeout(() => setIsHighlighted(false), 2500);
   }, []);
 
-  // ── Stripe success redirect handler ───────────────────────────
+  // Restore paid session or Stripe success/cancel redirect
   useEffect(() => {
     if (hasRestoredRef.current) return;
     hasRestoredRef.current = true;
 
     const success = searchParams.get("success");
     const sessionId = searchParams.get("session_id");
+    const saved = loadSearchState();
 
     if (success === "true" && sessionId) {
       markPaidSession();
 
-      const saved = loadSearchState();
       if (saved?.username) {
         setSearchInput(saved.username);
         if (saved.profile) {
@@ -287,7 +289,6 @@ export default function Home() {
         router.replace("/", { scroll: false });
       }
     } else if (searchParams.get("canceled") === "true") {
-      const saved = loadSearchState();
       if (saved?.username) {
         setSearchInput(saved.username);
         if (saved.profile) {
@@ -302,11 +303,24 @@ export default function Home() {
         clearSearchState();
         router.replace("/", { scroll: false });
       }
+    } else if (isPaidSession() && saved?.username) {
+      // Returning user with an existing paid session — restore their paid view
+      setSearchInput(saved.username);
+      if (saved.profile) {
+        setSearchState({
+          status: "full",
+          profile: saved.profile as SearchState["profile"],
+          recentFollowing: saved.following as FollowEntry[],
+          recentFollowers: saved.followers as FollowEntry[],
+          error: null,
+        });
+      }
     }
   }, [searchParams, router]);
 
   const handleUnlock = useCallback(async () => {
-    if (!searchState.profile || isCheckingOut) return;
+    if (!searchState.profile || checkingOutRef.current) return;
+    checkingOutRef.current = true;
     setIsCheckingOut(true);
 
     saveSearchState({
@@ -329,12 +343,14 @@ export default function Home() {
       if (data.url) {
         window.location.href = data.url;
       } else {
+        checkingOutRef.current = false;
         setIsCheckingOut(false);
       }
     } catch {
+      checkingOutRef.current = false;
       setIsCheckingOut(false);
     }
-  }, [searchState.profile, searchInput, isCheckingOut, searchState.recentFollowing, searchState.recentFollowers]);
+  }, [searchState.profile, searchInput, searchState.recentFollowing, searchState.recentFollowers]);
 
   const handleSearch = async () => {
     const username = searchInput.replace(/^@/, "").trim();
