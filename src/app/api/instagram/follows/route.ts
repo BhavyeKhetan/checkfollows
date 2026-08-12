@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMonitoringProvider, getPreviewProvider } from "@/lib/instagram/provider";
-import { upsertInstagramTarget, scanFollowing, getLatestSnapshot } from "@/lib/monitoring";
+import { upsertInstagramTarget, fullBaselineScan, getLatestSnapshot } from "@/lib/monitoring";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -71,6 +71,30 @@ export async function GET(request: Request) {
     }
 
     // ─── FULL mode (paid) ────────────────────────────────
+    if (full) {
+      // Runs a single batchScan, stores baseline, enables daily monitoring
+      const baseline = await fullBaselineScan(cleanUsername);
+
+      const followingList = baseline.following.map((u) => ({
+        instagramId: u.userId,
+        username: u.username,
+        fullName: u.fullName,
+        avatarUrl: u.avatarUrl,
+        isVerified: u.isVerified,
+        isPrivate: u.isPrivate,
+      }));
+
+      return NextResponse.json({
+        success: true,
+        targetId: baseline.target.id,
+        following: followingList,
+        hasHistory: false,
+        isFirstSearch: true,
+        monitoringEnabled: true,
+      });
+    }
+
+    // Lazy full fetch without baseline (e.g. returning paid user checking existing target)
     const provider = getMonitoringProvider();
     const profile = await provider.fetchProfile(cleanUsername);
 
@@ -102,10 +126,6 @@ export async function GET(request: Request) {
     const entries = result.entries.get(cleanUsername.toLowerCase()) || [];
     const prevSnapshot = await getLatestSnapshot(target.id, "following");
     const hasHistory = prevSnapshot !== null;
-
-    if (full) {
-      await scanFollowing(target.id);
-    }
 
     const followingList = entries.map((u) => ({
       instagramId: u.userId,

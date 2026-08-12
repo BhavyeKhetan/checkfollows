@@ -767,6 +767,14 @@ export async function processDueScans(): Promise<{
   const supabase = createServerClient();
   const now = new Date().toISOString();
 
+  // First, get target IDs that have an active paid subscription
+  const { data: paidSubs } = await supabase
+    .from("subscriptions")
+    .select("target_id")
+    .eq("active", true);
+
+  const paidTargetIds = new Set((paidSubs || []).map((s) => s.target_id));
+
   const { data: dueTargets } = await supabase
     .from("instagram_targets")
     .select("id, username")
@@ -775,7 +783,12 @@ export async function processDueScans(): Promise<{
     .order("next_scan_at", { ascending: true })
     .limit(50);
 
-  if (!dueTargets || dueTargets.length === 0) {
+  // Only scan targets that have an active paid subscription
+  const eligibleTargets = (dueTargets || []).filter((t) =>
+    paidTargetIds.has(t.id)
+  );
+
+  if (eligibleTargets.length === 0) {
     return { scanned: 0, failed: 0, suspect: 0, results: [] };
   }
 
@@ -784,8 +797,8 @@ export async function processDueScans(): Promise<{
   let failed = 0;
   let suspect = 0;
 
-  for (let i = 0; i < dueTargets.length; i += BATCH_SIZE) {
-    const batch = dueTargets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < eligibleTargets.length; i += BATCH_SIZE) {
+    const batch = eligibleTargets.slice(i, i + BATCH_SIZE);
 
     for (const target of batch) {
       const result = await scanFollowing(target.id);
