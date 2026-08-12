@@ -246,6 +246,13 @@ export default function Home() {
     if (hasRestoredRef.current) return;
     hasRestoredRef.current = true;
 
+    const q = searchParams.get("q");
+    if (q) {
+      setSearchInput(q);
+      handleSearch(q);
+      return;
+    }
+
     const success = searchParams.get("success");
     const sessionId = searchParams.get("session_id");
     const saved = loadSearchState();
@@ -352,8 +359,8 @@ export default function Home() {
     }
   }, [searchState.profile, searchInput, searchState.recentFollowing, searchState.recentFollowers]);
 
-  const handleSearch = async () => {
-    const username = searchInput.replace(/^@/, "").trim();
+  const handleSearch = async (override?: string) => {
+    const username = (override ?? searchInput).replace(/^@/, "").trim();
     if (!username) return;
 
     setSearchState({ status: "loading", profile: null, recentFollowing: null, recentFollowers: null, error: null });
@@ -789,6 +796,12 @@ export default function Home() {
             >
               FAQ
             </a>
+            <Link
+              href="/pricing"
+              className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
+            >
+              Pricing
+            </Link>
           </div>
 
           <div className="hidden sm:flex items-center gap-3">
@@ -960,7 +973,7 @@ export default function Home() {
                   <Button
                     variant="primary"
                     size="md"
-                    onClick={handleSearch}
+                    onClick={() => handleSearch()}
                     isLoading={searchState.status === "loading"}
                     disabled={!searchInput.trim()}
                     rightIcon={<ArrowRight className="w-4 h-4" />}
@@ -1478,8 +1491,16 @@ export default function Home() {
             </div>
             <span>CheckFollows</span>
           </div>
-          <div className="flex items-center gap-6 text-xs font-medium text-[#777777]">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-[#777777]">
             <span>© 2026 CheckFollows</span>
+            <span>·</span>
+            <a href="/pricing" className="hover:text-[#121212] transition-colors">
+              Pricing
+            </a>
+            <span>·</span>
+            <a href="/blog" className="hover:text-[#121212] transition-colors">
+              Blog
+            </a>
             <span>·</span>
             <a href="/privacy" className="hover:text-[#121212] transition-colors">
               Privacy Policy
