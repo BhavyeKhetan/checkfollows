@@ -1481,12 +1481,20 @@ export default function Home() {
           <div className="flex items-center gap-6 text-xs font-medium text-[#777777]">
             <span>© 2026 CheckFollows</span>
             <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">
+            <a href="/privacy" className="hover:text-[#121212] transition-colors">
               Privacy Policy
             </a>
             <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">
+            <a href="/terms" className="hover:text-[#121212] transition-colors">
               Terms of Service
+            </a>
+            <span>·</span>
+            <a href="/refund" className="hover:text-[#121212] transition-colors">
+              Refund Policy
+            </a>
+            <span>·</span>
+            <a href="/contact" className="hover:text-[#121212] transition-colors">
+              Contact
             </a>
           </div>
         </div>
