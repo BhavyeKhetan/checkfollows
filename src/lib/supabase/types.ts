@@ -23,6 +23,8 @@ export interface Database {
           last_scanned_at: string | null;
           next_scan_at: string | null;
           scan_interval_hours: number;
+          monitoring_enabled: boolean;
+          monitoring_interval_hours: number;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +41,8 @@ export interface Database {
           last_scanned_at?: string | null;
           next_scan_at?: string | null;
           scan_interval_hours?: number;
+          monitoring_enabled?: boolean;
+          monitoring_interval_hours?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +59,8 @@ export interface Database {
           last_scanned_at?: string | null;
           next_scan_at?: string | null;
           scan_interval_hours?: number;
+          monitoring_enabled?: boolean;
+          monitoring_interval_hours?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -181,6 +187,11 @@ export interface Database {
           error_message: string | null;
           provider: string;
           api_cost: number;
+          suspect: boolean;
+          profiles_returned: number;
+          actor_id: string | null;
+          run_id: string | null;
+          target_count: number;
           created_at: string;
         };
         Insert: {
@@ -192,6 +203,11 @@ export interface Database {
           error_message?: string | null;
           provider?: string;
           api_cost?: number;
+          suspect?: boolean;
+          profiles_returned?: number;
+          actor_id?: string | null;
+          run_id?: string | null;
+          target_count?: number;
           created_at?: string;
         };
         Update: {
@@ -203,7 +219,42 @@ export interface Database {
           error_message?: string | null;
           provider?: string;
           api_cost?: number;
+          suspect?: boolean;
+          profiles_returned?: number;
+          actor_id?: string | null;
+          run_id?: string | null;
+          target_count?: number;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      notification_events: {
+        Row: {
+          id: string;
+          target_id: string;
+          follow_event_id: string;
+          subscriber_email: string;
+          channel: string;
+          sent_at: string;
+          status: string;
+        };
+        Insert: {
+          id?: string;
+          target_id: string;
+          follow_event_id: string;
+          subscriber_email: string;
+          channel?: string;
+          sent_at?: string;
+          status?: string;
+        };
+        Update: {
+          id?: string;
+          target_id?: string;
+          follow_event_id?: string;
+          subscriber_email?: string;
+          channel?: string;
+          sent_at?: string;
+          status?: string;
         };
         Relationships: [];
       };

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { enableMonitoring } from "@/lib/monitoring";
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     // Check target exists
     const { data: target } = await supabase
       .from("instagram_targets")
-      .select("id, username")
+      .select("id, username, monitoring_enabled")
       .eq("id", targetId)
       .single();
 
@@ -51,9 +52,14 @@ export async function POST(request: Request) {
         .update({ active: true, updated_at: new Date().toISOString() })
         .eq("id", existing.id);
 
+      // Re-enable monitoring if it was disabled
+      if (!target.monitoring_enabled) {
+        await enableMonitoring(targetId);
+      }
+
       return NextResponse.json({
         success: true,
-        message: "Subscription reactivated",
+        message: "Subscription reactivated — monitoring is active",
         alreadySubscribed: true,
       });
     }
@@ -74,9 +80,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Enable monitoring for this target
+    await enableMonitoring(targetId);
+
     return NextResponse.json({
       success: true,
-      message: "Now tracking @" + target.username,
+      message: "Now tracking @" + target.username + " — monitoring is active",
       targetUsername: target.username,
     });
   } catch (error) {

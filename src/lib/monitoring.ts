@@ -1,39 +1,48 @@
 /**
  * Monitoring Engine — Snapshot + diff engine + scheduler for CheckFollows.
  *
- * Architecture:
- *   1. Scan a target → fetch current Following list via HikerAPI
- *   2. Compare against the most recent snapshot in Supabase
- *   3. Generate follow_events for any detected changes
- *   4. Store the new snapshot for future comparisons
- *   5. Schedule the next scan
+ * Architecture (Apify primary):
+ *   1. Scan target(s) → batch fetch current Following list via Apify
+ *   2. First scan = BASELINE (no events generated)
+ *   3. Subsequent scans → diff against previous snapshot → generate events
+ *   4. Snapshot validation → suspect detection (>20% reduction triggers retry)
+ *   5. Two-observation confirmation for STOPPED_FOLLOWING events
+ *   6. Cost instrumentation per scan
  *
- * Noise protection:
- *   Events are marked confirmed=false on first detection.
- *   They become confirmed=true only when observed in two consecutive scans.
- *   This avoids false positives from Instagram's slightly inconsistent lists.
+ * Key concepts:
+ *   - BASELINE: first successful scan. No events. Just stores data.
+ *   - NEW_FOLLOWING: accepted after one successful scan (less risky)
+ *   - STOPPED_FOLLOWING: candidate on first observation, confirmed on second
+ *   - SUSPECT: >20% reduction from previous count triggers verification
  */
 
 import { createServerClient } from "@/lib/supabase/server";
-import {
-  fetchProfileByUsername,
-  fetchFollowing,
-  fetchFollowers,
-} from "@/lib/hikerapi";
-import type { HikerProfile, HikerUserEntry } from "@/lib/hikerapi";
+import { getInstagramProvider } from "@/lib/instagram/provider";
+import type { InstagramUserEntry } from "@/lib/instagram/provider";
 
-// ─── Types ───────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────
+
+const SUSPECT_THRESHOLD = parseFloat(
+  process.env.SUSPECT_THRESHOLD_PCT || "0.20"
+);
+const BATCH_SIZE = parseInt(process.env.MONITORING_BATCH_SIZE || "10", 10);
+
+// ─── Types ────────────────────────────────────────────────
 
 export interface ScanResult {
   scanId: string;
   targetId: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "suspect";
   events: FollowEvent[];
   error?: string;
 }
 
 export interface FollowEvent {
-  eventType: "NEW_FOLLOWING" | "STOPPED_FOLLOWING" | "NEW_FOLLOWER" | "LOST_FOLLOWER";
+  eventType:
+    | "NEW_FOLLOWING"
+    | "STOPPED_FOLLOWING"
+    | "NEW_FOLLOWER"
+    | "LOST_FOLLOWER";
   instagramId: string;
   username: string;
   fullName: string | null;
@@ -42,49 +51,61 @@ export interface FollowEvent {
   confirmed: boolean;
 }
 
+// ─── Snapshots table row shape (for type narrowing) ───────
+
+interface SnapshotRow {
+  id: string;
+  target_id: string;
+  snapshot_type: string;
+  account_ids: string[];
+  account_usernames: string[];
+  captured_at: string;
+  scan_id: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────
 
-function buildUserMap(users: HikerUserEntry[]): Map<string, HikerUserEntry> {
-  const map = new Map<string, HikerUserEntry>();
+function buildUserMap(
+  users: InstagramUserEntry[]
+): Map<string, InstagramUserEntry> {
+  const map = new Map<string, InstagramUserEntry>();
   for (const u of users) {
-    map.set(u.pk, u);
+    map.set(u.userId, u);
   }
   return map;
 }
 
 function diffLists(
-  previous: Map<string, HikerUserEntry>,
-  current: Map<string, HikerUserEntry>,
+  previous: Map<string, InstagramUserEntry>,
+  current: Map<string, InstagramUserEntry>,
   addEventType: FollowEvent["eventType"],
   removeEventType: FollowEvent["eventType"]
 ): FollowEvent[] {
   const events: FollowEvent[] = [];
 
-  // New: in current but not in previous
   for (const [id, entry] of current) {
     if (!previous.has(id)) {
       events.push({
         eventType: addEventType,
         instagramId: id,
         username: entry.username,
-        fullName: entry.full_name,
-        avatarUrl: entry.profile_pic_url,
-        isVerified: entry.is_verified,
+        fullName: entry.fullName,
+        avatarUrl: entry.avatarUrl,
+        isVerified: entry.isVerified,
         confirmed: false,
       });
     }
   }
 
-  // Lost: in previous but not in current
   for (const [id, entry] of previous) {
     if (!current.has(id)) {
       events.push({
         eventType: removeEventType,
         instagramId: id,
         username: entry.username,
-        fullName: entry.full_name,
-        avatarUrl: entry.profile_pic_url,
-        isVerified: entry.is_verified,
+        fullName: entry.fullName,
+        avatarUrl: entry.avatarUrl,
+        isVerified: entry.isVerified,
         confirmed: false,
       });
     }
@@ -93,73 +114,159 @@ function diffLists(
   return events;
 }
 
-function buildUserIdList(users: HikerUserEntry[]): string[] {
-  return users.map((u) => u.pk);
+function buildUserIdList(users: InstagramUserEntry[]): string[] {
+  return users.map((u) => u.userId);
 }
 
-function buildUsernameList(users: HikerUserEntry[]): string[] {
+function buildUsernameList(users: InstagramUserEntry[]): string[] {
   return users.map((u) => u.username);
 }
 
-// ─── Core: Upsert Target ──────────────────────────────────
+// ─── Snapshot Validation ──────────────────────────────────
 
-export async function upsertInstagramTarget(profile: HikerProfile) {
+function isSuspectResult(
+  currentCount: number,
+  previousCount: number | null
+): boolean {
+  if (previousCount === null || previousCount === 0) return false;
+  const reduction = (previousCount - currentCount) / previousCount;
+  return reduction > SUSPECT_THRESHOLD;
+}
+
+// ─── Get latest non-suspect snapshot ──────────────────────
+
+async function getLatestValidSnapshot(
+  supabase: ReturnType<typeof createServerClient>,
+  targetId: string,
+  type: "following" | "followers"
+): Promise<SnapshotRow | null> {
+  // Get recent snapshots, then filter out ones from suspect scans
+  const { data: snapshots } = await supabase
+    .from("follow_snapshots")
+    .select("id, target_id, snapshot_type, account_ids, account_usernames, captured_at, scan_id")
+    .eq("target_id", targetId)
+    .eq("snapshot_type", type)
+    .order("captured_at", { ascending: false })
+    .limit(3);
+
+  if (!snapshots || snapshots.length === 0) return null;
+
+  // Check each snapshot's associated scan for suspect flag
+  for (const snap of snapshots) {
+    const { data: scan } = await supabase
+      .from("scans")
+      .select("suspect")
+      .eq("id", snap.scan_id)
+      .maybeSingle();
+
+    if (scan && !scan.suspect) {
+      return snap;
+    }
+  }
+
+  return null;
+}
+
+// ─── Get nth-oldest snapshot ──────────────────────────────
+
+async function getNthOldestSnapshot(
+  supabase: ReturnType<typeof createServerClient>,
+  targetId: string,
+  type: "following" | "followers",
+  n: number
+): Promise<SnapshotRow | null> {
+  const { data: snapshots } = await supabase
+    .from("follow_snapshots")
+    .select("id, target_id, snapshot_type, account_ids, account_usernames, captured_at, scan_id")
+    .eq("target_id", targetId)
+    .eq("snapshot_type", type)
+    .order("captured_at", { ascending: false })
+    .limit(n + 1);
+
+  if (!snapshots || snapshots.length <= n) return null;
+  return snapshots[n];
+}
+
+// ─── Upsert Target ────────────────────────────────────────
+
+export async function upsertInstagramTarget(profile: {
+  userId: string;
+  username: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  isPrivate: boolean;
+  isVerified: boolean;
+  followerCount: number;
+  followingCount: number;
+}): Promise<{
+  id: string;
+  instagram_id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  is_private: boolean;
+  is_verified: boolean;
+  following_count: number;
+  follower_count: number;
+} | null> {
   const supabase = createServerClient();
 
   const { data: existing } = await supabase
     .from("instagram_targets")
-    .select("id, next_scan_at")
-    .eq("instagram_id", profile.pk)
+    .select("id, monitoring_enabled")
+    .eq("instagram_id", profile.userId)
     .maybeSingle();
 
   if (existing) {
-    // Update profile info
     const { data } = await supabase
       .from("instagram_targets")
       .update({
         username: profile.username,
-        full_name: profile.full_name,
-        avatar_url: profile.profile_pic_url,
-        is_private: profile.is_private,
-        is_verified: profile.is_verified,
-        following_count: profile.following_count,
-        follower_count: profile.follower_count,
+        full_name: profile.fullName,
+        avatar_url: profile.avatarUrl,
+        is_private: profile.isPrivate,
+        is_verified: profile.isVerified,
+        following_count: profile.followingCount,
+        follower_count: profile.followerCount,
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
-      .select("id, instagram_id, username, full_name, avatar_url, is_private, is_verified")
+      .select(
+        "id, instagram_id, username, full_name, avatar_url, is_private, is_verified, following_count, follower_count"
+      )
       .single();
 
     return data;
   }
 
-  // Insert new target
   const { data } = await supabase
     .from("instagram_targets")
     .insert({
-      instagram_id: profile.pk,
+      instagram_id: profile.userId,
       username: profile.username,
-      full_name: profile.full_name,
-      avatar_url: profile.profile_pic_url,
-      is_private: profile.is_private,
-      is_verified: profile.is_verified,
-      following_count: profile.following_count,
-      follower_count: profile.follower_count,
+      full_name: profile.fullName,
+      avatar_url: profile.avatarUrl,
+      is_private: profile.isPrivate,
+      is_verified: profile.isVerified,
+      following_count: profile.followingCount,
+      follower_count: profile.followerCount,
       scan_interval_hours: 24,
-      next_scan_at: new Date().toISOString(), // eligible immediately
+      monitoring_enabled: false,
     })
-    .select("id, instagram_id, username, full_name, avatar_url, is_private, is_verified")
+    .select(
+      "id, instagram_id, username, full_name, avatar_url, is_private, is_verified, following_count, follower_count"
+    )
     .single();
 
   return data;
 }
 
-// ─── Core: Scan Following ─────────────────────────────────
+// ─── Core: Scan Following (single target) ─────────────────
 
 export async function scanFollowing(targetId: string): Promise<ScanResult> {
   const supabase = createServerClient();
+  const provider = getInstagramProvider();
 
-  // Get target info
   const { data: target } = await supabase
     .from("instagram_targets")
     .select("*")
@@ -176,15 +283,17 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
     };
   }
 
-  // Create scan record
   const { data: scan } = await supabase
     .from("scans")
     .insert({
       target_id: targetId,
       status: "running",
       started_at: new Date().toISOString(),
-      provider: "hikerapi",
+      provider: provider.name,
       api_cost: 0,
+      target_count: 1,
+      profiles_returned: 0,
+      suspect: false,
     })
     .select("id")
     .single();
@@ -200,38 +309,91 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
   }
 
   try {
-    // Fetch current following list
-    const currentFollowing = await fetchFollowing(target.instagram_id);
+    const result = await provider.batchScan({
+      usernames: [target.username],
+      dataToScrape: "Followings",
+      maxResultsPerUser: 0,
+    });
 
-    // Get most recent snapshot
-    const { data: prevSnapshot } = await supabase
-      .from("follow_snapshots")
-      .select("*")
-      .eq("target_id", targetId)
-      .eq("snapshot_type", "following")
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    if (!result.success) {
+      throw new Error(result.runMetadata.error || "Apify scan failed");
+    }
 
-    // Build maps and diff
-    const currentMap = buildUserMap(currentFollowing);
+    const entries = result.entries.get(target.username.toLowerCase()) || [];
+    const currentCount = entries.length;
+
+    await supabase
+      .from("scans")
+      .update({
+        profiles_returned: result.totalProfilesReturned,
+        actor_id: result.runMetadata.actorId || null,
+        run_id: result.runMetadata.runId || null,
+        api_cost: result.runMetadata.costEstimate || 0,
+      })
+      .eq("id", scan.id);
+
+    // Get most recent valid (non-suspect) snapshot
+    const prevSnapshot = await getLatestValidSnapshot(
+      supabase,
+      targetId,
+      "following"
+    );
+    const previousCount = prevSnapshot?.account_ids?.length ?? null;
+
+    // ─── Snapshot validation ─────────────────────────────
+    if (isSuspectResult(currentCount, previousCount)) {
+      await supabase
+        .from("scans")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          suspect: true,
+          error_message: `Suspect: ${previousCount} → ${currentCount} (${Math.round((1 - currentCount / (previousCount || 1)) * 100)}% reduction)`,
+        })
+        .eq("id", scan.id);
+
+      await supabase
+        .from("instagram_targets")
+        .update({
+          next_scan_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", targetId);
+
+      return {
+        scanId: scan.id,
+        targetId,
+        status: "suspect",
+        events: [],
+        error: `Suspect scan: ${previousCount} → ${currentCount}`,
+      };
+    }
+
+    const currentMap = buildUserMap(entries);
     let events: FollowEvent[] = [];
 
-    if (prevSnapshot) {
-      // Rebuild previous map from stored arrays
-      const prevMap = new Map<string, HikerUserEntry>();
+    // ─── BASELINE or DIFF ────────────────────────────────
+    const isBaseline = !prevSnapshot;
+
+    if (!isBaseline) {
+      const prevMap = new Map<string, InstagramUserEntry>();
       for (let i = 0; i < prevSnapshot.account_ids.length; i++) {
         prevMap.set(prevSnapshot.account_ids[i], {
-          pk: prevSnapshot.account_ids[i],
+          userId: prevSnapshot.account_ids[i],
           username: prevSnapshot.account_usernames[i] || "",
-          full_name: "",
-          is_private: false,
-          is_verified: false,
-          profile_pic_url: "",
+          fullName: null,
+          avatarUrl: null,
+          isPrivate: false,
+          isVerified: false,
         });
       }
 
-      events = diffLists(prevMap, currentMap, "NEW_FOLLOWING", "STOPPED_FOLLOWING");
+      events = diffLists(
+        prevMap,
+        currentMap,
+        "NEW_FOLLOWING",
+        "STOPPED_FOLLOWING"
+      );
     }
 
     // Store new snapshot
@@ -240,15 +402,14 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
       .insert({
         target_id: targetId,
         snapshot_type: "following",
-        account_ids: buildUserIdList(currentFollowing),
-        account_usernames: buildUsernameList(currentFollowing),
+        account_ids: buildUserIdList(entries),
+        account_usernames: buildUsernameList(entries),
         scan_id: scan.id,
       })
       .select("id")
       .single();
 
-    // Store events
-    if (events.length > 0 && newSnapshot) {
+    if (!isBaseline && events.length > 0 && newSnapshot) {
       const eventRows = events.map((e) => ({
         target_id: targetId,
         event_type: e.eventType,
@@ -265,39 +426,70 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
       await supabase.from("follow_events").insert(eventRows);
     }
 
-    // Confirm events that were detected in the previous scan (noise protection)
+    // ─── Confirm events ──────────────────────────────────
     if (prevSnapshot) {
-      const { data: unconfirmedEvents } = await supabase
+      // NEW_FOLLOWING: confirm immediately (single observation)
+      const { data: unconfirmedNewFollows } = await supabase
         .from("follow_events")
-        .select("id, instagram_id, event_type")
+        .select("id, instagram_id")
         .eq("target_id", targetId)
         .eq("confirmed", false)
+        .eq("event_type", "NEW_FOLLOWING")
         .eq("current_snapshot_id", prevSnapshot.id);
 
-      if (unconfirmedEvents && unconfirmedEvents.length > 0) {
-        const currentIds = new Set(currentFollowing.map((u) => u.pk));
+      if (unconfirmedNewFollows && unconfirmedNewFollows.length > 0) {
+        const currentIds = new Set(entries.map((u) => u.userId));
+        const toConfirm = unconfirmedNewFollows
+          .filter((evt) => currentIds.has(evt.instagram_id))
+          .map((evt) => evt.id);
 
-        for (const evt of unconfirmedEvents) {
-          let shouldConfirm = false;
-          if (evt.event_type === "NEW_FOLLOWING" && currentIds.has(evt.instagram_id)) {
-            shouldConfirm = true;
-          } else if (evt.event_type === "STOPPED_FOLLOWING" && !currentIds.has(evt.instagram_id)) {
-            shouldConfirm = true;
-          }
+        if (toConfirm.length > 0) {
+          await supabase
+            .from("follow_events")
+            .update({ confirmed: true })
+            .in("id", toConfirm);
+        }
+      }
 
-          if (shouldConfirm) {
+      // STOPPED_FOLLOWING: require two observations
+      // The older snapshot (index 2, 3rd from top) is the one whose candidate events
+      // should now be confirmed if the account is still absent
+      const olderSnapshot = await getNthOldestSnapshot(
+        supabase,
+        targetId,
+        "following",
+        2
+      );
+
+      if (olderSnapshot) {
+        const { data: candidateRemovals } = await supabase
+          .from("follow_events")
+          .select("id, instagram_id")
+          .eq("target_id", targetId)
+          .eq("confirmed", false)
+          .eq("event_type", "STOPPED_FOLLOWING")
+          .eq("current_snapshot_id", olderSnapshot.id);
+
+        if (candidateRemovals && candidateRemovals.length > 0) {
+          const currentIds = new Set(entries.map((u) => u.userId));
+          const toConfirm = candidateRemovals
+            .filter((evt) => !currentIds.has(evt.instagram_id))
+            .map((evt) => evt.id);
+
+          if (toConfirm.length > 0) {
             await supabase
               .from("follow_events")
               .update({ confirmed: true })
-              .eq("id", evt.id);
+              .in("id", toConfirm);
           }
         }
       }
     }
 
     // Schedule next scan
+    const intervalHours = target.monitoring_interval_hours || 24;
     const nextScanAt = new Date(
-      Date.now() + target.scan_interval_hours * 60 * 60 * 1000
+      Date.now() + intervalHours * 60 * 60 * 1000
     ).toISOString();
 
     await supabase
@@ -305,11 +497,11 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
       .update({
         last_scanned_at: new Date().toISOString(),
         next_scan_at: nextScanAt,
+        following_count: currentCount,
         updated_at: new Date().toISOString(),
       })
       .eq("id", targetId);
 
-    // Mark scan as complete
     await supabase
       .from("scans")
       .update({
@@ -327,8 +519,10 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
 
-    // Set next_scan_at with exponential-ish backoff on failure (1h → 24h max)
-    const failBackoffHours = Math.min((target.scan_interval_hours || 24) * 2, 24);
+    const failBackoffHours = Math.min(
+      (target.scan_interval_hours || 24) * 2,
+      24
+    );
     const nextRetryAt = new Date(
       Date.now() + failBackoffHours * 60 * 60 * 1000
     ).toISOString();
@@ -336,7 +530,6 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
     await supabase
       .from("instagram_targets")
       .update({
-        last_scanned_at: new Date().toISOString(),
         next_scan_at: nextRetryAt,
         updated_at: new Date().toISOString(),
       })
@@ -361,10 +554,11 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
   }
 }
 
-// ─── Core: Scan Followers ─────────────────────────────────
+// ─── Core: Scan Followers (single target) ─────────────────
 
 export async function scanFollowers(targetId: string): Promise<ScanResult> {
   const supabase = createServerClient();
+  const provider = getInstagramProvider();
 
   const { data: target } = await supabase
     .from("instagram_targets")
@@ -373,7 +567,13 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
     .single();
 
   if (!target) {
-    return { scanId: "", targetId, status: "failed", events: [], error: "Target not found" };
+    return {
+      scanId: "",
+      targetId,
+      status: "failed",
+      events: [],
+      error: "Target not found",
+    };
   }
 
   const { data: scan } = await supabase
@@ -382,44 +582,72 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       target_id: targetId,
       status: "running",
       started_at: new Date().toISOString(),
-      provider: "hikerapi",
+      provider: provider.name,
       api_cost: 0,
+      target_count: 1,
+      profiles_returned: 0,
+      suspect: false,
     })
     .select("id")
     .single();
 
   if (!scan) {
-    return { scanId: "", targetId, status: "failed", events: [], error: "Failed to create scan record" };
+    return {
+      scanId: "",
+      targetId,
+      status: "failed",
+      events: [],
+      error: "Failed to create scan record",
+    };
   }
 
   try {
-    const currentFollowers = await fetchFollowers(target.instagram_id);
+    const result = await provider.batchScan({
+      usernames: [target.username],
+      dataToScrape: "Followers",
+      maxResultsPerUser: 0,
+    });
 
-    const { data: prevSnapshot } = await supabase
-      .from("follow_snapshots")
-      .select("*")
-      .eq("target_id", targetId)
-      .eq("snapshot_type", "followers")
-      .order("captured_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    if (!result.success) {
+      throw new Error(
+        result.runMetadata.error || "Apify followers scan failed"
+      );
+    }
 
-    const currentMap = buildUserMap(currentFollowers);
+    const entries = result.entries.get(target.username.toLowerCase()) || [];
+
+    await supabase
+      .from("scans")
+      .update({
+        profiles_returned: result.totalProfilesReturned,
+        actor_id: result.runMetadata.actorId || null,
+        run_id: result.runMetadata.runId || null,
+        api_cost: result.runMetadata.costEstimate || 0,
+      })
+      .eq("id", scan.id);
+
+    const prevSnapshot = await getLatestValidSnapshot(
+      supabase,
+      targetId,
+      "followers"
+    );
+    const isBaseline = !prevSnapshot;
     let events: FollowEvent[] = [];
 
-    if (prevSnapshot) {
-      const prevMap = new Map<string, HikerUserEntry>();
+    if (!isBaseline) {
+      const prevMap = new Map<string, InstagramUserEntry>();
       for (let i = 0; i < prevSnapshot.account_ids.length; i++) {
         prevMap.set(prevSnapshot.account_ids[i], {
-          pk: prevSnapshot.account_ids[i],
+          userId: prevSnapshot.account_ids[i],
           username: prevSnapshot.account_usernames[i] || "",
-          full_name: "",
-          is_private: false,
-          is_verified: false,
-          profile_pic_url: "",
+          fullName: null,
+          avatarUrl: null,
+          isPrivate: false,
+          isVerified: false,
         });
       }
 
+      const currentMap = buildUserMap(entries);
       events = diffLists(prevMap, currentMap, "NEW_FOLLOWER", "LOST_FOLLOWER");
     }
 
@@ -428,14 +656,14 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       .insert({
         target_id: targetId,
         snapshot_type: "followers",
-        account_ids: buildUserIdList(currentFollowers),
-        account_usernames: buildUsernameList(currentFollowers),
+        account_ids: buildUserIdList(entries),
+        account_usernames: buildUsernameList(entries),
         scan_id: scan.id,
       })
       .select("id")
       .single();
 
-    if (events.length > 0 && newSnapshot) {
+    if (!isBaseline && events.length > 0 && newSnapshot) {
       const eventRows = events.map((e) => ({
         target_id: targetId,
         event_type: e.eventType,
@@ -452,53 +680,25 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       await supabase.from("follow_events").insert(eventRows);
     }
 
-    // Confirm events from previous scan (noise protection)
-    if (prevSnapshot) {
-      const { data: unconfirmedEvents } = await supabase
-        .from("follow_events")
-        .select("id, instagram_id, event_type")
-        .eq("target_id", targetId)
-        .eq("confirmed", false)
-        .eq("current_snapshot_id", prevSnapshot.id);
-
-      if (unconfirmedEvents && unconfirmedEvents.length > 0) {
-        const currentIds = new Set(currentFollowers.map((u) => u.pk));
-
-        for (const evt of unconfirmedEvents) {
-          let shouldConfirm = false;
-          if (evt.event_type === "NEW_FOLLOWER" && currentIds.has(evt.instagram_id)) {
-            shouldConfirm = true;
-          } else if (evt.event_type === "LOST_FOLLOWER" && !currentIds.has(evt.instagram_id)) {
-            shouldConfirm = true;
-          }
-
-          if (shouldConfirm) {
-            await supabase
-              .from("follow_events")
-              .update({ confirmed: true })
-              .eq("id", evt.id);
-          }
-        }
-      }
-    }
+    await supabase
+      .from("instagram_targets")
+      .update({
+        follower_count: entries.length,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", targetId);
 
     await supabase
       .from("scans")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      })
       .eq("id", scan.id);
 
     return { scanId: scan.id, targetId, status: "completed", events };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-
-    // Update scan_interval for backoff on failure
-    await supabase
-      .from("instagram_targets")
-      .update({
-        last_scanned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", targetId);
 
     await supabase
       .from("scans")
@@ -509,7 +709,13 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       })
       .eq("id", scan.id);
 
-    return { scanId: scan.id, targetId, status: "failed", events: [], error: message };
+    return {
+      scanId: scan.id,
+      targetId,
+      status: "failed",
+      events: [],
+      error: message,
+    };
   }
 }
 
@@ -518,55 +724,61 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
 export async function processDueScans(): Promise<{
   scanned: number;
   failed: number;
+  suspect: number;
   results: ScanResult[];
 }> {
   const supabase = createServerClient();
   const now = new Date().toISOString();
 
-  // Find targets due for scanning (next_scan_at <= now)
   const { data: dueTargets } = await supabase
     .from("instagram_targets")
-    .select("id")
+    .select("id, username")
+    .eq("monitoring_enabled", true)
     .lte("next_scan_at", now)
-    .limit(50); // process at most 50 per cron run
+    .order("next_scan_at", { ascending: true })
+    .limit(50);
 
   if (!dueTargets || dueTargets.length === 0) {
-    return { scanned: 0, failed: 0, results: [] };
+    return { scanned: 0, failed: 0, suspect: 0, results: [] };
   }
 
   const results: ScanResult[] = [];
   let scanned = 0;
   let failed = 0;
+  let suspect = 0;
 
-  for (const target of dueTargets) {
-    const result = await scanFollowing(target.id);
-    results.push(result);
+  for (let i = 0; i < dueTargets.length; i += BATCH_SIZE) {
+    const batch = dueTargets.slice(i, i + BATCH_SIZE);
 
-    if (result.status === "completed") {
-      scanned++;
-      // Optionally also scan followers for lightweight accounts
-      const { data: t } = await supabase
-        .from("instagram_targets")
-        .select("follower_count")
-        .eq("id", target.id)
-        .single();
+    for (const target of batch) {
+      const result = await scanFollowing(target.id);
+      results.push(result);
 
-      if (t && t.follower_count <= 2500) {
-        await scanFollowers(target.id);
+      if (result.status === "completed") {
+        scanned++;
+        const { data: t } = await supabase
+          .from("instagram_targets")
+          .select("follower_count")
+          .eq("id", target.id)
+          .single();
+
+        if (t && t.follower_count <= 2500) {
+          await scanFollowers(target.id);
+        }
+      } else if (result.status === "suspect") {
+        suspect++;
+      } else {
+        failed++;
       }
-    } else {
-      failed++;
     }
   }
 
-  return { scanned, failed, results };
+  return { scanned, failed, suspect, results };
 }
 
-// ─── First Scan (for new search) ──────────────────────────
+// ─── Initial Scan (new user search) ───────────────────────
 
-export async function initialScan(
-  username: string
-): Promise<{
+export async function initialScan(username: string): Promise<{
   target: {
     id: string;
     instagram_id: string;
@@ -578,34 +790,57 @@ export async function initialScan(
     following_count: number;
     follower_count: number;
   };
-  following: HikerUserEntry[];
+  following: InstagramUserEntry[];
   scanId: string;
 }> {
-  const profile = await fetchProfileByUsername(username);
+  const provider = getInstagramProvider();
+  const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
 
-  if (profile.is_private) {
-    throw new Error("This account is private. CheckFollows only works with public accounts.");
+  const result = await provider.batchScan({
+    usernames: [cleanUsername],
+    dataToScrape: "Followings",
+    maxResultsPerUser: 0,
+  });
+
+  if (!result.success) {
+    throw new Error(result.runMetadata.error || "Failed to scan account");
   }
 
-  // Upsert the target
-  const target = await upsertInstagramTarget(profile);
+  const entries = result.entries.get(cleanUsername) || [];
+
+  if (entries.length === 0) {
+    throw new Error(
+      "Account not found or has no following data. Make sure it's a public account."
+    );
+  }
+
+  const firstEntry = entries[0];
+  const instagramId = `ig_${cleanUsername}`;
+
+  const target = await upsertInstagramTarget({
+    userId: instagramId,
+    username: cleanUsername,
+    fullName: firstEntry.fullName,
+    avatarUrl: firstEntry.avatarUrl,
+    isPrivate: firstEntry.isPrivate,
+    isVerified: firstEntry.isVerified,
+    followerCount: 0,
+    followingCount: entries.length,
+  });
+
   if (!target) {
     throw new Error("Failed to create target record");
   }
 
-  // Perform first scan
   const scanResult = await scanFollowing(target.id);
-
-  // Fetch the full following list for display
-  const following = await fetchFollowing(profile.pk);
 
   return {
     target: {
       ...target,
-      following_count: profile.following_count,
-      follower_count: profile.follower_count,
+      following_count: entries.length,
+      follower_count: 0,
     },
-    following,
+    following: entries,
     scanId: scanResult.scanId,
   };
 }
@@ -660,4 +895,36 @@ export async function getLatestSnapshot(
     .maybeSingle();
 
   return data;
+}
+
+// ─── Enable / Disable Monitoring ──────────────────────────
+
+export async function enableMonitoring(
+  targetId: string,
+  intervalHours: number = 24
+): Promise<void> {
+  const supabase = createServerClient();
+
+  await supabase
+    .from("instagram_targets")
+    .update({
+      monitoring_enabled: true,
+      monitoring_interval_hours: intervalHours,
+      scan_interval_hours: intervalHours,
+      next_scan_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", targetId);
+}
+
+export async function disableMonitoring(targetId: string): Promise<void> {
+  const supabase = createServerClient();
+
+  await supabase
+    .from("instagram_targets")
+    .update({
+      monitoring_enabled: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", targetId);
 }

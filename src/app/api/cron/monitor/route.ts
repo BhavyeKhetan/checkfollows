@@ -1,10 +1,14 @@
 /**
- * Cron endpoint - triggered by Vercel Cron Jobs (or external scheduler).
- * Scans all instagram_targets whose next_scan_at <= now(),
- * runs the diff engine, and stores new snapshots + events.
+ * Cron endpoint — triggered by Vercel Cron Jobs.
+ * Scans all instagram_targets where monitoring_enabled=true AND next_scan_at <= now().
  *
- * Protected by CRON_SECRET to prevent unauthorized triggers.
- * Vercel Cron schedule: every 30 minutes (configured in vercel.json)
+ * Architecture:
+ *   - Scheduler runs every hour (vercel.json cron)
+ *   - Query: monitoring_enabled=true, next_scan_at <= now()
+ *   - Batch by MONITORING_BATCH_SIZE (default 10)
+ *   - Scan frequency is set per target (default 24h)
+ *
+ * Protected by CRON_SECRET.
  */
 
 import { NextResponse } from "next/server";
@@ -23,7 +27,7 @@ export async function GET(request: Request) {
   try {
     const result = await processDueScans();
 
-    // Send email alerts to subscribers for any new confirmed events
+    // Send email alerts to subscribers for new confirmed events
     let emailsSent = 0;
     if (result.scanned > 0) {
       const supabase = createServerClient();
@@ -31,7 +35,6 @@ export async function GET(request: Request) {
       for (const scanResult of result.results) {
         if (scanResult.status !== "completed" || scanResult.events.length === 0) continue;
 
-        // Get target info
         const { data: target } = await supabase
           .from("instagram_targets")
           .select("username, full_name")
@@ -40,7 +43,6 @@ export async function GET(request: Request) {
 
         if (!target) continue;
 
-        // Find newly confirmed events for this target after this scan
         const confirmedEvents = scanResult.events
           .filter((e) => e.confirmed)
           .map((e) => ({
@@ -65,6 +67,7 @@ export async function GET(request: Request) {
       ok: true,
       scanned: result.scanned,
       failed: result.failed,
+      suspect: result.suspect,
       emailsSent,
       timestamp: new Date().toISOString(),
     });

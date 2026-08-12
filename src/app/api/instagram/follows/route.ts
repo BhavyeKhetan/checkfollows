@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchProfileByUsername, fetchFollowing } from "@/lib/hikerapi";
+import { getInstagramProvider } from "@/lib/instagram/provider";
 import { upsertInstagramTarget, scanFollowing, getLatestSnapshot } from "@/lib/monitoring";
 
 export async function GET(request: Request) {
@@ -8,20 +8,28 @@ export async function GET(request: Request) {
   const full = searchParams.get("full") === "true";
 
   if (!username) {
-    return NextResponse.json({ success: false, error: "Username is required" }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "Username is required" },
+      { status: 400 }
+    );
   }
 
   const cleanUsername = username.replace(/^@/, "").trim();
 
   if (!/^[a-zA-Z0-9._]{1,30}$/.test(cleanUsername)) {
-    return NextResponse.json({ success: false, error: "Invalid Instagram username" }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "Invalid Instagram username" },
+      { status: 400 }
+    );
   }
 
   try {
-    // Get profile and upsert
-    const profile = await fetchProfileByUsername(cleanUsername);
+    const provider = getInstagramProvider();
 
-    if (profile.is_private) {
+    // Get profile and upsert
+    const profile = await provider.fetchProfile(cleanUsername);
+
+    if (profile.isPrivate) {
       return NextResponse.json({
         success: false,
         error: "private_account",
@@ -30,13 +38,26 @@ export async function GET(request: Request) {
 
     const target = await upsertInstagramTarget(profile);
     if (!target) {
-      return NextResponse.json({ success: false, error: "Failed to save target" }, { status: 500 });
+      return NextResponse.json(
+        { success: false, error: "Failed to save target" },
+        { status: 500 }
+      );
     }
 
-    // Fetch following list
-    const following = await fetchFollowing(profile.pk);
+    // Fetch following list via batch scan
+    const result = await provider.batchScan({
+      usernames: [cleanUsername],
+      dataToScrape: "Followings",
+      maxResultsPerUser: 0,
+    });
 
-    // Check if we have historical data (previous snapshots → we have events)
+    if (!result.success) {
+      throw new Error(result.runMetadata.error || "Failed to fetch follows");
+    }
+
+    const entries = result.entries.get(cleanUsername.toLowerCase()) || [];
+
+    // Check if we have historical data
     const prevSnapshot = await getLatestSnapshot(target.id, "following");
     const hasHistory = prevSnapshot !== null;
 
@@ -45,14 +66,13 @@ export async function GET(request: Request) {
       await scanFollowing(target.id);
     }
 
-    // Map to clean response format
-    const followingList = following.map((u) => ({
-      instagramId: u.pk,
+    const followingList = entries.map((u) => ({
+      instagramId: u.userId,
       username: u.username,
-      fullName: u.full_name,
-      avatarUrl: u.profile_pic_url,
-      isVerified: u.is_verified,
-      isPrivate: u.is_private,
+      fullName: u.fullName,
+      avatarUrl: u.avatarUrl,
+      isVerified: u.isVerified,
+      isPrivate: u.isPrivate,
     }));
 
     return NextResponse.json({
@@ -60,18 +80,23 @@ export async function GET(request: Request) {
       targetId: target.id,
       following: followingList,
       hasHistory,
-      // If we have history, the "recent" ordering is based on our diff engine
-      // For first-time search, return Instagram's order as-is
       isFirstSearch: !hasHistory,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch follows";
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch follows";
 
-    if (message.includes("404") || message.includes("not found")) {
-      return NextResponse.json({ success: false, error: "not_found" }, { status: 404 });
+    if (message.includes("not found")) {
+      return NextResponse.json(
+        { success: false, error: "not_found" },
+        { status: 404 }
+      );
     }
 
     console.error("Follows fetch error:", message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 500 }
+    );
   }
 }
