@@ -13,9 +13,15 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-export function getStripePriceId(): string {
-  const id = process.env.STRIPE_PRICE_ID;
-  if (!id) throw new Error("STRIPE_PRICE_ID is not configured");
+/** Price IDs for each plan tier */
+export const PRICE_IDS = {
+  basic: process.env.STRIPE_PRICE_BASIC_ID || process.env.STRIPE_PRICE_ID || "",
+  pro: process.env.STRIPE_PRICE_PRO_ID || "",
+};
+
+export function getStripePriceId(plan: "basic" | "pro" = "basic"): string {
+  const id = PRICE_IDS[plan];
+  if (!id) throw new Error(`STRIPE_PRICE_${plan.toUpperCase()}_ID is not configured`);
   return id;
 }
 

@@ -5,16 +5,20 @@ export async function POST(request: Request) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
     const stripe = getStripe();
-    const priceId = getStripePriceId();
 
+    let plan: "basic" | "pro" = "basic";
     let targetMeta: Record<string, string> = {};
+
     try {
       const body = await request.json();
+      if (body.plan === "pro") plan = "pro";
       if (body.username) targetMeta.username = body.username;
       if (body.targetId) targetMeta.target_id = body.targetId;
     } catch {
-      // no body is fine — generic checkout
+      // no body — default to basic
     }
+
+    const priceId = getStripePriceId(plan);
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -23,12 +27,13 @@ export async function POST(request: Request) {
       success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${baseUrl}/?canceled=true`,
       metadata: {
-        product: "checkfollows_weekly",
+        product: plan === "pro" ? "checkfollows_pro" : "checkfollows_basic",
+        plan,
         ...targetMeta,
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url, plan });
   } catch (error: unknown) {
     console.error("Stripe checkout error:", error);
     return NextResponse.json(

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
             .insert({
               target_id: session.metadata.target_id,
               email: customerEmail,
-              plan: "weekly",
+              plan: session.metadata?.plan || "basic",
               stripe_customer_id: customerId,
               stripe_subscription_id: subscriptionId,
               active: true,
