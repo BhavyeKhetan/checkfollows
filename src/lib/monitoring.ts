@@ -819,8 +819,8 @@ const PREVIEW_CAP = parseInt(process.env.PREVIEW_FOLLOW_CAP || "10", 10);
 
 /**
  * Lightweight preview for unpaid landing-page searches.
- * Uses the cheap apify/instagram-profile-scraper for profile data,
- * then optionally fetches a small capped preview (10-20) of following/followers.
+ * Uses the cheap apify/instagram-profile-scraper ONLY for profile data.
+ * Does NOT fetch following/followers lists (that happens after payment).
  * Does NOT store a baseline snapshot — that happens after payment.
  */
 export async function previewLookup(username: string): Promise<{
@@ -840,54 +840,27 @@ export async function previewLookup(username: string): Promise<{
   followersPreview: InstagramUserEntry[];
 }> {
   const previewProvider = getPreviewProvider();
-  const monitoringProvider = getMonitoringProvider();
   const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
 
-  // Step 1: Fetch profile using the cheap preview actor
+  // Fetch profile using the cheap preview actor — profile data only, no follow lists
   const profile = await previewProvider.fetchProfile(cleanUsername);
 
   if (profile.isPrivate) {
     throw new Error("This account is private");
   }
 
-  // Step 2: Upsert target (or update existing)
+  // Upsert target (or update existing) so we have a record
   const target = await upsertInstagramTarget(profile);
 
-  // Step 3: Fetch small capped previews of following/followers
-  let followingPreview: InstagramUserEntry[] = [];
-  let followersPreview: InstagramUserEntry[] = [];
-
-  try {
-    // Use the monitoring provider with a cap for preview
-    const [followingResult, followersResult] = await Promise.all([
-      monitoringProvider.batchScan({
-        usernames: [cleanUsername],
-        dataToScrape: "Followings",
-        maxResultsPerUser: PREVIEW_CAP,
-      }),
-      monitoringProvider.batchScan({
-        usernames: [cleanUsername],
-        dataToScrape: "Followers",
-        maxResultsPerUser: PREVIEW_CAP,
-      }),
-    ]);
-
-    if (followingResult.success) {
-      followingPreview = followingResult.entries.get(cleanUsername) || [];
-    }
-    if (followersResult.success) {
-      followersPreview = followersResult.entries.get(cleanUsername) || [];
-    }
-  } catch {
-    // Preview fetches are best-effort — don't fail the whole lookup
-    console.warn("Preview follow fetch failed for", cleanUsername);
-  }
+  // Follow/followers lists are NOT fetched here — they require the expensive
+  // dead00 actor. The frontend can lazily fetch capped previews on-demand
+  // via /api/instagram/follows?preview=true&username=...
 
   return {
     profile,
     target,
-    followingPreview,
-    followersPreview,
+    followingPreview: [],
+    followersPreview: [],
   };
 }
 
@@ -971,10 +944,6 @@ export async function fullBaselineScan(username: string): Promise<{
   };
 }
 
-/** @deprecated Use previewLookup() for unpaid or fullBaselineScan() for paid */
-export async function initialScan(username: string) {
-  return fullBaselineScan(username);
-}
 
 // ─── Query: Get Events ────────────────────────────────────
 
