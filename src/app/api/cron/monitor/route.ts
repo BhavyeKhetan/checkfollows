@@ -9,6 +9,8 @@
 
 import { NextResponse } from "next/server";
 import { processDueScans } from "@/lib/monitoring";
+import { notifySubscribers } from "@/lib/email/alerts";
+import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,10 +23,49 @@ export async function GET(request: Request) {
   try {
     const result = await processDueScans();
 
+    // Send email alerts to subscribers for any new confirmed events
+    let emailsSent = 0;
+    if (result.scanned > 0) {
+      const supabase = createServerClient();
+
+      for (const scanResult of result.results) {
+        if (scanResult.status !== "completed" || scanResult.events.length === 0) continue;
+
+        // Get target info
+        const { data: target } = await supabase
+          .from("instagram_targets")
+          .select("username, full_name")
+          .eq("id", scanResult.targetId)
+          .single();
+
+        if (!target) continue;
+
+        // Find newly confirmed events for this target after this scan
+        const confirmedEvents = scanResult.events
+          .filter((e) => e.confirmed)
+          .map((e) => ({
+            eventType: e.eventType,
+            username: e.username,
+            fullName: e.fullName,
+          }));
+
+        if (confirmedEvents.length > 0) {
+          const sent = await notifySubscribers(
+            scanResult.targetId,
+            target.username,
+            target.full_name,
+            confirmedEvents
+          );
+          emailsSent += sent;
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       scanned: result.scanned,
       failed: result.failed,
+      emailsSent,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

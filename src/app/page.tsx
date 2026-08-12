@@ -568,14 +568,48 @@ export default function Home() {
 
         {/* Tracking CTA for paid users */}
         {isPaid && (
-          <Button
-            variant="secondary"
-            fullWidth
-            className="mt-4"
-            leftIcon={<Bell className="w-4 h-4 text-[#121212]" />}
-          >
-            Track this account for live changes
-          </Button>
+          <div className="mt-4 space-y-2">
+            <Button
+              variant="secondary"
+              fullWidth
+              leftIcon={<Bell className="w-4 h-4 text-[#121212]" />}
+              onClick={() => {
+                const email = window.prompt("Enter your email to get alerts when this account follows/unfollows someone:");
+                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                  if (email) alert("Please enter a valid email address.");
+                  return;
+                }
+                const targetId = (searchState.profile as unknown as Record<string, unknown>)?.id;
+                if (!targetId) return;
+                fetch("/api/instagram/track", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email, targetId }),
+                })
+                  .then((r) => r.json())
+                  .then((data) => {
+                    if (data.success) {
+                      alert(`✅ You're now tracking @${searchState.profile?.username || "this account"}! You'll get email alerts when changes are detected.`);
+                    } else {
+                      alert(data.error || "Failed to subscribe. Please try again.");
+                    }
+                  })
+                  .catch(() => alert("Network error. Please try again."));
+              }}
+            >
+              Track this account for live changes
+            </Button>
+            {searchState.profile && (
+              <Link
+                href={`/track/${searchState.profile.username}`}
+                className="block"
+              >
+                <Button variant="ghost" fullWidth size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
+                  View full timeline
+                </Button>
+              </Link>
+            )}
+          </div>
         )}
       </motion.div>
     );

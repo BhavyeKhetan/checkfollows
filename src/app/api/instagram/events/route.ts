@@ -1,42 +1,63 @@
-/**
- * Events endpoint — returns detected follow changes for a target.
- * GET /api/instagram/events?targetId=xxx
- */
-
 import { NextResponse } from "next/server";
-import { getEventsForTarget } from "@/lib/monitoring";
+import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const username = searchParams.get("username");
   const targetId = searchParams.get("targetId");
-
-  if (!targetId) {
-    return NextResponse.json({ success: false, error: "targetId is required" }, { status: 400 });
-  }
+  const confirmedOnly = searchParams.get("confirmed") !== "false"; // default true
+  const limit = parseInt(searchParams.get("limit") || "50", 10);
 
   try {
-    const events = await getEventsForTarget(targetId, {
-      limit: 100,
-      confirmedOnly: false,
-    });
+    const supabase = createServerClient();
+    let target;
+
+    if (targetId) {
+      const { data } = await supabase
+        .from("instagram_targets")
+        .select("id, username")
+        .eq("id", targetId)
+        .single();
+      target = data;
+    } else if (username) {
+      const clean = username.replace(/^@/, "").trim();
+      const { data } = await supabase
+        .from("instagram_targets")
+        .select("id, username")
+        .eq("username", clean.toLowerCase())
+        .maybeSingle();
+      target = data;
+    }
+
+    if (!target) {
+      return NextResponse.json({ success: false, error: "Target not found" }, { status: 404 });
+    }
+
+    let query = supabase
+      .from("follow_events")
+      .select("*")
+      .eq("target_id", target.id)
+      .order("detected_at", { ascending: false })
+      .limit(Math.min(limit, 200));
+
+    if (confirmedOnly) {
+      query = query.eq("confirmed", true);
+    }
+
+    const { data: events, error } = await query;
+
+    if (error) {
+      console.error("Events fetch error:", error);
+      return NextResponse.json({ success: false, error: "Database error" }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
-      events: events.map((e) => ({
-        id: e.id,
-        eventType: e.event_type,
-        instagramId: e.instagram_id,
-        username: e.username,
-        fullName: e.full_name,
-        avatarUrl: e.avatar_url,
-        isVerified: e.is_verified,
-        detectedAt: e.detected_at,
-        confirmed: e.confirmed,
-      })),
+      targetUsername: target.username,
+      events: events || [],
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch events";
-    console.error("Events fetch error:", message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    console.error("Events API error:", error);
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
   }
 }
