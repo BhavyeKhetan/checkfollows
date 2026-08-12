@@ -11,7 +11,7 @@ function getResend(): Resend | null {
   return new Resend(key);
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "alerts@checkfollows.com";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "team@checkfollows.com";
 
 export interface AlertPayload {
   targetUsername: string;
