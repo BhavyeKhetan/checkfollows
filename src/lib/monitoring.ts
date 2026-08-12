@@ -272,14 +272,12 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
         .select("id, instagram_id, event_type")
         .eq("target_id", targetId)
         .eq("confirmed", false)
-        .eq("previous_snapshot_id", prevSnapshot.id);
+        .eq("current_snapshot_id", prevSnapshot.id);
 
       if (unconfirmedEvents && unconfirmedEvents.length > 0) {
         const currentIds = new Set(currentFollowing.map((u) => u.pk));
 
         for (const evt of unconfirmedEvents) {
-          // For NEW_FOLLOWING: the account should still be in current following
-          // For STOPPED_FOLLOWING: the account should still be absent
           let shouldConfirm = false;
           if (evt.event_type === "NEW_FOLLOWING" && currentIds.has(evt.instagram_id)) {
             shouldConfirm = true;
@@ -328,6 +326,21 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+
+    // Set next_scan_at with exponential-ish backoff on failure (1h → 24h max)
+    const failBackoffHours = Math.min((target.scan_interval_hours || 24) * 2, 24);
+    const nextRetryAt = new Date(
+      Date.now() + failBackoffHours * 60 * 60 * 1000
+    ).toISOString();
+
+    await supabase
+      .from("instagram_targets")
+      .update({
+        last_scanned_at: new Date().toISOString(),
+        next_scan_at: nextRetryAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", targetId);
 
     await supabase
       .from("scans")
@@ -439,6 +452,36 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       await supabase.from("follow_events").insert(eventRows);
     }
 
+    // Confirm events from previous scan (noise protection)
+    if (prevSnapshot) {
+      const { data: unconfirmedEvents } = await supabase
+        .from("follow_events")
+        .select("id, instagram_id, event_type")
+        .eq("target_id", targetId)
+        .eq("confirmed", false)
+        .eq("current_snapshot_id", prevSnapshot.id);
+
+      if (unconfirmedEvents && unconfirmedEvents.length > 0) {
+        const currentIds = new Set(currentFollowers.map((u) => u.pk));
+
+        for (const evt of unconfirmedEvents) {
+          let shouldConfirm = false;
+          if (evt.event_type === "NEW_FOLLOWER" && currentIds.has(evt.instagram_id)) {
+            shouldConfirm = true;
+          } else if (evt.event_type === "LOST_FOLLOWER" && !currentIds.has(evt.instagram_id)) {
+            shouldConfirm = true;
+          }
+
+          if (shouldConfirm) {
+            await supabase
+              .from("follow_events")
+              .update({ confirmed: true })
+              .eq("id", evt.id);
+          }
+        }
+      }
+    }
+
     await supabase
       .from("scans")
       .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -447,6 +490,15 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
     return { scanId: scan.id, targetId, status: "completed", events };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+
+    // Update scan_interval for backoff on failure
+    await supabase
+      .from("instagram_targets")
+      .update({
+        last_scanned_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", targetId);
 
     await supabase
       .from("scans")
