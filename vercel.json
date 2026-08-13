@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/monitor?secret=checkfollows-cron-secret-change-me",
+      "path": "/api/cron/monitor",
       "schedule": "0 0 * * *"
     }
   ]

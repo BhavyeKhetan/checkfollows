@@ -18,9 +18,17 @@ import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const secret = searchParams.get("secret");
+  const authHeader = request.headers.get("authorization") || "";
+  const querySecret = searchParams.get("secret");
+  const expected = process.env.CRON_SECRET || "";
 
-  if (secret !== process.env.CRON_SECRET) {
+  // Vercel auto-attaches CRON_SECRET as an Authorization Bearer token;
+  // the query-param path remains for manual/test invocations.
+  const authorized =
+    !!expected &&
+    (authHeader === `Bearer ${expected}` || querySecret === expected);
+
+  if (!authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
