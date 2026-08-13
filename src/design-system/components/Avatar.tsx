@@ -28,6 +28,12 @@ export function Avatar({
 
   const initial = username ? username[0].toUpperCase() : "?";
 
+  const proxiedSrc = src
+    ? src.startsWith("/") || src.startsWith("data:")
+      ? src
+      : `/api/proxy-image?url=${encodeURIComponent(src)}`
+    : null;
+
   return (
     <div className={`relative inline-block shrink-0 ${className}`}>
       <div
@@ -37,12 +43,17 @@ export function Avatar({
             : "border border-[#E2E2DC]"
         } bg-[#EDEDE8] text-[#121212]`}
       >
-        {src ? (
+        {proxiedSrc ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={src}
+            src={proxiedSrc}
             alt={username}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover rounded-full"
+            onError={(e) => {
+              // Hide broken image to show initial fallback
+              (e.target as HTMLElement).style.display = "none";
+            }}
           />
         ) : (
           <span>{initial}</span>

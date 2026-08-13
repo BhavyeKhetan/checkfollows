@@ -181,7 +181,18 @@ export default function TrackPage() {
     }
   }, [username]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    let ignore = false;
+    async function fetchData() {
+      if (!ignore) {
+        await loadData();
+      }
+    }
+    fetchData();
+    return () => {
+      ignore = true;
+    };
+  }, [loadData]);
 
   const handleToggleMonitoring = async () => {
     if (!target) return;

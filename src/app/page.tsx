@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -23,8 +23,11 @@ import {
   TrendingUp,
   Briefcase,
   Star,
+  Check,
+  Sparkles,
 } from "lucide-react";
 import type { SearchState, FollowEntry } from "@/lib/types";
+import { classifyFollowEntries } from "@/lib/classification";
 import {
   Button,
   Badge,
@@ -39,22 +42,22 @@ import {
 // ─── Mock demo data with Real Avatar Photos ────────────────────────
 
 const DEMO_FOLLOWING: FollowEntry[] = [
-  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: null, isVerified: false, isPrivate: true },
-  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: null, isVerified: true, isPrivate: false },
-  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: null, isVerified: true, isPrivate: false },
+  { id: "1", username: "emma.wilson", fullName: "Emma Wilson", avatarUrl: "/images/demo/emma.jpg", isVerified: false, isPrivate: false },
+  { id: "2", username: "sophia.martinez", fullName: "Sophia Martinez", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
+  { id: "3", username: "olivia.j", fullName: "Olivia Johnson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: false },
+  { id: "4", username: "mia.b", fullName: "Mia Brown", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: true },
+  { id: "5", username: "isabella.fit", fullName: "Isabella Fitness", avatarUrl: "/images/demo/isabella.jpg", isVerified: true, isPrivate: false },
+  { id: "6", username: "charlotte.style", fullName: "Charlotte Style", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
+  { id: "7", username: "amelia.rose", fullName: "Amelia Rose", avatarUrl: "/images/testimonials/elena.jpg", isVerified: false, isPrivate: false },
+  { id: "8", username: "harper.lee", fullName: "Harper Lee", avatarUrl: "/images/testimonials/marcus.jpg", isVerified: true, isPrivate: false },
 ];
 
 const DEMO_FOLLOWERS: FollowEntry[] = [
-  { id: "f1", username: "sarah.jane", fullName: "Sarah Jane", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "f2", username: "ava.taylor", fullName: "Ava Taylor", avatarUrl: null, isVerified: true, isPrivate: false },
-  { id: "f3", username: "luna.m", fullName: "Luna M.", avatarUrl: null, isVerified: false, isPrivate: false },
-  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: null, isVerified: false, isPrivate: true },
-  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: null, isVerified: false, isPrivate: false },
+  { id: "f1", username: "preethimo29", fullName: "Preethi M.", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
+  { id: "f2", username: "shagunagxrwal", fullName: "Shaguna Agarwal", avatarUrl: "/images/testimonials/elena.jpg", isVerified: false, isPrivate: false },
+  { id: "f3", username: "waystudio2026", fullName: "Way Studio", avatarUrl: "/images/demo/emma.jpg", isVerified: true, isPrivate: false },
+  { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: true },
+  { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: false },
 ];
 
 // ─── Testimonials Data with Real Avatars ───────────────────────────
@@ -63,6 +66,7 @@ const TESTIMONIALS = [
   {
     name: "Marcus T.",
     role: "Verified Searcher",
+    avatar: "/images/testimonials/marcus.jpg",
     rating: 5,
     quote:
       "I thought the IG following list was chronological inside the app. Turns out Instagram completely scrambles it! CheckFollows actually revealed the true order in 5 seconds.",
@@ -70,6 +74,7 @@ const TESTIMONIALS = [
   {
     name: "Sarah K.",
     role: "Verified Searcher",
+    avatar: "/images/testimonials/sarah.jpg",
     rating: 5,
     quote:
       "Finally a tool that doesn't ask me for my Instagram password or make me download sketchy software. Completely private and works right in the browser.",
@@ -77,85 +82,61 @@ const TESTIMONIALS = [
   {
     name: "Elena R.",
     role: "Digital Marketer",
+    avatar: "/images/testimonials/elena.jpg",
     rating: 5,
     quote:
       "I use this to keep tabs on influencer networking and new brand connections before competitors notice. The chronological sorting is 100% spot on.",
   },
 ];
 
-// ─── LocalStorage helpers ──────────────────────────────────────────
-
-const STORAGE_KEY = "checkfollows_search_state";
-const PAID_FLAG_KEY = "checkfollows_paid";
-const PAID_EXPIRY_DAYS = 30;
-
-function saveSearchState(state: { username: string; profile: unknown; following: unknown[]; followers: unknown[] }) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch { /* quota exceeded — ignore */ }
-}
-
-function loadSearchState(): { username: string; profile: unknown; following: unknown[]; followers: unknown[] } | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function clearSearchState() {
-  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-}
-
-function isPaidSession(): boolean {
-  try {
-    const raw = localStorage.getItem(PAID_FLAG_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    // Check expiry
-    if (data.expiresAt && Date.now() > data.expiresAt) {
-      localStorage.removeItem(PAID_FLAG_KEY);
-      return false;
-    }
-    return data.paid === true;
-  } catch {
-    return false;
-  }
-}
-
-function markPaidSession() {
-  const expiresAt = Date.now() + PAID_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-  try {
-    localStorage.setItem(PAID_FLAG_KEY, JSON.stringify({ paid: true, expiresAt }));
-  } catch { /* ignore */ }
-}
-
 // ─── Component Helpers ─────────────────────────────────────────────
 
-function FollowCard({
-  entry,
-  label,
+function CategoryCard({
+  title,
+  summaryText,
+  badgeLabel,
+  sampleAvatars,
 }: {
-  entry: FollowEntry;
-  label: string;
+  title: string;
+  summaryText: string;
+  badgeLabel: string;
+  sampleAvatars: (string | null)[];
 }) {
   return (
-    <div className="flex items-center gap-3.5 p-3.5 rounded-xl hover:bg-[#F8F8F5] transition-all cursor-pointer group border border-transparent hover:border-[#E2E2DC]">
-      <Avatar src={entry.avatarUrl} username={entry.username} isVerified={entry.isVerified} size="md" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="font-bold text-sm truncate text-[#121212] group-hover:text-[#000000] transition-colors">
-            {entry.username}
-          </span>
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[#E2E2DC] bg-[#FFFFFF] hover:border-[#121212] transition-all gap-4 shadow-sm">
+      <div className="flex items-center gap-3.5 min-w-0">
+        {/* Stacked overlapping avatars */}
+        <div className="flex -space-x-3 shrink-0">
+          {sampleAvatars.slice(0, 3).map((avatar, idx) => (
+            <div
+              key={idx}
+              className="w-10 h-10 rounded-full border-2 border-[#FFFFFF] bg-[#EDEDE8] overflow-hidden shadow-sm shrink-0"
+            >
+              {avatar ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatar.startsWith("/") ? avatar : `/api/proxy-image?url=${encodeURIComponent(avatar)}`}
+                  alt="avatar"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover rounded-full filter blur-[2px]"
+                />
+              ) : (
+                <div className="w-full h-full bg-[#EDEDE8]" />
+              )}
+            </div>
+          ))}
         </div>
-        <p className="text-xs text-[#555555] truncate">
-          {entry.fullName || `@${entry.username}`}
-        </p>
+
+        {/* Text summary */}
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm font-semibold text-[#121212] leading-snug">
+            {summaryText}
+          </p>
+        </div>
       </div>
-      <Badge variant="lime" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-        {label}
+
+      <Badge variant="mono" size="sm" className="shrink-0 bg-[#EDEDE8] text-[#121212] font-mono">
+        {badgeLabel}
       </Badge>
     </div>
   );
@@ -207,7 +188,6 @@ const FAQS = [
 
 export default function Home() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [searchInput, setSearchInput] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -216,223 +196,91 @@ export default function Home() {
     recentFollowers: null,
     error: null,
   });
-  const [activeTab, setActiveTab] = useState<"following" | "followers">("following");
-  const [demoTab, setDemoTab] = useState<"following" | "followers">("following");
+  const [activeTab, setActiveTab] = useState<"followers" | "following">("followers");
+  const [demoTab, setDemoTab] = useState<"followers" | "following">("followers");
   const [showDemo, setShowDemo] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  // Loading progress steps
+  const [loadingStep, setLoadingStep] = useState(0);
 
   // Focus & highlight state when CTA buttons are clicked
   const [isHighlighted, setIsHighlighted] = useState(false);
   const [showEmptyPrompt, setShowEmptyPrompt] = useState(false);
   const [showStickySearch, setShowStickySearch] = useState(false);
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
-  const hasRestoredRef = useRef(false);
 
-  const checkingOutRef = useRef(false);
-
-  const triggerFocusAndHighlight = useCallback(() => {
+  const triggerFocusAndHighlight = () => {
     setIsHighlighted(true);
     inputRef.current?.focus();
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => setIsHighlighted(false), 2500);
-  }, []);
+  };
 
-  // Restore paid session or Stripe success/cancel redirect
-  useEffect(() => {
-    if (hasRestoredRef.current) return;
-    hasRestoredRef.current = true;
-
-    const q = searchParams.get("q");
-    if (q) {
-      setSearchInput(q);
-      handleSearch(q);
-      return;
-    }
-
-    const success = searchParams.get("success");
-    const sessionId = searchParams.get("session_id");
-    const saved = loadSearchState();
-
-    if (success === "true" && sessionId) {
-      markPaidSession();
-
-      if (saved?.username) {
-        setSearchInput(saved.username);
-        if (saved.profile) {
-          setSearchState({
-            status: "full",
-            profile: saved.profile as SearchState["profile"],
-            recentFollowing: saved.following as FollowEntry[],
-            recentFollowers: saved.followers as FollowEntry[],
-            error: null,
-          });
-
-          fetch(`/api/instagram/follows?username=${encodeURIComponent(saved.username)}&full=true`)
-            .then((r) => r.json())
-            .then((data) => {
-              if (data.success) {
-                setSearchState((prev) => ({
-                  ...prev,
-                  status: "full",
-                  recentFollowing: (data.following || []).map(
-                    (u: Record<string, unknown>) => ({
-                      id: u.instagramId as string,
-                      username: u.username as string,
-                      fullName: u.fullName as string | null,
-                      avatarUrl: u.avatarUrl as string | null,
-                      isVerified: u.isVerified as boolean,
-                      isPrivate: u.isPrivate as boolean,
-                    })
-                  ),
-                }));
-              }
-            })
-            .catch(() => {});
-        }
-        router.replace("/", { scroll: false });
-      }
-    } else if (searchParams.get("canceled") === "true") {
-      if (saved?.username) {
-        setSearchInput(saved.username);
-        if (saved.profile) {
-          setSearchState({
-            status: "preview",
-            profile: saved.profile as SearchState["profile"],
-            recentFollowing: saved.following as FollowEntry[],
-            recentFollowers: saved.followers as FollowEntry[],
-            error: null,
-          });
-        }
-        clearSearchState();
-        router.replace("/", { scroll: false });
-      }
-    } else if (isPaidSession() && saved?.username) {
-      // Returning user with an existing paid session — restore their paid view
-      setSearchInput(saved.username);
-      if (saved.profile) {
-        setSearchState({
-          status: "full",
-          profile: saved.profile as SearchState["profile"],
-          recentFollowing: saved.following as FollowEntry[],
-          recentFollowers: saved.followers as FollowEntry[],
-          error: null,
-        });
-      }
-    }
-  }, [searchParams, router]);
-
-  const handleUnlock = useCallback(async () => {
-    if (!searchState.profile || checkingOutRef.current) return;
-    checkingOutRef.current = true;
-    setIsCheckingOut(true);
-
-    saveSearchState({
-      username: searchInput.replace(/^@/, "").trim(),
-      profile: searchState.profile,
-      following: searchState.recentFollowing || [],
-      followers: searchState.recentFollowers || [],
-    });
-
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: searchInput.replace(/^@/, "").trim(),
-          targetId: (searchState.profile as unknown as Record<string, unknown>)?.id,
-        }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        checkingOutRef.current = false;
-        setIsCheckingOut(false);
-      }
-    } catch {
-      checkingOutRef.current = false;
-      setIsCheckingOut(false);
-    }
-  }, [searchState.profile, searchInput, searchState.recentFollowing, searchState.recentFollowers]);
-
-  const handleSearch = async (override?: string) => {
-    const username = (override ?? searchInput).replace(/^@/, "").trim();
+  const handleSearch = async () => {
+    const username = searchInput.replace(/^@/, "").trim();
     if (!username) return;
 
     setSearchState({ status: "loading", profile: null, recentFollowing: null, recentFollowers: null, error: null });
+    setLoadingStep(1);
 
     try {
-      // Use the two-stage combined search API — stage=preview for unpaid users
-      const res = await fetch("/api/instagram/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, stage: "preview" }),
-      });
-      const data = await res.json();
+      // Step 1 -> 2
+      setTimeout(() => setLoadingStep(2), 600);
 
-      if (!res.ok || !data.success) {
-        if (data.error === "private_account") {
+      const profileRes = await fetch(
+        `/api/instagram/profile?username=${encodeURIComponent(username)}`
+      );
+      const profileData = await profileRes.json();
+
+      if (!profileRes.ok || !profileData.success) {
+        if (profileData.isPrivate) {
           setSearchState((prev) => ({
             ...prev,
             status: "private",
-            profile: data.profile || null,
+            profile: profileData.profile,
             error: null,
           }));
-        } else if (data.error === "not_found") {
+        } else if (profileData.notFound) {
           setSearchState((prev) => ({ ...prev, status: "not_found", error: null }));
         } else {
           setSearchState((prev) => ({
             ...prev,
             status: "error",
-            error: data.error || "Something went wrong",
+            error: profileData.error || "Something went wrong",
           }));
         }
         return;
       }
 
-      // Map response to our SearchState format
-      const profile = data.profile || data.target;
-      setSearchState({
-        status: "preview",
-        profile: profile
-          ? {
-              username: profile.username,
-              fullName: profile.full_name || profile.fullName || null,
-              avatarUrl: profile.avatar_url || profile.avatarUrl || null,
-              followerCount: profile.followerCount ?? profile.follower_count ?? 0,
-              followingCount: profile.followingCount ?? profile.following_count ?? 0,
-              isPrivate: profile.is_private ?? profile.isPrivate ?? false,
-              isVerified: profile.is_verified ?? profile.isVerified ?? false,
-              biography: profile.biography ?? null,
-              externalUrl: profile.external_url ?? profile.externalUrl ?? null,
-            }
-          : null,
-        recentFollowing: (data.followingPreview || []).map(
-          (u: Record<string, unknown>) => ({
-            id: u.instagramId as string,
-            username: u.username as string,
-            fullName: u.fullName as string | null,
-            avatarUrl: u.avatarUrl as string | null,
-            isVerified: u.isVerified as boolean,
-            isPrivate: u.isPrivate as boolean,
-          })
-        ),
-        recentFollowers: (data.followersPreview || []).map(
-          (u: Record<string, unknown>) => ({
-            id: u.instagramId as string,
-            username: u.username as string,
-            fullName: u.fullName as string | null,
-            avatarUrl: u.avatarUrl as string | null,
-            isVerified: u.isVerified as boolean,
-            isPrivate: u.isPrivate as boolean,
-          })
-        ),
+      // Step 2 -> 3
+      setLoadingStep(3);
+
+      setSearchState((prev) => ({
+        ...prev,
+        status: "profile",
+        profile: profileData.profile,
         error: null,
-      });
+      }));
+
+      // Step 3 -> 4
+      setTimeout(() => setLoadingStep(4), 1000);
+
+      const followsRes = await fetch(
+        `/api/instagram/follows?username=${encodeURIComponent(username)}`
+      );
+      const followsData = await followsRes.json();
+
+      setSearchState((prev) => ({
+        ...prev,
+        status: "preview",
+        profile: profileData.profile,
+        recentFollowing: followsData.recentFollowing || DEMO_FOLLOWING,
+        recentFollowers: followsData.recentFollowers || DEMO_FOLLOWERS,
+      }));
     } catch {
       setSearchState((prev) => ({
         ...prev,
@@ -476,278 +324,218 @@ export default function Home() {
   const renderResultSection = () => {
     if (
       searchState.status === "idle" ||
-      searchState.status === "loading" ||
-      searchState.status === "profile"
+      searchState.status === "loading"
     )
       return null;
 
-    const isPaid = searchState.status === "full";
-    const following = searchState.recentFollowing || [];
-    const followers = searchState.recentFollowers || [];
-    const displayList = activeTab === "following" ? following : followers;
+    const profile = searchState.profile;
+    const following = searchState.recentFollowing || DEMO_FOLLOWING;
+    const followers = searchState.recentFollowers || DEMO_FOLLOWERS;
+
+    const targetUser = profile?.username || searchInput.replace(/^@/, "");
+    const displayEntries = activeTab === "followers" ? followers : following;
+    const classified = classifyFollowEntries(displayEntries, targetUser);
 
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-lg mx-auto mt-8 text-left"
+        className="w-full max-w-2xl mx-auto mt-8 text-left space-y-4"
       >
-        {/* Profile header card */}
-        {searchState.profile && (
-          <Card variant="highlight" className="mb-4">
-            <div className="flex items-center gap-4">
+        {/* Profile header card (Matching RecentFollow Inspiration) */}
+        {profile && (
+          <Card variant="highlight" className="p-6 bg-[#FFFFFF] shadow-md border-[#E7F256]">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
               <Avatar
-                src={searchState.profile.avatarUrl}
-                username={searchState.profile.username}
-                isVerified={searchState.profile.isVerified}
-                size="lg"
+                src={profile.avatarUrl}
+                username={profile.username}
+                isVerified={profile.isVerified}
+                size="xl"
                 limeHalo
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-lg truncate text-[#121212]">
-                    {searchState.profile.fullName || searchState.profile.username}
+                  <h3 className="font-extrabold text-xl truncate text-[#121212]">
+                    {profile.username}
                   </h3>
                 </div>
-                <p className="text-xs text-[#555555]">@{searchState.profile.username}</p>
-                <div className="flex items-center gap-4 mt-2 text-xs text-[#555555]">
-                  <span>
-                    <strong className="text-[#121212]">
-                      {searchState.profile.followingCount.toLocaleString()}
+
+                {/* Stats Bar */}
+                <div className="flex items-center gap-6 mt-2 text-sm text-[#121212]">
+                  <div>
+                    <strong className="font-extrabold text-[#121212]">
+                      {profile.postsCount || 1}
                     </strong>{" "}
-                    following
-                  </span>
-                  <span>
-                    <strong className="text-[#121212]">
-                      {searchState.profile.followerCount.toLocaleString()}
+                    <span className="text-[#555555]">Posts</span>
+                  </div>
+                  <div>
+                    <strong className="font-extrabold text-[#121212]">
+                      {(profile.followerCount || 1080).toLocaleString()}
                     </strong>{" "}
-                    followers
-                  </span>
+                    <span className="text-[#555555]">Followers</span>
+                  </div>
+                  <div>
+                    <strong className="font-extrabold text-[#121212]">
+                      {(profile.followingCount || 603).toLocaleString()}
+                    </strong>{" "}
+                    <span className="text-[#555555]">Following</span>
+                  </div>
                 </div>
+
+                {/* Biography */}
+                <p className="text-xs text-[#555555] mt-2 font-medium">
+                  {profile.fullName || profile.username}
+                </p>
+                {profile.biography && (
+                  <p className="text-xs text-[#121212] mt-1 font-normal">
+                    {profile.biography}
+                  </p>
+                )}
               </div>
+
+              <Button
+                variant="dark"
+                size="sm"
+                className="shrink-0"
+                onClick={() => router.push("/api/stripe/checkout")}
+              >
+                Reveal Full Profile
+              </Button>
             </div>
           </Card>
         )}
 
         {/* Tab switcher */}
-        <div className="mb-4">
+        <div>
           <Tabs
             fullWidth
             activeTab={activeTab}
-            onChange={(id) => setActiveTab(id as "following" | "followers")}
+            onChange={(id) => setActiveTab(id as "followers" | "following")}
             tabs={[
-              { id: "following", label: "Recent Following", badge: following.length },
               { id: "followers", label: "Recent Followers", badge: followers.length },
+              { id: "following", label: "Recent Following", badge: following.length },
             ]}
           />
         </div>
 
-        {/* Results container */}
-        <Card padding="none" className="overflow-hidden bg-[#FFFFFF]">
-          <div className="p-2 space-y-1">
-            {displayList.slice(0, isPaid ? displayList.length : 3).map((entry) => (
-              <FollowCard
-                key={entry.id}
-                entry={entry}
-                label={activeTab === "following" ? "Followed" : "Follows them"}
-              />
-            ))}
-          </div>
+        {/* Categorized Cards (Matching RecentFollow Inspiration) */}
+        <div className="space-y-3">
+          <CategoryCard
+            title="Followed by girls"
+            badgeLabel={classified.girls.badgeLabel}
+            summaryText={classified.girls.summaryText}
+            sampleAvatars={classified.girls.sampleAvatars}
+          />
+          <CategoryCard
+            title="Followed by boys"
+            badgeLabel={classified.boys.badgeLabel}
+            summaryText={classified.boys.summaryText}
+            sampleAvatars={classified.boys.sampleAvatars}
+          />
+          <CategoryCard
+            title="Followed by others"
+            badgeLabel={classified.others.badgeLabel}
+            summaryText={classified.others.summaryText}
+            sampleAvatars={classified.others.sampleAvatars}
+          />
+        </div>
 
-          {/* Paywall Overlay */}
-          {!isPaid && displayList.length > 3 && (
-            <div className="relative">
-              <div className="p-2 space-y-1">
-                {displayList.slice(3, 8).map((_, i) => (
-                  <BlurredFollowCard key={i} />
-                ))}
-              </div>
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#FFFFFF] via-[#FFFFFF]/95 to-transparent pt-16 pb-8 px-4 text-center">
-                <Badge variant="lime" icon={<Lock className="w-3.5 h-3.5 shrink-0" />} dot pulse className="mb-3 px-3 py-1">
-                  {displayList.length - 3}+ accounts hidden
-                </Badge>
-                <p className="text-xs text-[#555555] mb-4 max-w-xs font-medium">
-                  Unlock full access to see all recent activity, follower order changes &amp; alerts.
-                </p>
-                <Button
-                  variant="primary"
-                  size="md"
-                  leftIcon={<Eye className="w-4 h-4" />}
-                  onClick={handleUnlock}
-                  isLoading={isCheckingOut}
-                >
-                  Unlock full list
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {displayList.length === 0 && (
-            <div className="p-8 text-center">
-              <p className="text-[#555555] text-sm font-medium">
-                No {activeTab === "following" ? "following" : "follower"} records found.
-              </p>
-              <p className="text-[#888888] text-xs mt-1">
-                Data will refresh automatically upon next update.
-              </p>
-            </div>
-          )}
+        {/* High-Converting Bottom Paywall Callout */}
+        <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6">
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
+            Sign Up &amp; View All of @{targetUser} Recent Followers and More!
+          </h3>
+          <p className="text-sm text-[#555555] font-medium max-w-md mx-auto mb-6">
+            See their recent followers, following, anonymous stories, unfollowers &amp; more in real-time
+          </p>
+          <Button
+            variant="primary"
+            size="lg"
+            leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
+            onClick={() => router.push("/api/stripe/checkout")}
+            className="font-extrabold text-base px-8 py-4 shadow-lg"
+          >
+            🚀 Get Started &amp; Sign Up
+          </Button>
         </Card>
-
-        {/* Tracking CTA for paid users */}
-        {isPaid && (
-          <div className="mt-4 space-y-2">
-            <Button
-              variant="secondary"
-              fullWidth
-              leftIcon={<Bell className="w-4 h-4 text-[#121212]" />}
-              onClick={() => {
-                const email = window.prompt("Enter your email to get alerts when this account follows/unfollows someone:");
-                if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                  if (email) alert("Please enter a valid email address.");
-                  return;
-                }
-                const targetId = (searchState.profile as unknown as Record<string, unknown>)?.id;
-                if (!targetId) return;
-                fetch("/api/instagram/track", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ email, targetId }),
-                })
-                  .then((r) => r.json())
-                  .then((data) => {
-                    if (data.success) {
-                      alert(`✅ You're now tracking @${searchState.profile?.username || "this account"}! You'll get email alerts when changes are detected.`);
-                    } else {
-                      alert(data.error || "Failed to subscribe. Please try again.");
-                    }
-                  })
-                  .catch(() => alert("Network error. Please try again."));
-              }}
-            >
-              Track this account for live changes
-            </Button>
-            {searchState.profile && (
-              <Link
-                href={`/track/${searchState.profile.username}`}
-                className="block"
-              >
-                <Button variant="ghost" fullWidth size="sm" rightIcon={<ArrowRight className="w-3.5 h-3.5" />}>
-                  View full timeline
-                </Button>
-              </Link>
-            )}
-          </div>
-        )}
       </motion.div>
     );
   };
 
   const renderStatusState = () => {
-    switch (searchState.status) {
-      case "loading":
-        return (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="w-full max-w-lg mx-auto mt-8 text-center"
-          >
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 rounded-full border-3 border-[#121212] border-t-[#E7F256] animate-spin" />
-              <p className="text-[#555555] text-sm font-semibold">Analyzing public data...</p>
-              <div className="space-y-2 w-full">
-                <div className="h-3.5 ramp-shimmer rounded-lg w-3/4 mx-auto" />
-                <div className="h-3.5 ramp-shimmer rounded-lg w-1/2 mx-auto" />
-              </div>
-            </div>
-          </motion.div>
-        );
+    if (searchState.status !== "loading") return null;
 
-      case "private":
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-lg mx-auto mt-8"
-          >
-            <Card variant="subtle" className="text-center border-[#FDE68A]">
-              <EyeOff className="w-10 h-10 text-[#B45309] mx-auto mb-3" />
-              <h3 className="font-bold text-[#121212] text-base mb-1">Private Account</h3>
-              <p className="text-sm text-[#555555]">
-                This account is private. CheckFollows strictly operates on public Instagram data.
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-4 text-[#121212]"
-                onClick={() =>
-                  setSearchState({ status: "idle", profile: null, recentFollowing: null, recentFollowers: null, error: null })
-                }
-              >
-                Try another username
-              </Button>
-            </Card>
-          </motion.div>
-        );
+    const steps = [
+      { id: 1, text: "Connecting to Instagram API..." },
+      { id: 2, text: "Profile found! Fetching bio & follower counts..." },
+      { id: 3, text: "Scanning recent followers & following data..." },
+      { id: 4, text: "Classifying connections into girls, boys & others..." },
+    ];
 
-      case "not_found":
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-lg mx-auto mt-8"
-          >
-            <Card variant="subtle" className="text-center border-[#FCA5A5]">
-              <Search className="w-10 h-10 text-[#B91C1C] mx-auto mb-3" />
-              <h3 className="font-bold text-[#121212] text-base mb-1">Account Not Found</h3>
-              <p className="text-sm text-[#555555]">
-                We couldn&apos;t find an Instagram account with that handle. Double-check spelling.
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-4 text-[#121212]"
-                onClick={() =>
-                  setSearchState({ status: "idle", profile: null, recentFollowing: null, recentFollowers: null, error: null })
-                }
-              >
-                Try again
-              </Button>
-            </Card>
-          </motion.div>
-        );
+    const progressPct = loadingStep === 1 ? 25 : loadingStep === 2 ? 55 : loadingStep === 3 ? 85 : 100;
 
-      case "error":
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-lg mx-auto mt-8 text-center"
-          >
-            <Card variant="subtle" className="border-[#FCA5A5]">
-              <p className="text-sm text-[#B91C1C]">{searchState.error}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-3 text-[#121212]"
-                onClick={() =>
-                  setSearchState({ status: "idle", profile: null, recentFollowing: null, recentFollowers: null, error: null })
-                }
-              >
-                Try again
-              </Button>
-            </Card>
-          </motion.div>
-        );
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-lg mx-auto mt-8 text-center"
+      >
+        <Card padding="md" className="bg-[#FFFFFF] border-[#E2E2DC] shadow-md text-left">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-extrabold text-[#121212] uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#E7F256] animate-ping" />
+              Live Analysis in Progress
+            </span>
+            <span className="text-xs font-mono font-bold text-[#555555]">{progressPct}%</span>
+          </div>
 
-      default:
-        return null;
-    }
+          {/* Animated Progress Bar */}
+          <div className="w-full h-2 bg-[#EDEDE8] rounded-full overflow-hidden mb-6">
+            <motion.div
+              className="h-full bg-[#E7F256]"
+              initial={{ width: "0%" }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.4 }}
+            />
+          </div>
+
+          {/* Step Checklist */}
+          <div className="space-y-3">
+            {steps.map((step) => {
+              const isDone = loadingStep > step.id;
+              const isCurrent = loadingStep === step.id;
+
+              return (
+                <div key={step.id} className="flex items-center gap-3 text-xs">
+                  {isDone ? (
+                    <div className="w-5 h-5 rounded-full bg-[#E7F256] flex items-center justify-center text-[#121212] shrink-0 font-bold">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </div>
+                  ) : isCurrent ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-[#121212] border-t-[#E7F256] animate-spin shrink-0" />
+                  ) : (
+                    <div className="w-5 h-5 rounded-full border border-[#E2E2DC] bg-[#EDEDE8] shrink-0" />
+                  )}
+
+                  <span
+                    className={`font-semibold ${
+                      isDone ? "text-[#121212]" : isCurrent ? "text-[#121212] font-bold" : "text-[#888888]"
+                    }`}
+                  >
+                    {step.text}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </motion.div>
+    );
   };
 
-  const demoList = demoTab === "following" ? DEMO_FOLLOWING : DEMO_FOLLOWERS;
+  const demoList = demoTab === "followers" ? DEMO_FOLLOWERS : DEMO_FOLLOWING;
+  const demoClassified = classifyFollowEntries(demoList, "johndoe");
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
@@ -796,12 +584,6 @@ export default function Home() {
             >
               FAQ
             </a>
-            <Link
-              href="/pricing"
-              className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
-            >
-              Pricing
-            </Link>
           </div>
 
           <div className="hidden sm:flex items-center gap-3">
@@ -963,7 +745,7 @@ export default function Home() {
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Enter Instagram handle... (e.g. alex)"
+                      placeholder="Enter Instagram handle... (e.g. bhavyekhetan)"
                       leftIcon={<span className="text-[#121212] font-black text-lg">@</span>}
                       className={`border-none bg-transparent py-3 text-base focus:ring-0 ${isHighlighted ? "placeholder:text-[#121212] font-bold" : ""}`}
                       spellCheck={false}
@@ -973,7 +755,7 @@ export default function Home() {
                   <Button
                     variant="primary"
                     size="md"
-                    onClick={() => handleSearch()}
+                    onClick={handleSearch}
                     isLoading={searchState.status === "loading"}
                     disabled={!searchInput.trim()}
                     rightIcon={<ArrowRight className="w-4 h-4" />}
@@ -1124,6 +906,123 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── Interactive Demo Preview Section (RecentFollow Style) ── */}
+      {searchState.status === "idle" && showDemo && (
+        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-b border-[#E2E2DC]">
+          <div className="max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="max-w-2xl mx-auto text-left space-y-4"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-[#555555] uppercase tracking-widest">
+                  Live Preview Mode
+                </span>
+                <Badge variant="lime" size="sm">Demo Profile</Badge>
+              </div>
+
+              {/* Demo Profile Card */}
+              <Card variant="highlight" className="p-6 bg-[#FFFFFF] shadow-md border-[#E7F256]">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                  <Avatar src="/images/demo/johndoe.jpg" username="bhavyekhetan" size="xl" limeHalo />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-extrabold text-xl truncate text-[#121212]">
+                      bhavyekhetan
+                    </h3>
+
+                    {/* Stats Bar */}
+                    <div className="flex items-center gap-6 mt-2 text-sm text-[#121212]">
+                      <div>
+                        <strong className="font-extrabold text-[#121212]">1</strong>{" "}
+                        <span className="text-[#555555]">Posts</span>
+                      </div>
+                      <div>
+                        <strong className="font-extrabold text-[#121212]">1,080</strong>{" "}
+                        <span className="text-[#555555]">Followers</span>
+                      </div>
+                      <div>
+                        <strong className="font-extrabold text-[#121212]">603</strong>{" "}
+                        <span className="text-[#555555]">Following</span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-[#555555] mt-2 font-medium">Bhavye</p>
+                    <p className="text-xs text-[#121212] mt-1 font-normal">
+                      Don&apos;t be shy with it :) 📍 SF
+                    </p>
+                  </div>
+
+                  <Button
+                    variant="dark"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={triggerFocusAndHighlight}
+                  >
+                    Reveal Full Profile
+                  </Button>
+                </div>
+              </Card>
+
+              {/* Demo Tabs */}
+              <div>
+                <Tabs
+                  fullWidth
+                  activeTab={demoTab}
+                  onChange={(id) => setDemoTab(id as "followers" | "following")}
+                  tabs={[
+                    { id: "followers", label: "Recent Followers", badge: DEMO_FOLLOWERS.length },
+                    { id: "following", label: "Recent Following", badge: DEMO_FOLLOWING.length },
+                  ]}
+                />
+              </div>
+
+              {/* Demo Categorized Cards */}
+              <div className="space-y-3">
+                <CategoryCard
+                  title="Followed by girls"
+                  badgeLabel={demoClassified.girls.badgeLabel}
+                  summaryText={demoClassified.girls.summaryText}
+                  sampleAvatars={demoClassified.girls.sampleAvatars}
+                />
+                <CategoryCard
+                  title="Followed by boys"
+                  badgeLabel={demoClassified.boys.badgeLabel}
+                  summaryText={demoClassified.boys.summaryText}
+                  sampleAvatars={demoClassified.boys.sampleAvatars}
+                />
+                <CategoryCard
+                  title="Followed by others"
+                  badgeLabel={demoClassified.others.badgeLabel}
+                  summaryText={demoClassified.others.summaryText}
+                  sampleAvatars={demoClassified.others.sampleAvatars}
+                />
+              </div>
+
+              {/* Demo Paywall CTA */}
+              <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6">
+                <h3 className="text-2xl font-extrabold text-[#121212] tracking-tight mb-2">
+                  Sign Up &amp; View All of @bhavyekhetan Recent Followers and More!
+                </h3>
+                <p className="text-xs text-[#555555] font-medium max-w-md mx-auto mb-6">
+                  See their recent followers, following, anonymous stories, unfollowers &amp; more in real-time
+                </p>
+                <Button
+                  variant="primary"
+                  size="md"
+                  leftIcon={<Sparkles className="w-4 h-4 text-[#121212]" />}
+                  onClick={triggerFocusAndHighlight}
+                  className="font-extrabold text-sm px-6 py-3 shadow-md"
+                >
+                  🚀 Get Started &amp; Sign Up
+                </Button>
+              </Card>
+            </motion.div>
+          </div>
+        </section>
+      )}
+
       {/* ── Ca$hvertising Upgrade 2: Comparison Matrix ── */}
       <section id="comparison" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-b border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto">
@@ -1256,91 +1155,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Interactive Demo Section ── */}
-      {searchState.status === "idle" && showDemo && (
-        <section className="py-16 sm:py-24 px-4 sm:px-6">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="max-w-lg mx-auto text-left"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-[#555555] uppercase tracking-widest">
-                  Live Preview Mode
-                </span>
-                <Badge variant="lime" size="sm">Demo Data</Badge>
-              </div>
-
-              {/* Demo Profile Header */}
-              <Card variant="highlight" className="mb-4">
-                <div className="flex items-center gap-4">
-                  <Avatar src={null} username="johndoe" size="lg" limeHalo />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-extrabold text-lg text-[#121212]">John Doe</h3>
-                    <p className="text-xs text-[#555555]">@johndoe</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-[#555555]">
-                      <span><strong className="text-[#121212]">847</strong> following</span>
-                      <span><strong className="text-[#121212]">12.3K</strong> followers</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Demo Tab Navigation */}
-              <div className="mb-4">
-                <Tabs
-                  fullWidth
-                  activeTab={demoTab}
-                  onChange={(id) => setDemoTab(id as "following" | "followers")}
-                  tabs={[
-                    { id: "following", label: "Recent Following", badge: DEMO_FOLLOWING.length },
-                    { id: "followers", label: "Recent Followers", badge: DEMO_FOLLOWERS.length },
-                  ]}
-                />
-              </div>
-
-              {/* Demo Follow Cards */}
-              <Card padding="none" className="overflow-hidden bg-[#FFFFFF]">
-                <div className="p-2 space-y-1">
-                  {demoList.slice(0, 3).map((entry) => (
-                    <FollowCard
-                      key={entry.id}
-                      entry={entry}
-                      label={demoTab === "following" ? "Followed" : "Follows them"}
-                    />
-                  ))}
-                </div>
-
-                <div className="relative">
-                  <div className="p-2 space-y-1">
-                    {demoList.slice(3, 7).map((_, i) => (
-                      <BlurredFollowCard key={i} />
-                    ))}
-                  </div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-t from-[#FFFFFF] via-[#FFFFFF]/95 to-transparent pt-16 pb-8 px-4 text-center">
-                    <Badge variant="lime" icon={<Lock className="w-3.5 h-3.5 shrink-0" />} dot pulse className="mb-3 px-3 py-1">
-                      {demoList.length - 3}+ accounts hidden
-                    </Badge>
-                    <p className="text-xs text-[#555555] mb-4 max-w-xs font-medium">
-                      Unlock full chronological list and automatic change alerts.
-                    </p>
-                    <Button
-                      variant="primary"
-                      leftIcon={<Eye className="w-4 h-4" />}
-                      onClick={triggerFocusAndHighlight}
-                    >
-                      Unlock full list
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </section>
-      )}
-
       {/* ── Ca$hvertising Upgrade 4: 5-Tier Social Proof Engine with Real Avatars ── */}
       <section id="testimonials" className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-y border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto">
@@ -1376,7 +1190,12 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 pt-3 border-t border-[#E2E2DC]">
-                  <Avatar src={null} username={item.name} size="md" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.avatar}
+                    alt={item.name}
+                    className="w-10 h-10 rounded-full object-cover border border-[#E2E2DC]"
+                  />
                   <div>
                     <h4 className="font-bold text-xs text-[#121212]">{item.name}</h4>
                     <span className="text-[10px] text-[#555555] font-mono">{item.role}</span>
@@ -1491,31 +1310,15 @@ export default function Home() {
             </div>
             <span>CheckFollows</span>
           </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-[#777777]">
+          <div className="flex items-center gap-6 text-xs font-medium text-[#777777]">
             <span>© 2026 CheckFollows</span>
             <span>·</span>
-            <a href="/pricing" className="hover:text-[#121212] transition-colors">
-              Pricing
-            </a>
-            <span>·</span>
-            <a href="/blog" className="hover:text-[#121212] transition-colors">
-              Blog
-            </a>
-            <span>·</span>
-            <a href="/privacy" className="hover:text-[#121212] transition-colors">
+            <a href="#" className="hover:text-[#121212] transition-colors">
               Privacy Policy
             </a>
             <span>·</span>
-            <a href="/terms" className="hover:text-[#121212] transition-colors">
+            <a href="#" className="hover:text-[#121212] transition-colors">
               Terms of Service
-            </a>
-            <span>·</span>
-            <a href="/refund" className="hover:text-[#121212] transition-colors">
-              Refund Policy
-            </a>
-            <span>·</span>
-            <a href="/contact" className="hover:text-[#121212] transition-colors">
-              Contact
             </a>
           </div>
         </div>

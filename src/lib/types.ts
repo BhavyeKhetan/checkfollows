@@ -8,6 +8,7 @@ export interface InstagramProfile {
   isVerified: boolean;
   biography: string | null;
   externalUrl: string | null;
+  postsCount?: number;
 }
 
 export interface InstagramAccount {

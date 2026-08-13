@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     const stripe = getStripe();
 
     let cadence: "weekly" | "quarterly" = "weekly";
-    let targetMeta: Record<string, string> = {};
+    const targetMeta: Record<string, string> = {};
 
     try {
       const body = await request.json();
