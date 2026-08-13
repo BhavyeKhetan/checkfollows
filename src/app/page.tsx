@@ -8,8 +8,6 @@ import {
   Search,
   Lock,
   Eye,
-  EyeOff,
-  Bell,
   Shield,
   ArrowRight,
   ArrowDown,
@@ -92,7 +90,6 @@ const TESTIMONIALS = [
 // ─── Component Helpers ─────────────────────────────────────────────
 
 function CategoryCard({
-  title,
   summaryText,
   badgeLabel,
   sampleAvatars,
@@ -142,19 +139,6 @@ function CategoryCard({
   );
 }
 
-function BlurredFollowCard() {
-  return (
-    <div className="flex items-center gap-3.5 p-3.5 rounded-xl relative overflow-hidden">
-      <div className="w-10 h-10 rounded-full bg-[#EDEDE8] blur-[6px] border border-[#E2E2DC]" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3.5 w-28 bg-[#EDEDE8] rounded blur-[4px]" />
-        <div className="h-2.5 w-20 bg-[#EDEDE8] rounded blur-[4px]" />
-      </div>
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#FFFFFF]/70 to-transparent" />
-    </div>
-  );
-}
-
 // ─── FAQ Data ──────────────────────────────────────────────────────
 
 const FAQS = [
@@ -187,7 +171,6 @@ const FAQS = [
 // ─── Main Page ─────────────────────────────────────────────────────
 
 export default function Home() {
-  const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [searchState, setSearchState] = useState<SearchState>({
     status: "idle",
@@ -204,6 +187,7 @@ export default function Home() {
 
   // Loading progress steps
   const [loadingStep, setLoadingStep] = useState(0);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   // Focus & highlight state when CTA buttons are clicked
   const [isHighlighted, setIsHighlighted] = useState(false);
@@ -218,6 +202,33 @@ export default function Home() {
     inputRef.current?.focus();
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => setIsHighlighted(false), 2500);
+  };
+
+  const router = useRouter();
+
+  const handleStartSignup = async (targetUsername?: string) => {
+    if (isCheckoutLoading) return;
+    setIsCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cadence: "weekly",
+          username: targetUsername || searchInput.replace(/^@/, "").trim() || "bhavyekhetan",
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.assign(data.url);
+      } else {
+        router.push("/pricing");
+      }
+    } catch {
+      router.push("/pricing");
+    } finally {
+      setIsCheckoutLoading(false);
+    }
   };
 
   const handleSearch = async () => {
@@ -398,7 +409,8 @@ export default function Home() {
                 variant="dark"
                 size="sm"
                 className="shrink-0"
-                onClick={() => router.push("/api/stripe/checkout")}
+                isLoading={isCheckoutLoading}
+                onClick={() => handleStartSignup(targetUser)}
               >
                 Reveal Full Profile
               </Button>
@@ -441,8 +453,8 @@ export default function Home() {
           />
         </div>
 
-        {/* High-Converting Bottom Paywall Callout */}
-        <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6">
+        {/* High-Converting Bottom Paywall Callout (Matches RecentFollow) */}
+        <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6 shadow-sm">
           <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
             Sign Up &amp; View All of @{targetUser} Recent Followers and More!
           </h3>
@@ -452,8 +464,9 @@ export default function Home() {
           <Button
             variant="primary"
             size="lg"
+            isLoading={isCheckoutLoading}
             leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
-            onClick={() => router.push("/api/stripe/checkout")}
+            onClick={() => handleStartSignup(targetUser)}
             className="font-extrabold text-base px-8 py-4 shadow-lg"
           >
             🚀 Get Started &amp; Sign Up
@@ -535,7 +548,7 @@ export default function Home() {
   };
 
   const demoList = demoTab === "followers" ? DEMO_FOLLOWERS : DEMO_FOLLOWING;
-  const demoClassified = classifyFollowEntries(demoList, "johndoe");
+  const demoClassified = classifyFollowEntries(demoList, "bhavyekhetan");
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
@@ -958,7 +971,8 @@ export default function Home() {
                     variant="dark"
                     size="sm"
                     className="shrink-0"
-                    onClick={triggerFocusAndHighlight}
+                    isLoading={isCheckoutLoading}
+                    onClick={() => handleStartSignup("bhavyekhetan")}
                   >
                     Reveal Full Profile
                   </Button>
@@ -1000,20 +1014,21 @@ export default function Home() {
                 />
               </div>
 
-              {/* Demo Paywall CTA */}
-              <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6">
-                <h3 className="text-2xl font-extrabold text-[#121212] tracking-tight mb-2">
+              {/* Demo Paywall CTA (RecentFollow Style) */}
+              <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6 shadow-sm">
+                <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
                   Sign Up &amp; View All of @bhavyekhetan Recent Followers and More!
                 </h3>
-                <p className="text-xs text-[#555555] font-medium max-w-md mx-auto mb-6">
+                <p className="text-sm text-[#555555] font-medium max-w-md mx-auto mb-6">
                   See their recent followers, following, anonymous stories, unfollowers &amp; more in real-time
                 </p>
                 <Button
                   variant="primary"
-                  size="md"
-                  leftIcon={<Sparkles className="w-4 h-4 text-[#121212]" />}
-                  onClick={triggerFocusAndHighlight}
-                  className="font-extrabold text-sm px-6 py-3 shadow-md"
+                  size="lg"
+                  isLoading={isCheckoutLoading}
+                  leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
+                  onClick={() => handleStartSignup("bhavyekhetan")}
+                  className="font-extrabold text-base px-8 py-4 shadow-lg"
                 >
                   🚀 Get Started &amp; Sign Up
                 </Button>
