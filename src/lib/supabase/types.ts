@@ -69,34 +69,37 @@ export interface Database {
       subscriptions: {
         Row: {
           id: string;
-          target_id: string;
+          target_id: string | null;
           email: string;
           plan: string;
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           active: boolean;
+          user_paused: boolean;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          target_id: string;
+          target_id?: string | null;
           email: string;
           plan?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           active?: boolean;
+          user_paused?: boolean;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          target_id?: string;
+          target_id?: string | null;
           email?: string;
           plan?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           active?: boolean;
+          user_paused?: boolean;
           created_at?: string;
           updated_at?: string;
         };

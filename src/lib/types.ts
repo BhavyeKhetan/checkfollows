@@ -1,4 +1,5 @@
 export interface InstagramProfile {
+  id?: string;
   username: string;
   fullName: string | null;
   avatarUrl: string | null;

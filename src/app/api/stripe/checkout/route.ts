@@ -8,12 +8,17 @@ export async function POST(request: Request) {
 
     let cadence: "weekly" | "quarterly" = "weekly";
     const targetMeta: Record<string, string> = {};
+    let customerEmail: string | undefined;
 
     try {
       const body = await request.json();
       if (body.cadence === "quarterly") cadence = "quarterly";
-      if (body.username) targetMeta.username = body.username;
-      if (body.targetId) targetMeta.target_id = body.targetId;
+      if (body.username) targetMeta.username = String(body.username);
+      if (body.targetId) targetMeta.target_id = String(body.targetId);
+      if (typeof body.email === "string" && body.email.trim()) {
+        customerEmail = String(body.email).trim();
+        targetMeta.email = customerEmail;
+      }
     } catch {
       // no body — default to weekly
     }
@@ -23,10 +28,16 @@ export async function POST(request: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(customerEmail ? { customer_email: customerEmail } : {}),
       success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${baseUrl}/?canceled=true`,
       subscription_data: {
         trial_period_days: 7,
+        metadata: {
+          product: "checkfollows",
+          cadence,
+          ...targetMeta,
+        },
       },
       metadata: {
         product: "checkfollows",

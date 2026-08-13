@@ -198,22 +198,83 @@ export default function TrackPage() {
     if (!target) return;
     setTogglingMonitoring(true);
     try {
+      if (target.monitoring_enabled) {
+        // ─── STOP monitoring (user-initiated) ───
+        const res = await fetch("/api/instagram/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetId: target.id, action: "stop" }),
+        });
+        const data = await res.json();
+        setTarget((prev) => prev ? { ...prev, monitoring_enabled: false } : null);
+        if (data?.message) window.alert(data.message);
+        return;
+      }
+
+      // ─── START tracking: gate behind Stripe checkout ───
       const email = window.prompt(
-        target.monitoring_enabled
-          ? "Enter your email to confirm stopping monitoring:"
-          : "Enter your email to start monitoring this account:"
+        "Enter your email to start tracking this account:"
       );
       if (!email) return;
 
-      await fetch("/api/instagram/track", {
+      const res = await fetch("/api/instagram/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetId: target.id, email }),
       });
-      setTarget((prev) => prev ? { ...prev, monitoring_enabled: !prev.monitoring_enabled } : null);
+      const data = await res.json();
+
+      if (data?.url) {
+        // No paid subscription yet → Stripe Checkout.
+        window.location.assign(data.url);
+        return;
+      }
+
+      if (!res.ok) {
+        window.alert(data?.error || "Could not start tracking. Please try again.");
+        return;
+      }
+
+      // Already paid → monitoring activated server-side.
+      setTarget((prev) => prev ? { ...prev, monitoring_enabled: true } : null);
+      if (data?.message) window.alert(data.message);
     } catch { /* ignore */ }
     finally { setTogglingMonitoring(false); }
   };
+
+  // ─── Post-payment success handling ───
+  // Stripe redirects here with ?session_id=...&success=true. We verify the
+  // session, activate monitoring, and establish the baseline.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const success = params.get("success");
+
+    if (!sessionId || success !== "true") return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/stripe/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const data = await res.json();
+        if (data?.success) {
+          window.alert("Payment confirmed — tracking is now active. A full scan is running to establish your baseline.");
+          // Reload to show the latest monitoring state + events.
+          await loadData();
+        }
+      } catch { /* ignore */ }
+      finally {
+        // Clean the query params so refresh doesn't re-activate.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("success");
+        window.history.replaceState({}, "", url.toString());
+      }
+    })();
+  }, [loadData]);
 
   const filteredEvents = activeTab === "all"
     ? events

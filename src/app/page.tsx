@@ -232,7 +232,7 @@ export default function Home() {
     setTimeout(() => setIsHighlighted(false), 2500);
   };
 
-  const handleStartSignup = async (targetUsername?: string) => {
+  const handleStartSignup = async (targetUsername?: string, targetId?: string) => {
     if (isCheckoutLoading) return;
     setIsCheckoutLoading(true);
     try {
@@ -242,6 +242,7 @@ export default function Home() {
         body: JSON.stringify({
           cadence: "weekly",
           username: targetUsername || searchInput.replace(/^@/, "").trim() || "alex.rivera",
+          targetId,
         }),
       });
       const data = await res.json();
@@ -358,6 +359,39 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Post-payment success: verify the session, then send the user to their
+  // freshly-activated tracking page.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const success = params.get("success");
+    if (!sessionId || success !== "true") return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/stripe/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const data = await res.json();
+        if (data?.success && data.username) {
+          router.replace(`/track/${encodeURIComponent(data.username)}`);
+        } else if (data?.success) {
+          // Generic purchase without a linked account — land on pricing.
+          router.replace("/pricing");
+        }
+      } catch {
+        router.replace("/pricing");
+      } finally {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_id");
+        url.searchParams.delete("success");
+        window.history.replaceState({}, "", url.toString());
+      }
+    })();
+  }, [router]);
+
   const renderResultSection = () => {
     if (
       searchState.status === "idle" ||
@@ -436,7 +470,7 @@ export default function Home() {
                 size="sm"
                 className="shrink-0"
                 isLoading={isCheckoutLoading}
-                onClick={() => handleStartSignup(targetUser)}
+                onClick={() => handleStartSignup(targetUser, profile?.id)}
               >
                 Reveal Full Profile
               </Button>
@@ -495,7 +529,7 @@ export default function Home() {
             size="lg"
             isLoading={isCheckoutLoading}
             leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
-            onClick={() => handleStartSignup(targetUser)}
+            onClick={() => handleStartSignup(targetUser, profile?.id)}
             className="font-extrabold text-base px-8 py-4 shadow-lg"
           >
             🚀 Get Started &amp; Sign Up

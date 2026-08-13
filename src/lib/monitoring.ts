@@ -760,13 +760,23 @@ export async function processDueScans(): Promise<{
   const provider = getMonitoringProvider();
   const now = new Date().toISOString();
 
-  // Get target IDs that have an active paid subscription
+  // Get target IDs that have an active PAID subscription.
+  // A paid subscription MUST have a Stripe subscription ID — this is the
+  // entitlement gate that prevents free monitoring (legacy free rows have
+  // no stripe_subscription_id and no longer unlock scans). Rows the user
+  // explicitly paused (user_paused = true) are excluded.
   const { data: paidSubs } = await supabase
     .from("subscriptions")
     .select("target_id")
-    .eq("active", true);
+    .eq("active", true)
+    .eq("user_paused", false)
+    .not("stripe_subscription_id", "is", null);
 
-  const paidTargetIds = new Set((paidSubs || []).map((s) => s.target_id));
+  const paidTargetIds = new Set(
+    (paidSubs || [])
+      .map((s) => s.target_id)
+      .filter((id): id is string => !!id)
+  );
 
   const { data: dueTargets } = await supabase
     .from("instagram_targets")
