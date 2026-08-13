@@ -93,48 +93,75 @@ function CategoryCard({
   summaryText,
   badgeLabel,
   sampleAvatars,
+  entries,
 }: {
   title: string;
   summaryText: string;
   badgeLabel: string;
   sampleAvatars: (string | null)[];
+  entries?: FollowEntry[];
 }) {
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-xl border border-[#E2E2DC] bg-[#FFFFFF] hover:border-[#121212] transition-all gap-4 shadow-sm">
-      <div className="flex items-center gap-3.5 min-w-0">
-        {/* Stacked overlapping avatars */}
-        <div className="flex -space-x-3 shrink-0">
-          {sampleAvatars.slice(0, 3).map((avatar, idx) => (
+    <div className="rounded-xl border border-[#E2E2DC] bg-[#FFFFFF] hover:border-[#121212] transition-all shadow-sm overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 gap-4">
+        <div className="flex items-center gap-3.5 min-w-0">
+          {/* Stacked overlapping avatars - CRISP & UNBLURRED */}
+          <div className="flex -space-x-3 shrink-0">
+            {sampleAvatars.slice(0, 3).map((avatar, idx) => (
+              <div
+                key={idx}
+                className="w-10 h-10 rounded-full border-2 border-[#FFFFFF] bg-[#EDEDE8] overflow-hidden shadow-sm shrink-0"
+              >
+                {avatar ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={avatar.startsWith("/") ? avatar : `/api/proxy-image?url=${encodeURIComponent(avatar)}`}
+                    alt="avatar"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#EDEDE8]" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Text summary */}
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm font-semibold text-[#121212] leading-snug">
+              {summaryText}
+            </p>
+          </div>
+        </div>
+
+        <Badge variant="mono" size="sm" className="shrink-0 bg-[#EDEDE8] text-[#121212] font-mono">
+          {badgeLabel}
+        </Badge>
+      </div>
+
+      {/* Expanded clean list of real entries */}
+      {entries && entries.length > 0 && (
+        <div className="border-t border-[#E2E2DC] bg-[#F9F9F7]/60 p-2 space-y-1.5">
+          {entries.slice(0, 3).map((entry) => (
             <div
-              key={idx}
-              className="w-10 h-10 rounded-full border-2 border-[#FFFFFF] bg-[#EDEDE8] overflow-hidden shadow-sm shrink-0"
+              key={entry.id}
+              className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#FFFFFF] border border-[#E2E2DC]/80 hover:border-[#121212] transition-all"
             >
-              {avatar ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={avatar.startsWith("/") ? avatar : `/api/proxy-image?url=${encodeURIComponent(avatar)}`}
-                  alt="avatar"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover rounded-full filter blur-[2px]"
-                />
-              ) : (
-                <div className="w-full h-full bg-[#EDEDE8]" />
-              )}
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar src={entry.avatarUrl} username={entry.username} isVerified={entry.isVerified} size="sm" />
+                <div className="min-w-0">
+                  <p className="font-bold text-xs text-[#121212] truncate">@{entry.username}</p>
+                  <p className="text-[11px] text-[#555555] truncate">{entry.fullName || `@${entry.username}`}</p>
+                </div>
+              </div>
+              <Badge variant="lime" size="sm">
+                Followed
+              </Badge>
             </div>
           ))}
         </div>
-
-        {/* Text summary */}
-        <div className="min-w-0">
-          <p className="text-xs sm:text-sm font-semibold text-[#121212] leading-snug">
-            {summaryText}
-          </p>
-        </div>
-      </div>
-
-      <Badge variant="mono" size="sm" className="shrink-0 bg-[#EDEDE8] text-[#121212] font-mono">
-        {badgeLabel}
-      </Badge>
+      )}
     </div>
   );
 }
@@ -196,6 +223,7 @@ export default function Home() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const triggerFocusAndHighlight = () => {
     setIsHighlighted(true);
@@ -203,8 +231,6 @@ export default function Home() {
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => setIsHighlighted(false), 2500);
   };
-
-  const router = useRouter();
 
   const handleStartSignup = async (targetUsername?: string) => {
     if (isCheckoutLoading) return;
@@ -215,7 +241,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cadence: "weekly",
-          username: targetUsername || searchInput.replace(/^@/, "").trim() || "bhavyekhetan",
+          username: targetUsername || searchInput.replace(/^@/, "").trim() || "alex.rivera",
         }),
       });
       const data = await res.json();
@@ -431,29 +457,32 @@ export default function Home() {
           />
         </div>
 
-        {/* Categorized Cards (Matching RecentFollow Inspiration) */}
+        {/* Categorized Cards (Unblurred & Crisp with Real Entries) */}
         <div className="space-y-3">
           <CategoryCard
             title="Followed by girls"
             badgeLabel={classified.girls.badgeLabel}
             summaryText={classified.girls.summaryText}
             sampleAvatars={classified.girls.sampleAvatars}
+            entries={classified.girls.entries}
           />
           <CategoryCard
             title="Followed by boys"
             badgeLabel={classified.boys.badgeLabel}
             summaryText={classified.boys.summaryText}
             sampleAvatars={classified.boys.sampleAvatars}
+            entries={classified.boys.entries}
           />
           <CategoryCard
             title="Followed by others"
             badgeLabel={classified.others.badgeLabel}
             summaryText={classified.others.summaryText}
             sampleAvatars={classified.others.sampleAvatars}
+            entries={classified.others.entries}
           />
         </div>
 
-        {/* High-Converting Bottom Paywall Callout (Matches RecentFollow) */}
+        {/* High-Converting Bottom Paywall Callout */}
         <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6 shadow-sm">
           <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
             Sign Up &amp; View All of @{targetUser} Recent Followers and More!
@@ -548,7 +577,7 @@ export default function Home() {
   };
 
   const demoList = demoTab === "followers" ? DEMO_FOLLOWERS : DEMO_FOLLOWING;
-  const demoClassified = classifyFollowEntries(demoList, "bhavyekhetan");
+  const demoClassified = classifyFollowEntries(demoList, "alex.rivera");
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
@@ -758,7 +787,7 @@ export default function Home() {
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Enter Instagram handle... (e.g. bhavyekhetan)"
+                      placeholder="Enter Instagram handle... (e.g. alex.rivera)"
                       leftIcon={<span className="text-[#121212] font-black text-lg">@</span>}
                       className={`border-none bg-transparent py-3 text-base focus:ring-0 ${isHighlighted ? "placeholder:text-[#121212] font-bold" : ""}`}
                       spellCheck={false}
@@ -919,7 +948,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Interactive Demo Preview Section (RecentFollow Style) ── */}
+      {/* ── Interactive Demo Preview Section (Generic Influencer Profile) ── */}
       {searchState.status === "idle" && showDemo && (
         <section className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-b border-[#E2E2DC]">
           <div className="max-w-4xl mx-auto">
@@ -933,37 +962,37 @@ export default function Home() {
                 <span className="text-xs font-bold text-[#555555] uppercase tracking-widest">
                   Live Preview Mode
                 </span>
-                <Badge variant="lime" size="sm">Demo Profile</Badge>
+                <Badge variant="lime" size="sm">Generic Demo Profile</Badge>
               </div>
 
-              {/* Demo Profile Card */}
+              {/* Generic Influencer Demo Profile Card */}
               <Card variant="highlight" className="p-6 bg-[#FFFFFF] shadow-md border-[#E7F256]">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                  <Avatar src="/images/demo/johndoe.jpg" username="bhavyekhetan" size="xl" limeHalo />
+                  <Avatar src="/images/demo/johndoe.jpg" username="alex.rivera" size="xl" limeHalo />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-extrabold text-xl truncate text-[#121212]">
-                      bhavyekhetan
+                      alex.rivera
                     </h3>
 
                     {/* Stats Bar */}
                     <div className="flex items-center gap-6 mt-2 text-sm text-[#121212]">
                       <div>
-                        <strong className="font-extrabold text-[#121212]">1</strong>{" "}
+                        <strong className="font-extrabold text-[#121212]">142</strong>{" "}
                         <span className="text-[#555555]">Posts</span>
                       </div>
                       <div>
-                        <strong className="font-extrabold text-[#121212]">1,080</strong>{" "}
+                        <strong className="font-extrabold text-[#121212]">48.2K</strong>{" "}
                         <span className="text-[#555555]">Followers</span>
                       </div>
                       <div>
-                        <strong className="font-extrabold text-[#121212]">603</strong>{" "}
+                        <strong className="font-extrabold text-[#121212]">812</strong>{" "}
                         <span className="text-[#555555]">Following</span>
                       </div>
                     </div>
 
-                    <p className="text-xs text-[#555555] mt-2 font-medium">Bhavye</p>
+                    <p className="text-xs text-[#555555] mt-2 font-medium">Alex Rivera</p>
                     <p className="text-xs text-[#121212] mt-1 font-normal">
-                      Don&apos;t be shy with it :) 📍 SF
+                      NYC ✈️ LA | Creative Director 📸
                     </p>
                   </div>
 
@@ -972,7 +1001,7 @@ export default function Home() {
                     size="sm"
                     className="shrink-0"
                     isLoading={isCheckoutLoading}
-                    onClick={() => handleStartSignup("bhavyekhetan")}
+                    onClick={() => handleStartSignup("alex.rivera")}
                   >
                     Reveal Full Profile
                   </Button>
@@ -999,25 +1028,28 @@ export default function Home() {
                   badgeLabel={demoClassified.girls.badgeLabel}
                   summaryText={demoClassified.girls.summaryText}
                   sampleAvatars={demoClassified.girls.sampleAvatars}
+                  entries={demoClassified.girls.entries}
                 />
                 <CategoryCard
                   title="Followed by boys"
                   badgeLabel={demoClassified.boys.badgeLabel}
                   summaryText={demoClassified.boys.summaryText}
                   sampleAvatars={demoClassified.boys.sampleAvatars}
+                  entries={demoClassified.boys.entries}
                 />
                 <CategoryCard
                   title="Followed by others"
                   badgeLabel={demoClassified.others.badgeLabel}
                   summaryText={demoClassified.others.summaryText}
                   sampleAvatars={demoClassified.others.sampleAvatars}
+                  entries={demoClassified.others.entries}
                 />
               </div>
 
-              {/* Demo Paywall CTA (RecentFollow Style) */}
+              {/* Demo Paywall CTA */}
               <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6 shadow-sm">
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
-                  Sign Up &amp; View All of @bhavyekhetan Recent Followers and More!
+                  Sign Up &amp; View All of @alex.rivera Recent Followers and More!
                 </h3>
                 <p className="text-sm text-[#555555] font-medium max-w-md mx-auto mb-6">
                   See their recent followers, following, anonymous stories, unfollowers &amp; more in real-time
@@ -1027,7 +1059,7 @@ export default function Home() {
                   size="lg"
                   isLoading={isCheckoutLoading}
                   leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
-                  onClick={() => handleStartSignup("bhavyekhetan")}
+                  onClick={() => handleStartSignup("alex.rivera")}
                   className="font-extrabold text-base px-8 py-4 shadow-lg"
                 >
                   🚀 Get Started &amp; Sign Up
