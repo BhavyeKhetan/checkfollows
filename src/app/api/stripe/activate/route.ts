@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       .eq("stripe_subscription_id", subscriptionId)
       .maybeSingle();
 
-    const plan = metadata.plan || "pro";
+    const plan = metadata.plan || "basic";
     const subData = {
       email: customerEmail,
       plan,

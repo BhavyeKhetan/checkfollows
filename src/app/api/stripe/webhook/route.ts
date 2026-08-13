@@ -51,7 +51,7 @@ export async function POST(request: Request) {
             .eq("stripe_subscription_id", subscriptionId)
             .maybeSingle();
 
-          const plan = metadata.plan || "pro";
+          const plan = metadata.plan || "basic";
           const targetId = metadata.target_id || null;
 
           const subRow = {
@@ -206,6 +206,34 @@ export async function POST(request: Request) {
             .from("subscriptions")
             .update({ active: false, updated_at: new Date().toISOString() })
             .eq("stripe_subscription_id", subId);
+        }
+        break;
+      }
+
+      case "radar.early_fraud_warning.created": {
+        const efw = event.data.object as Stripe.Radar.EarlyFraudWarning;
+        const chargeId = efw.charge as string;
+        if (efw.actionable && chargeId) {
+          try {
+            await getStripe().refunds.create({ charge: chargeId });
+            console.log("[Webhook] Refunded charge after early fraud warning:", chargeId);
+          } catch (err) {
+            console.error("[Webhook] EFW refund failed:", err);
+          }
+        }
+        break;
+      }
+
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+        const chargeId = dispute.charge as string;
+        if (chargeId) {
+          try {
+            await getStripe().refunds.create({ charge: chargeId });
+            console.log("[Webhook] Refunded charge after dispute:", chargeId);
+          } catch (err) {
+            console.error("[Webhook] Dispute refund failed:", err);
+          }
         }
         break;
       }

@@ -6,6 +6,7 @@ import { Button } from "@/design-system";
 
 export function CheckoutButton({
   cadence,
+  emailAlerts = false,
   label = "Start free trial",
   variant = "primary",
   size = "md",
@@ -13,6 +14,7 @@ export function CheckoutButton({
   className = "",
 }: {
   cadence: "weekly" | "quarterly";
+  emailAlerts?: boolean;
   label?: string;
   variant?: "primary" | "dark" | "secondary" | "ghost" | "outline" | "lime-subtle";
   size?: "sm" | "md" | "lg";
@@ -30,7 +32,7 @@ export function CheckoutButton({
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cadence }),
+        body: JSON.stringify({ cadence, email_alerts: emailAlerts }),
       });
       const data = await res.json();
       if (data.url) {

@@ -12,7 +12,6 @@ const FEATURES = [
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
   "Track multiple accounts",
-  "Email change alerts",
   "No Instagram login required",
   "Cancel anytime — keep access until period end",
 ];
@@ -42,6 +41,7 @@ const PRICING_FAQS = [
 
 export function Pricing() {
   const [cadence, setCadence] = useState<"weekly" | "quarterly">("quarterly");
+  const [emailAlerts, setEmailAlerts] = useState(false);
 
   return (
     <div>
@@ -81,6 +81,32 @@ export function Pricing() {
             </div>
           </div>
 
+          {/* Email alerts upsell */}
+          <div className="flex items-center justify-center mb-10">
+            <button
+              type="button"
+              onClick={() => setEmailAlerts((v) => !v)}
+              className="inline-flex items-center gap-3 rounded-full border border-[#E2E2DC] bg-[#F9F9F7] px-5 py-2.5 hover:border-[#C9C9C0] transition-colors"
+            >
+              <Bell className="w-4 h-4 text-[#121212]" />
+              <span className="text-sm font-bold text-[#121212]">Email change alerts</span>
+              <span
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                  emailAlerts ? "bg-[#121212]" : "bg-[#D9D9D2]"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    emailAlerts ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+                />
+              </span>
+              <span className="text-sm font-extrabold text-[#047857]">
+                {cadence === "weekly" ? "+$2/wk" : "+$10/qtr"}
+              </span>
+            </button>
+          </div>
+
           <div className="grid gap-6 md:grid-cols-2 items-stretch">
             {/* Weekly */}
             <Card
@@ -92,13 +118,21 @@ export function Pricing() {
               <h3 className="text-lg font-bold text-[#121212]">Weekly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For short-term curiosity</p>
               <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-5xl font-extrabold tracking-tight text-[#121212]">$9.99</span>
+                <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
+                  {emailAlerts ? "$11.99" : "$9.99"}
+                </span>
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
-              <p className="text-xs text-[#888888] mt-2">Billed weekly · 7-day free trial</p>
+              <p className="text-xs text-[#888888] mt-2">
+                Billed weekly · 7-day free trial
+                {emailAlerts && (
+                  <span className="text-[#047857] font-semibold"> · +$2.00/wk email alerts</span>
+                )}
+              </p>
               <div className="mt-6 flex-1">
                 <CheckoutButton
                   cadence="weekly"
+                  emailAlerts={emailAlerts}
                   label="Start free trial"
                   variant={cadence === "weekly" ? "primary" : "secondary"}
                   fullWidth
@@ -119,15 +153,21 @@ export function Pricing() {
               <h3 className="text-lg font-bold text-[#121212]">Quarterly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For ongoing monitoring</p>
               <div className="mt-6 flex items-baseline gap-1">
-                <span className="text-5xl font-extrabold tracking-tight text-[#121212]">$49.99</span>
+                <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
+                  {emailAlerts ? "$59.99" : "$49.99"}
+                </span>
                 <span className="text-sm font-semibold text-[#777777]">/quarter</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                ≈ $16.66/mo · Billed every 3 months · 7-day free trial
+                ≈ {emailAlerts ? "$20.00" : "$16.66"}/mo · Billed every 3 months · 7-day free trial
+                {emailAlerts && (
+                  <span className="text-[#047857] font-semibold"> · +$10.00/qtr email alerts</span>
+                )}
               </p>
               <div className="mt-6 flex-1">
                 <CheckoutButton
                   cadence="quarterly"
+                  emailAlerts={emailAlerts}
                   label="Start free trial"
                   variant={cadence === "quarterly" ? "primary" : "secondary"}
                   fullWidth
@@ -157,7 +197,7 @@ export function Pricing() {
           <div className="grid sm:grid-cols-3 gap-6 mt-10">
             <MiniValue icon={Clock} title="Daily monitoring" body="We rescan automatically every 24 hours so you never miss a change." />
             <MiniValue icon={History} title="Accumulating history" body="Every check builds a permanent timeline you can revisit anytime." />
-            <MiniValue icon={Bell} title="Change alerts" body="Get notified the moment a new follow or unfollow is detected." />
+            <MiniValue icon={Bell} title="Change detection" body="New follows and unfollows appear in your timeline the moment they're detected." />
           </div>
         </div>
       </section>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
-import { getStripe, getStripePriceId } from "@/lib/stripe";
+import { getStripe, getStripePriceId, getEmailAlertsPriceId } from "@/lib/stripe";
 
 const MAX_TRACKED = parseInt(
   process.env.MAX_TRACKED_ACCOUNTS_PER_USER || "5",
@@ -21,7 +21,8 @@ const MAX_TRACKED = parseInt(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetId, email, action = "start" } = body;
+    const { targetId, email, action = "start", email_alerts } = body;
+    const emailAlerts = email_alerts === true || email_alerts === "true";
 
     if (!targetId) {
       return NextResponse.json(
@@ -149,7 +150,7 @@ export async function POST(request: Request) {
         await supabase
           .from("subscriptions")
           .update({
-            plan: paidSub.plan || "pro",
+            plan: paidSub.plan || "basic",
             stripe_customer_id: paidSub.stripe_customer_id,
             stripe_subscription_id: paidSub.stripe_subscription_id,
             active: true,
@@ -163,7 +164,7 @@ export async function POST(request: Request) {
           .insert({
             target_id: targetId,
             email,
-            plan: paidSub.plan || "pro",
+            plan: paidSub.plan || "basic",
             stripe_customer_id: paidSub.stripe_customer_id,
             stripe_subscription_id: paidSub.stripe_subscription_id,
             active: true,
@@ -212,9 +213,19 @@ export async function POST(request: Request) {
     const stripe = getStripe();
     const priceId = getStripePriceId("weekly");
 
+    const lineItems: Array<{ price: string; quantity: number }> = [
+      { price: priceId, quantity: 1 },
+    ];
+    if (emailAlerts) {
+      lineItems.push({ price: getEmailAlertsPriceId("weekly"), quantity: 1 });
+    }
+
+    // "pro" plan = email alerts enabled (add-on). "basic" = monitoring only.
+    const plan = emailAlerts ? "pro" : "basic";
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: lineItems,
       customer_email: email,
       success_url: `${baseUrl}/track/${encodeURIComponent(
         target.username
@@ -227,19 +238,21 @@ export async function POST(request: Request) {
         metadata: {
           product: "checkfollows",
           cadence: "weekly",
+          plan,
+          email_alerts: String(emailAlerts),
           target_id: targetId,
           username: target.username,
           email,
-          plan: "pro",
         },
       },
       metadata: {
         product: "checkfollows",
         cadence: "weekly",
+        plan,
+        email_alerts: String(emailAlerts),
         target_id: targetId,
         username: target.username,
         email,
-        plan: "pro",
       },
     });
 
