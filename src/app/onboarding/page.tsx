@@ -735,7 +735,7 @@ function PaywallStep({
             leftIcon={<Sparkles className="w-4 h-4 text-[#121212]" />}
             className="font-extrabold"
           >
-            🚀 Get Started — See who they follow
+            Get Started — See who they follow
           </Button>
           <p className="text-center text-[11px] text-[#777777] font-semibold">
             🔒 Cancel anytime · Secure checkout
