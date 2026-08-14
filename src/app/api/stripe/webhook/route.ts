@@ -138,23 +138,83 @@ export async function POST(request: Request) {
         const subscription = event.data.object as Stripe.Subscription;
         const isActive =
           subscription.status === "active" || subscription.status === "trialing";
+        const metadata = subscription.metadata || {};
+        const email = metadata.email || "";
+        const plan = metadata.plan || "basic";
+        const targetId = metadata.target_id || null;
 
         const supabase = createServerClient();
 
-        // Sync active flag for all linked rows.
+        // Upsert the subscription row. Embedded (Payment Element) checkouts
+        // create the subscription via the API, so there is no
+        // checkout.session.completed event to insert it — insert here.
+        if (email) {
+          const { data: existingRow } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("stripe_subscription_id", subscription.id)
+            .maybeSingle();
+
+          const base = {
+            email,
+            plan,
+            stripe_customer_id: (subscription.customer as string) || null,
+            stripe_subscription_id: subscription.id,
+            active: isActive,
+            updated_at: new Date().toISOString(),
+            ...(targetId ? { target_id: targetId } : {}),
+          };
+
+          if (existingRow) {
+            await supabase
+              .from("subscriptions")
+              .update(base)
+              .eq("id", existingRow.id);
+          } else {
+            const { error: insertErr } = await supabase
+              .from("subscriptions")
+              .insert(base);
+
+            if (insertErr && targetId) {
+              // UNIQUE(target_id, email) — a re-purchase. Update the existing
+              // row, but never clobber a newer subscription.
+              console.warn(
+                "Webhook: subscription insert failed (re-purchase); updating instead:",
+                insertErr.message
+              );
+              const { data: conflicting } = await supabase
+                .from("subscriptions")
+                .select("stripe_subscription_id")
+                .eq("target_id", targetId)
+                .eq("email", email)
+                .maybeSingle();
+
+              const existingSubId = conflicting?.stripe_subscription_id;
+              if (
+                !existingSubId ||
+                existingSubId === subscription.id ||
+                existingSubId === null
+              ) {
+                await supabase
+                  .from("subscriptions")
+                  .update(base)
+                  .eq("target_id", targetId)
+                  .eq("email", email);
+              }
+            } else if (insertErr) {
+              console.warn("Webhook: subscription upsert failed:", insertErr.message);
+            }
+          }
+        }
+
+        // Reflect entitlement on the targets themselves. A user-initiated
+        // pause (user_paused=true) must NOT be silently reverted by a
+        // routine Stripe lifecycle event.
         const { data: linked } = await supabase
           .from("subscriptions")
           .select("id, target_id, user_paused")
           .eq("stripe_subscription_id", subscription.id);
 
-        await supabase
-          .from("subscriptions")
-          .update({ active: isActive, updated_at: new Date().toISOString() })
-          .eq("stripe_subscription_id", subscription.id);
-
-        // Reflect entitlement on the targets themselves. A user-initiated
-        // pause (user_paused=true) must NOT be silently reverted by a
-        // routine Stripe lifecycle event.
         for (const row of linked || []) {
           if (!row.target_id) continue;
           if (isActive && !row.user_paused) {

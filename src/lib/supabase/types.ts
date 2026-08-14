@@ -261,6 +261,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      leads: {
+        Row: {
+          id: string;
+          email: string;
+          username: string | null;
+          target_id: string | null;
+          relationship: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          email: string;
+          username?: string | null;
+          target_id?: string | null;
+          relationship?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          username?: string | null;
+          target_id?: string | null;
+          relationship?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

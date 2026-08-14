@@ -39,3 +39,20 @@ export function getStripeRedirectUrl(sessionId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   return `${baseUrl}/?session_id=${sessionId}`;
 }
+
+/**
+ * Extract the client secret for the first invoice of an "incomplete"
+ * subscription, used by the in-page Stripe Payment Element to collect the
+ * payment method (mirrors promise_web's EmbeddedCheckout).
+ */
+export function subscriptionClientSecret(subscription: Stripe.Subscription): string {
+  const invoice = subscription.latest_invoice;
+  if (!invoice || typeof invoice === "string") {
+    throw new Error("Stripe did not return the subscription invoice");
+  }
+  const secret = invoice.confirmation_secret?.client_secret;
+  if (!secret) {
+    throw new Error("Stripe did not return a payment client secret");
+  }
+  return secret;
+}

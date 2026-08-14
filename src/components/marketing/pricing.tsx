@@ -18,8 +18,8 @@ const FEATURES = [
 
 const PRICING_FAQS = [
   {
-    q: "How does the free trial work?",
-    a: "Every paid plan starts with a 7-day free trial. You get the full experience — complete following history and daily monitoring — and you can cancel before the trial ends and pay nothing.",
+    q: "When do I get charged?",
+    a: "You're charged immediately at checkout — then your plan renews every week or every 3 months depending on your cadence. You can cancel anytime, and your access continues until the end of your billing period.",
   },
   {
     q: "What happens after I subscribe?",
@@ -49,7 +49,7 @@ export function Pricing() {
       <section className="relative ramp-grid-bg pt-14 pb-16 sm:pt-20 sm:pb-24 px-4 sm:px-6 border-b border-[#E2E2DC]">
         <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
           <Badge variant="mono" size="md" className="mb-6">
-            SIMPLE PRICING &middot; 7-DAY FREE TRIAL
+            SIMPLE PRICING &middot; CANCEL ANYTIME
           </Badge>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-[#121212] leading-[1.08]">
             One plan. <span className="bg-[#E7F256] text-[#121212] px-2.5 py-0.5 rounded-xl border border-black/10 inline-block">Daily monitoring.</span>
@@ -124,7 +124,7 @@ export function Pricing() {
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                Billed weekly · 7-day free trial
+                Billed weekly
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · +$2.00/wk email alerts</span>
                 )}
@@ -133,7 +133,7 @@ export function Pricing() {
                 <CheckoutButton
                   cadence="weekly"
                   emailAlerts={emailAlerts}
-                  label="Start free trial"
+                  label="Get started"
                   variant={cadence === "weekly" ? "primary" : "secondary"}
                   fullWidth
                 />
@@ -159,7 +159,7 @@ export function Pricing() {
                 <span className="text-sm font-semibold text-[#777777]">/quarter</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                ≈ {emailAlerts ? "$20.00" : "$16.66"}/mo · Billed every 3 months · 7-day free trial
+                ≈ {emailAlerts ? "$20.00" : "$16.66"}/mo · Billed every 3 months
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · +$10.00/qtr email alerts</span>
                 )}
@@ -168,7 +168,7 @@ export function Pricing() {
                 <CheckoutButton
                   cadence="quarterly"
                   emailAlerts={emailAlerts}
-                  label="Start free trial"
+                  label="Get started"
                   variant={cadence === "quarterly" ? "primary" : "secondary"}
                   fullWidth
                 />

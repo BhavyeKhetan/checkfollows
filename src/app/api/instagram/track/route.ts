@@ -234,7 +234,6 @@ export async function POST(request: Request) {
         target.username
       )}?canceled=true`,
       subscription_data: {
-        trial_period_days: 7,
         metadata: {
           product: "checkfollows",
           cadence: "weekly",

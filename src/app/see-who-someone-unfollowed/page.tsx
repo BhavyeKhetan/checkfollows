@@ -82,7 +82,7 @@ export default function Page() {
           },
           {
             q: "How much does it cost?",
-            a: "Search is free. Monitoring starts at $9.99/week with a 7-day free trial.",
+            a: "Search is free. Monitoring starts at $9.99/week — cancel anytime.",
           },
         ]}
         related={[

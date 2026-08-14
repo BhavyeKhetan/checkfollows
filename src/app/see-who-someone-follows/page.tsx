@@ -82,7 +82,7 @@ export default function Page() {
           },
           {
             q: "How much does it cost?",
-            a: "Search and preview are free. Full access starts at $9.99/week with a 7-day free trial.",
+            a: "Search and preview are free. Full access starts at $9.99/week — cancel anytime.",
           },
         ]}
         related={[

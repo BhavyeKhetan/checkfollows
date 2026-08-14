@@ -24,7 +24,7 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
-import type { SearchState, FollowEntry } from "@/lib/types";
+import type { SearchState, FollowEntry, InstagramProfile } from "@/lib/types";
 import { classifyFollowEntries } from "@/lib/classification";
 import {
   Button,
@@ -36,6 +36,49 @@ import {
   Avatar,
   AccordionItem,
 } from "@/design-system";
+
+// ─── Client-side profile cache (avoid re-hitting the API) ──────────
+const PROFILE_CACHE_KEY = "cf_profile_cache_v1";
+const PROFILE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const profileMemoryCache = new Map<string, { t: number; v: unknown }>();
+
+function readCachedProfile(username: string) {
+  const key = username.toLowerCase();
+  const memoryHit = profileMemoryCache.get(key);
+  if (memoryHit) {
+    if (Date.now() - memoryHit.t < PROFILE_CACHE_TTL) return memoryHit.v;
+    profileMemoryCache.delete(key);
+  }
+  try {
+    if (typeof window === "undefined") return null;
+    const raw = sessionStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const store = JSON.parse(raw) as Record<string, { t: number; v: unknown }>;
+    const hit = store[key];
+    if (hit && Date.now() - hit.t < PROFILE_CACHE_TTL) {
+      profileMemoryCache.set(key, hit);
+      return hit.v;
+    }
+  } catch {
+    /* ignore corrupt cache */
+  }
+  return null;
+}
+
+function writeCachedProfile(username: string, data: unknown) {
+  const key = username.toLowerCase();
+  const entry = { t: Date.now(), v: data };
+  profileMemoryCache.set(key, entry);
+  try {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem(PROFILE_CACHE_KEY) || "{}";
+    const store = JSON.parse(raw) as Record<string, { t: number; v: unknown }>;
+    store[key] = entry;
+    sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(store));
+  } catch {
+    /* ignore */
+  }
+}
 
 // ─── Mock demo data with Real Avatar Photos ────────────────────────
 
@@ -51,9 +94,9 @@ const DEMO_FOLLOWING: FollowEntry[] = [
 ];
 
 const DEMO_FOLLOWERS: FollowEntry[] = [
-  { id: "f1", username: "preethimo29", fullName: "Preethi M.", avatarUrl: "/images/testimonials/sarah.jpg", isVerified: false, isPrivate: false },
-  { id: "f2", username: "shagunagxrwal", fullName: "Shaguna Agarwal", avatarUrl: "/images/testimonials/elena.jpg", isVerified: false, isPrivate: false },
-  { id: "f3", username: "waystudio2026", fullName: "Way Studio", avatarUrl: "/images/demo/emma.jpg", isVerified: true, isPrivate: false },
+  { id: "f1", username: "ava.thompson", fullName: "Ava Thompson", avatarUrl: "/images/demo/sophia.jpg", isVerified: false, isPrivate: false },
+  { id: "f2", username: "grace.miller", fullName: "Grace Miller", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: false },
+  { id: "f3", username: "noah.brooks", fullName: "Noah Brooks", avatarUrl: "/images/demo/johndoe.jpg", isVerified: true, isPrivate: false },
   { id: "f4", username: "zoe.anderson", fullName: "Zoe Anderson", avatarUrl: "/images/demo/olivia.jpg", isVerified: false, isPrivate: true },
   { id: "f5", username: "layla.k", fullName: "Layla K.", avatarUrl: "/images/demo/mia.jpg", isVerified: false, isPrivate: false },
 ];
@@ -214,7 +257,6 @@ export default function Home() {
 
   // Loading progress steps
   const [loadingStep, setLoadingStep] = useState(0);
-  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   // Focus & highlight state when CTA buttons are clicked
   const [isHighlighted, setIsHighlighted] = useState(false);
@@ -232,30 +274,16 @@ export default function Home() {
     setTimeout(() => setIsHighlighted(false), 2500);
   };
 
-  const handleStartSignup = async (targetUsername?: string, targetId?: string) => {
-    if (isCheckoutLoading) return;
-    setIsCheckoutLoading(true);
-    try {
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cadence: "weekly",
-          username: targetUsername || searchInput.replace(/^@/, "").trim() || "alex.rivera",
-          targetId,
-        }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.assign(data.url);
-      } else {
-        router.push("/pricing");
-      }
-    } catch {
-      router.push("/pricing");
-    } finally {
-      setIsCheckoutLoading(false);
-    }
+  // Route into the in-funnel signup (email → relationship → scan → paywall)
+  // instead of dropping the user straight onto a Stripe page.
+  const handleStartSignup = (targetUsername?: string, targetId?: string) => {
+    const username = (
+      targetUsername || searchInput.replace(/^@/, "").trim() || ""
+    ).replace(/^@/, "");
+    const params = new URLSearchParams();
+    if (username) params.set("username", username);
+    if (targetId) params.set("targetId", targetId);
+    router.push(`/onboarding?${params.toString()}`);
   };
 
   const handleSearch = async () => {
@@ -266,9 +294,25 @@ export default function Home() {
     setLoadingStep(1);
 
     try {
-      // Step 1 -> 2
-      setTimeout(() => setLoadingStep(2), 600);
+      // Client-side cache hit — skip the network call entirely
+      const cachedProfile = readCachedProfile(username);
+      if (cachedProfile) {
+        setLoadingStep(3);
+        setTimeout(() => {
+          setSearchState((prev) => ({
+            ...prev,
+            status: "profile",
+            profile: cachedProfile as InstagramProfile,
+            error: null,
+          }));
+        }, 350);
+        return;
+      }
 
+      // Step 1 -> 2
+      setTimeout(() => setLoadingStep(2), 500);
+
+      // Lightweight lookup only — username, picture & bio. No follower/following scan.
       const profileRes = await fetch(
         `/api/instagram/profile?username=${encodeURIComponent(username)}`
       );
@@ -294,31 +338,20 @@ export default function Home() {
         return;
       }
 
+      // Save the lightweight result so repeat searches never re-hit the API
+      writeCachedProfile(username, profileData.profile);
+
       // Step 2 -> 3
       setLoadingStep(3);
 
-      setSearchState((prev) => ({
-        ...prev,
-        status: "profile",
-        profile: profileData.profile,
-        error: null,
-      }));
-
-      // Step 3 -> 4
-      setTimeout(() => setLoadingStep(4), 1000);
-
-      const followsRes = await fetch(
-        `/api/instagram/follows?username=${encodeURIComponent(username)}`
-      );
-      const followsData = await followsRes.json();
-
-      setSearchState((prev) => ({
-        ...prev,
-        status: "preview",
-        profile: profileData.profile,
-        recentFollowing: followsData.recentFollowing || DEMO_FOLLOWING,
-        recentFollowers: followsData.recentFollowers || DEMO_FOLLOWERS,
-      }));
+      setTimeout(() => {
+        setSearchState((prev) => ({
+          ...prev,
+          status: "profile",
+          profile: profileData.profile,
+          error: null,
+        }));
+      }, 400);
     } catch {
       setSearchState((prev) => ({
         ...prev,
@@ -400,11 +433,74 @@ export default function Home() {
       return null;
 
     const profile = searchState.profile;
-    const following = searchState.recentFollowing || DEMO_FOLLOWING;
-    const followers = searchState.recentFollowers || DEMO_FOLLOWERS;
 
+    // ── Edge states: never show fake results for a real search ─────
+    if (searchState.status === "not_found") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-lg mx-auto mt-8 text-left"
+        >
+          <Card padding="md" className="bg-[#FFFFFF] border-[#E2E2DC] shadow-md text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-[#EDEDE8] flex items-center justify-center mb-3 text-[#555555]">
+              <Search className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-lg text-[#121212] mb-1">Profile not found</h3>
+            <p className="text-sm text-[#555555]">
+              We couldn&apos;t find &quot;@{searchInput.replace(/^@/, "").trim()}&quot; on Instagram. Double-check the handle and try again.
+            </p>
+          </Card>
+        </motion.div>
+      );
+    }
+
+    if (searchState.status === "private") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-lg mx-auto mt-8 text-left"
+        >
+          <Card padding="md" className="bg-[#FFFFFF] border-amber-200 shadow-md text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-3 text-[#B45309]">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-lg text-[#121212] mb-1">This account is private</h3>
+            <p className="text-sm text-[#555555]">
+              CheckFollows only works with public Instagram accounts, so we can&apos;t inspect this profile.
+            </p>
+          </Card>
+        </motion.div>
+      );
+    }
+
+    if (searchState.status === "error") {
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-lg mx-auto mt-8 text-left"
+        >
+          <Card padding="md" className="bg-[#FFFFFF] border-[#E2E2DC] shadow-md text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-[#EDEDE8] flex items-center justify-center mb-3 text-[#555555]">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="font-extrabold text-lg text-[#121212] mb-1">Something went wrong</h3>
+            <p className="text-sm text-[#555555]">{searchState.error || "Please try again in a moment."}</p>
+          </Card>
+        </motion.div>
+      );
+    }
+
+    // ── Locked preview: only picture, name & bio are readable ──────
     const targetUser = profile?.username || searchInput.replace(/^@/, "");
-    const displayEntries = activeTab === "followers" ? followers : following;
+
+    // Fake, made-up entries shown blurred behind the lock (never real data)
+    const displayEntries = activeTab === "followers" ? DEMO_FOLLOWERS : DEMO_FOLLOWING;
     const classified = classifyFollowEntries(displayEntries, targetUser);
 
     return (
@@ -414,7 +510,7 @@ export default function Home() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-2xl mx-auto mt-8 text-left space-y-4"
       >
-        {/* Profile header card (Matching RecentFollow Inspiration) */}
+        {/* Profile header card — picture, name & bio only */}
         {profile && (
           <Card variant="highlight" className="p-6 bg-[#FFFFFF] shadow-md border-[#E7F256]">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
@@ -432,29 +528,29 @@ export default function Home() {
                   </h3>
                 </div>
 
-                {/* Stats Bar */}
+                {/* Stats Bar — blurred (locked) */}
                 <div className="flex items-center gap-6 mt-2 text-sm text-[#121212]">
                   <div>
-                    <strong className="font-extrabold text-[#121212]">
-                      {profile.postsCount || 1}
-                    </strong>{" "}
+                    <span className="inline-block blur-[6px] select-none" aria-hidden="true">
+                      <strong className="font-extrabold text-[#121212]">{profile.postsCount || 1}</strong>
+                    </span>{" "}
                     <span className="text-[#555555]">Posts</span>
                   </div>
                   <div>
-                    <strong className="font-extrabold text-[#121212]">
-                      {(profile.followerCount || 1080).toLocaleString()}
-                    </strong>{" "}
+                    <span className="inline-block blur-[6px] select-none" aria-hidden="true">
+                      <strong className="font-extrabold text-[#121212]">{(profile.followerCount || 1080).toLocaleString()}</strong>
+                    </span>{" "}
                     <span className="text-[#555555]">Followers</span>
                   </div>
                   <div>
-                    <strong className="font-extrabold text-[#121212]">
-                      {(profile.followingCount || 603).toLocaleString()}
-                    </strong>{" "}
+                    <span className="inline-block blur-[6px] select-none" aria-hidden="true">
+                      <strong className="font-extrabold text-[#121212]">{(profile.followingCount || 603).toLocaleString()}</strong>
+                    </span>{" "}
                     <span className="text-[#555555]">Following</span>
                   </div>
                 </div>
 
-                {/* Biography */}
+                {/* Name + bio — visible */}
                 <p className="text-xs text-[#555555] mt-2 font-medium">
                   {profile.fullName || profile.username}
                 </p>
@@ -469,7 +565,6 @@ export default function Home() {
                 variant="dark"
                 size="sm"
                 className="shrink-0"
-                isLoading={isCheckoutLoading}
                 onClick={() => handleStartSignup(targetUser, profile?.id)}
               >
                 Reveal Full Profile
@@ -478,63 +573,69 @@ export default function Home() {
           </Card>
         )}
 
-        {/* Tab switcher */}
-        <div>
-          <Tabs
-            fullWidth
-            activeTab={activeTab}
-            onChange={(id) => setActiveTab(id as "followers" | "following")}
-            tabs={[
-              { id: "followers", label: "Recent Followers", badge: followers.length },
-              { id: "following", label: "Recent Following", badge: following.length },
-            ]}
-          />
-        </div>
+        {/* Locked follower / following area */}
+        <div className="relative overflow-hidden rounded-2xl min-h-[320px]">
+          {/* Blurred (fake) content behind the lock */}
+          <div className="pointer-events-none select-none blur-[7px] opacity-90" aria-hidden="true">
+            <Tabs
+              fullWidth
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as "followers" | "following")}
+              tabs={[
+                { id: "followers", label: "Recent Followers", badge: DEMO_FOLLOWERS.length },
+                { id: "following", label: "Recent Following", badge: DEMO_FOLLOWING.length },
+              ]}
+            />
+            <div className="space-y-3 mt-3">
+              <CategoryCard
+                title="Followed by girls"
+                badgeLabel={classified.girls.badgeLabel}
+                summaryText={classified.girls.summaryText}
+                sampleAvatars={classified.girls.sampleAvatars}
+                entries={classified.girls.entries}
+              />
+              <CategoryCard
+                title="Followed by boys"
+                badgeLabel={classified.boys.badgeLabel}
+                summaryText={classified.boys.summaryText}
+                sampleAvatars={classified.boys.sampleAvatars}
+                entries={classified.boys.entries}
+              />
+              <CategoryCard
+                title="Followed by others"
+                badgeLabel={classified.others.badgeLabel}
+                summaryText={classified.others.summaryText}
+                sampleAvatars={classified.others.sampleAvatars}
+                entries={classified.others.entries}
+              />
+            </div>
+          </div>
 
-        {/* Categorized Cards (Unblurred & Crisp with Real Entries) */}
-        <div className="space-y-3">
-          <CategoryCard
-            title="Followed by girls"
-            badgeLabel={classified.girls.badgeLabel}
-            summaryText={classified.girls.summaryText}
-            sampleAvatars={classified.girls.sampleAvatars}
-            entries={classified.girls.entries}
-          />
-          <CategoryCard
-            title="Followed by boys"
-            badgeLabel={classified.boys.badgeLabel}
-            summaryText={classified.boys.summaryText}
-            sampleAvatars={classified.boys.sampleAvatars}
-            entries={classified.boys.entries}
-          />
-          <CategoryCard
-            title="Followed by others"
-            badgeLabel={classified.others.badgeLabel}
-            summaryText={classified.others.summaryText}
-            sampleAvatars={classified.others.sampleAvatars}
-            entries={classified.others.entries}
-          />
+          {/* Lock overlay CTA */}
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="bg-[#FFFFFF]/95 backdrop-blur-sm rounded-2xl border border-[#E2E2DC] shadow-[0_8px_32px_rgba(0,0,0,0.12)] px-6 py-6 text-center max-w-sm w-full">
+              <div className="w-12 h-12 mx-auto rounded-full bg-[#121212] text-[#E7F256] flex items-center justify-center mb-3">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h4 className="text-base font-extrabold text-[#121212] mb-1">
+                Unlock @{targetUser}&apos;s accounts
+              </h4>
+              <p className="text-xs text-[#555555] mb-4">
+                Sign up to reveal their full recent followers &amp; following list.
+              </p>
+              <Button
+                variant="primary"
+                fullWidth
+                size="md"
+                leftIcon={<Sparkles className="w-4 h-4 text-[#121212]" />}
+                onClick={() => handleStartSignup(targetUser, profile?.id)}
+                className="font-extrabold"
+              >
+                Sign up and view all of @{targetUser}&apos;s accounts
+              </Button>
+            </div>
+          </div>
         </div>
-
-        {/* High-Converting Bottom Paywall Callout */}
-        <Card variant="subtle" className="p-8 text-center bg-[#F9F9F7] border-[#E2E2DC] mt-6 shadow-sm">
-          <h3 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight mb-2">
-            Sign Up &amp; View All of @{targetUser} Recent Followers and More!
-          </h3>
-          <p className="text-sm text-[#555555] font-medium max-w-md mx-auto mb-6">
-            See their recent followers, following, anonymous stories, unfollowers &amp; more in real-time
-          </p>
-          <Button
-            variant="primary"
-            size="lg"
-            isLoading={isCheckoutLoading}
-            leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
-            onClick={() => handleStartSignup(targetUser, profile?.id)}
-            className="font-extrabold text-base px-8 py-4 shadow-lg"
-          >
-            🚀 Get Started &amp; Sign Up
-          </Button>
-        </Card>
       </motion.div>
     );
   };
@@ -544,12 +645,11 @@ export default function Home() {
 
     const steps = [
       { id: 1, text: "Connecting to Instagram API..." },
-      { id: 2, text: "Profile found! Fetching bio & follower counts..." },
-      { id: 3, text: "Scanning recent followers & following data..." },
-      { id: 4, text: "Classifying connections into girls, boys & others..." },
+      { id: 2, text: "Profile found! Fetching profile & bio..." },
+      { id: 3, text: "Preparing your anonymous preview..." },
     ];
 
-    const progressPct = loadingStep === 1 ? 25 : loadingStep === 2 ? 55 : loadingStep === 3 ? 85 : 100;
+    const progressPct = loadingStep === 1 ? 33 : loadingStep === 2 ? 66 : 100;
 
     return (
       <motion.div
@@ -983,7 +1083,7 @@ export default function Home() {
       </section>
 
       {/* ── Interactive Demo Preview Section (Generic Influencer Profile) ── */}
-      {searchState.status === "idle" && showDemo && (
+      {showDemo && (
         <section className="py-16 sm:py-24 px-4 sm:px-6 bg-[#FFFFFF] border-b border-[#E2E2DC]">
           <div className="max-w-4xl mx-auto">
             <motion.div
@@ -1034,8 +1134,7 @@ export default function Home() {
                     variant="dark"
                     size="sm"
                     className="shrink-0"
-                    isLoading={isCheckoutLoading}
-                    onClick={() => handleStartSignup("alex.rivera")}
+                        onClick={() => handleStartSignup("alex.rivera")}
                   >
                     Reveal Full Profile
                   </Button>
@@ -1091,8 +1190,7 @@ export default function Home() {
                 <Button
                   variant="primary"
                   size="lg"
-                  isLoading={isCheckoutLoading}
-                  leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
+                    leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
                   onClick={() => handleStartSignup("alex.rivera")}
                   className="font-extrabold text-base px-8 py-4 shadow-lg"
                 >

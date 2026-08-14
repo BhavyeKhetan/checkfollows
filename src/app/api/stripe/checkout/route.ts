@@ -51,7 +51,6 @@ export async function POST(request: Request) {
       success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${baseUrl}/?canceled=true`,
       subscription_data: {
-        trial_period_days: 7,
         metadata: sharedMetadata,
       },
       metadata: sharedMetadata,

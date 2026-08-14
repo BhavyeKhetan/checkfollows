@@ -175,7 +175,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: "5. Does history accumulate?",
         paragraphs: [
           "The real value of a tracker compounds over time. Every day of monitoring adds to a timeline that becomes more valuable the longer you keep it. That's what makes a subscription worth keeping — and what makes cancellation feel like losing something.",
-          "CheckFollows checks every box: daily automatic monitoring, dual follow/unfollow detection, confirmed change reporting, password-free privacy, and a permanent accumulating history. Try it free for 7 days and see the difference for yourself.",
+          "CheckFollows checks every box: daily automatic monitoring, dual follow/unfollow detection, confirmed change reporting, password-free privacy, and a permanent accumulating history. Start tracking today and see the difference for yourself.",
         ],
       },
     ],

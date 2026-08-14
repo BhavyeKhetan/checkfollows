@@ -7,7 +7,7 @@ import { Button } from "@/design-system";
 export function CheckoutButton({
   cadence,
   emailAlerts = false,
-  label = "Start free trial",
+  label = "Get started",
   variant = "primary",
   size = "md",
   fullWidth = false,
