@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
 import { getStripe, getStripePriceId, getEmailAlertsPriceId } from "@/lib/stripe";
 
@@ -21,7 +22,7 @@ const MAX_TRACKED = parseInt(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetId, email, action = "start", email_alerts } = body;
+    const { targetId, action = "start", email_alerts } = body;
     const emailAlerts = email_alerts === true || email_alerts === "true";
 
     if (!targetId) {
@@ -32,6 +33,18 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServerClient();
+
+    // Tracking is a paid, authenticated action. Use the signed-in user's
+    // email so subscriptions are tied to the account, not a free-form string.
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json(
+        { success: false, error: "Sign in to manage tracking" },
+        { status: 401 }
+      );
+    }
+    const email =
+      authUser.email || (typeof body.email === "string" ? body.email : "");
 
     // ─── STOP: disable monitoring + mark user-paused ──
     // user_paused = true prevents Stripe lifecycle events from silently
@@ -93,7 +106,12 @@ export async function POST(request: Request) {
       // Clear the user-pause flag so webhook events can manage it again.
       await supabase
         .from("subscriptions")
-        .update({ user_paused: false, active: true, updated_at: new Date().toISOString() })
+        .update({
+          user_id: authUser.id,
+          user_paused: false,
+          active: true,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", existingPaid.id);
       if (!target.monitoring_enabled) await enableMonitoring(targetId);
       return NextResponse.json({
@@ -150,6 +168,7 @@ export async function POST(request: Request) {
         await supabase
           .from("subscriptions")
           .update({
+            user_id: authUser.id,
             plan: paidSub.plan || "basic",
             stripe_customer_id: paidSub.stripe_customer_id,
             stripe_subscription_id: paidSub.stripe_subscription_id,
@@ -163,6 +182,7 @@ export async function POST(request: Request) {
           .from("subscriptions")
           .insert({
             target_id: targetId,
+            user_id: authUser.id,
             email,
             plan: paidSub.plan || "basic",
             stripe_customer_id: paidSub.stripe_customer_id,
@@ -242,6 +262,7 @@ export async function POST(request: Request) {
           target_id: targetId,
           username: target.username,
           email,
+          user_id: authUser.id,
         },
       },
       metadata: {
@@ -252,6 +273,7 @@ export async function POST(request: Request) {
         target_id: targetId,
         username: target.username,
         email,
+        user_id: authUser.id,
       },
     });
 

@@ -5,6 +5,7 @@ import {
   getEmailAlertsPriceId,
   subscriptionClientSecret,
 } from "@/lib/stripe";
+import { getAuthUser } from "@/lib/supabase/auth";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -70,6 +71,11 @@ export async function POST(request: Request) {
     if (username) metadata.username = username;
     if (targetId) metadata.target_id = targetId;
     if (relationship) metadata.relationship = relationship;
+
+    // If the buyer is already signed in, tag the subscription so the webhook
+    // can link it straight to their account (no signup step needed).
+    const authUser = await getAuthUser();
+    if (authUser) metadata.user_id = authUser.id;
 
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,

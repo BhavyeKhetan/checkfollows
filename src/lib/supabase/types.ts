@@ -70,6 +70,7 @@ export interface Database {
         Row: {
           id: string;
           target_id: string | null;
+          user_id: string | null;
           email: string;
           plan: string;
           stripe_customer_id: string | null;
@@ -82,6 +83,7 @@ export interface Database {
         Insert: {
           id?: string;
           target_id?: string | null;
+          user_id?: string | null;
           email: string;
           plan?: string;
           stripe_customer_id?: string | null;
@@ -94,6 +96,7 @@ export interface Database {
         Update: {
           id?: string;
           target_id?: string | null;
+          user_id?: string | null;
           email?: string;
           plan?: string;
           stripe_customer_id?: string | null;

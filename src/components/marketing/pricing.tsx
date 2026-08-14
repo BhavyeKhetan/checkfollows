@@ -113,7 +113,7 @@ export function Pricing() {
                   }`}
                 />
               </span>
-              <span className="text-sm font-extrabold text-[#047857]">
+              <span className="text-[11px] font-bold text-[#047857]">
                 {cadence === "weekly" ? "+$2/wk" : "+$10/qtr"}
               </span>
             </button>

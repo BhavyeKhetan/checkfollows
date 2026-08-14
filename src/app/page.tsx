@@ -36,6 +36,7 @@ import {
   Avatar,
   AccordionItem,
 } from "@/design-system";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Client-side profile cache (avoid re-hitting the API) ──────────
 const PROFILE_CACHE_KEY = "cf_profile_cache_v1";
@@ -275,14 +276,37 @@ export default function Home() {
   };
 
   // Route into the in-funnel signup (email → relationship → scan → paywall)
-  // instead of dropping the user straight onto a Stripe page.
-  const handleStartSignup = (targetUsername?: string, targetId?: string) => {
+  // instead of dropping the user straight onto a Stripe page. If the visitor
+  // is already signed in with an active subscription, skip the funnel and go
+  // straight to the (gated) tracking page.
+  const handleStartSignup = async (
+    targetUsername?: string,
+    targetId?: string
+  ) => {
     const username = (
       targetUsername || searchInput.replace(/^@/, "").trim() || ""
     ).replace(/^@/, "");
     const params = new URLSearchParams();
     if (username) params.set("username", username);
     if (targetId) params.set("targetId", targetId);
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user && username) {
+        const res = await fetch("/api/account");
+        const data = await res.json().catch(() => ({}));
+        if (data?.hasActiveSubscription) {
+          router.push(`/track/${encodeURIComponent(username)}`);
+          return;
+        }
+      }
+    } catch {
+      /* ignore — fall through to the funnel */
+    }
+
     router.push(`/onboarding?${params.toString()}`);
   };
 

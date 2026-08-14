@@ -20,6 +20,7 @@ import {
   Clock,
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -128,6 +129,57 @@ export default function TrackPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [togglingMonitoring, setTogglingMonitoring] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+
+  // ── Auth + subscription gate ──────────────────────────
+  // Viewing real follow data is paid. Redirect unauthenticated users to
+  // login and authenticated non-subscribers into the funnel.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace(
+          `/login?next=${encodeURIComponent(`/track/${username}`)}`
+        );
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/account");
+        if (res.status === 401) {
+          router.replace(
+            `/login?next=${encodeURIComponent(`/track/${username}`)}`
+          );
+          return;
+        }
+        const data = await res.json();
+        if (!data.hasActiveSubscription) {
+          router.replace(`/onboarding?username=${encodeURIComponent(username)}`);
+          return;
+        }
+        if (!cancelled) {
+          setUserEmail(data.user?.email || user.email || "");
+          setAuthorized(true);
+        }
+      } catch {
+        // Network hiccup — allow the page to load; the events endpoint will
+        // still enforce its own entitlement check.
+        if (!cancelled) {
+          setUserEmail(user.email || "");
+          setAuthorized(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [username, router]);
 
   const loadData = useCallback(async () => {
     if (!username) return;
@@ -182,17 +234,17 @@ export default function TrackPage() {
   }, [username]);
 
   useEffect(() => {
+    if (!authorized) return;
     let ignore = false;
-    async function fetchData() {
+    (async () => {
       if (!ignore) {
         await loadData();
       }
-    }
-    fetchData();
+    })();
     return () => {
       ignore = true;
     };
-  }, [loadData]);
+  }, [loadData, authorized]);
 
   const handleToggleMonitoring = async () => {
     if (!target) return;
@@ -211,16 +263,13 @@ export default function TrackPage() {
         return;
       }
 
-      // ─── START tracking: gate behind Stripe checkout ───
-      const email = window.prompt(
-        "Enter your email to start tracking this account:"
-      );
-      if (!email) return;
+      // ─── START tracking (already paid — no prompt needed) ───
+      if (!userEmail) return;
 
       const res = await fetch("/api/instagram/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id, email }),
+        body: JSON.stringify({ targetId: target.id, email: userEmail }),
       });
       const data = await res.json();
 
@@ -293,8 +342,8 @@ export default function TrackPage() {
   const newFollowers = events.filter((e) => e.event_type === "NEW_FOLLOWER" && e.confirmed).length;
   const lostFollowers = events.filter((e) => e.event_type === "LOST_FOLLOWER" && e.confirmed).length;
 
-  // Loading state
-  if (loading) {
+  // Loading / auth-gate state
+  if (loading || !authorized) {
     return (
       <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

@@ -10,12 +10,12 @@
  */
 
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 import { previewLookup, fullBaselineScan, getEventsForTarget } from "@/lib/monitoring";
 
 export async function POST(request: Request) {
   try {
-    const { username, stage, email } = await request.json();
+    const { username, stage } = await request.json();
 
     if (!username) {
       return NextResponse.json(
@@ -63,26 +63,18 @@ export async function POST(request: Request) {
     }
 
     // ─── FULL stage (paid) ───────────────────────────────
-    // Entitlement gate: only run the expensive full baseline for a caller
-    // who already has an active Stripe-backed subscription.
-    if (!email || typeof email !== "string") {
+    // Entitlement gate: only run the expensive full baseline for an
+    // authenticated user with an active Stripe-backed subscription.
+    const user = await getAuthUser();
+    if (!user) {
       return NextResponse.json(
-        { success: false, error: "An email with an active subscription is required" },
-        { status: 402 }
+        { success: false, error: "Sign in to run a full scan" },
+        { status: 401 }
       );
     }
 
-    const supabase = createServerClient();
-    const { data: paidSub } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("email", email)
-      .eq("active", true)
-      .not("stripe_subscription_id", "is", null)
-      .limit(1)
-      .maybeSingle();
-
-    if (!paidSub) {
+    const entitled = await hasActiveSubscription(user.id);
+    if (!entitled) {
       return NextResponse.json(
         { success: false, error: "An active subscription is required to run a full scan" },
         { status: 402 }

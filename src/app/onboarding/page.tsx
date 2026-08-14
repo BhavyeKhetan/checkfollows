@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button, Input, Card, Badge } from "@/design-system";
 import EmbeddedCheckout from "@/components/checkout/embedded-checkout";
+import { createClient } from "@/lib/supabase/client";
 
 type Step = "email" | "relationship" | "scanning" | "paywall";
 type Cadence = "weekly" | "quarterly";
@@ -90,12 +91,30 @@ function OnboardingContent() {
   const [email, setEmail] = useState("");
   const [relationship, setRelationship] = useState("");
   const [cadence, setCadence] = useState<Cadence>("quarterly");
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [finalizing, setFinalizing] = useState(
     searchParams.get("finalize") === "1"
   );
+
+  // After payment: signed-in users go straight to their account; everyone
+  // else completes a quick signup so we can tie the subscription to them.
+  const redirectAfterPayment = async (params: URLSearchParams) => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        router.replace("/account");
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    router.replace(`/signup?${params.toString()}`);
+  };
 
   // ── Post-payment (3DS redirect) finalization ────────────────────
   useEffect(() => {
@@ -118,10 +137,11 @@ function OnboardingContent() {
               target_id: ctx.target_id,
             }),
           });
-          const dest = ctx.username
-            ? `/track/${encodeURIComponent(ctx.username)}`
-            : "/";
-          router.replace(dest);
+          const params = new URLSearchParams();
+          if (ctx.email) params.set("email", ctx.email);
+          if (ctx.username) params.set("username", ctx.username);
+          if (ctx.target_id) params.set("targetId", ctx.target_id);
+          await redirectAfterPayment(params);
           return;
         }
       } catch (err) {
@@ -139,11 +159,11 @@ function OnboardingContent() {
     BASE_PRICES[cadence] + (emailAlerts ? ALERTS_ADDON[cadence] : 0);
 
   const handlePaymentSuccess = () => {
-    if (username) {
-      router.replace(`/track/${encodeURIComponent(username)}`);
-    } else {
-      router.replace("/");
-    }
+    const params = new URLSearchParams();
+    if (email) params.set("email", email.trim());
+    if (username) params.set("username", username);
+    if (targetId) params.set("targetId", targetId);
+    void redirectAfterPayment(params);
   };
 
   // Persist the lead as soon as we have an email (non-blocking).
@@ -648,31 +668,56 @@ function PaywallStep({
             ? "Billed weekly"
             : "≈ $16.66/mo · Billed every 3 months"}
           {emailAlerts && (
-            <span className="text-[#047857] font-semibold">
+            <span className="text-[#047857] font-semibold text-[11px]">
               {" "}· +${ALERTS_ADDON[cadence].toFixed(2)}/email alerts
             </span>
           )}
         </p>
 
-        {/* Email alerts toggle */}
+        {/* Email alerts upsell — big, prominent toggle (default OFF) */}
         <button
           type="button"
+          role="switch"
+          aria-checked={emailAlerts}
           onClick={() => setEmailAlerts(!emailAlerts)}
-          className="mt-5 w-full inline-flex items-center justify-between rounded-2xl border border-[#E2E2DC] bg-[#F9F9F7] px-4 py-3 hover:border-[#C9C9C0] transition-colors"
+          className={`mt-5 w-full inline-flex items-center justify-between gap-4 rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 ${
+            emailAlerts
+              ? "border-[#121212] bg-[#E7F256]/15"
+              : "border-[#E2E2DC] bg-[#F9F9F7] hover:border-[#C9C9C0]"
+          }`}
         >
-          <span className="flex items-center gap-2.5 text-sm font-bold text-[#121212]">
-            <Bell className="w-4 h-4" /> Email change alerts
-          </span>
-          <span
-            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-              emailAlerts ? "bg-[#121212]" : "bg-[#D9D9D2]"
-            }`}
-          >
+          <span className="flex items-center gap-3 min-w-0">
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                emailAlerts ? "translate-x-4" : "translate-x-0.5"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                emailAlerts ? "bg-[#121212] text-[#E7F256]" : "bg-[#EDEDE8] text-[#555555]"
               }`}
-            />
+            >
+              <Bell className="w-5 h-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm sm:text-base font-extrabold text-[#121212] leading-tight">
+                Email change alerts
+              </span>
+              <span className="block text-xs text-[#555555] font-medium mt-0.5">
+                Get notified the moment they follow or unfollow someone
+              </span>
+            </span>
+          </span>
+          <span className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] font-bold text-[#047857]">
+              +${ALERTS_ADDON[cadence].toFixed(2)}{cadence === "weekly" ? "/wk" : "/qtr"}
+            </span>
+            <span
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                emailAlerts ? "bg-[#121212]" : "bg-[#D9D9D2]"
+              }`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                  emailAlerts ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </span>
           </span>
         </button>
 

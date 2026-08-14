@@ -53,6 +53,7 @@ export async function POST(request: Request) {
 
           const plan = metadata.plan || "basic";
           const targetId = metadata.target_id || null;
+          const userId = metadata.user_id || null;
 
           const subRow = {
             email: customerEmail,
@@ -62,6 +63,7 @@ export async function POST(request: Request) {
             active: true,
             updated_at: new Date().toISOString(),
             ...(targetId ? { target_id: targetId } : {}),
+            ...(userId ? { user_id: userId } : {}),
           };
 
           if (existing) {
@@ -79,6 +81,7 @@ export async function POST(request: Request) {
                 stripe_subscription_id: subscriptionId,
                 active: true,
                 ...(targetId ? { target_id: targetId } : {}),
+                ...(userId ? { user_id: userId } : {}),
               });
 
             if (insertErr) {
@@ -142,6 +145,7 @@ export async function POST(request: Request) {
         const email = metadata.email || "";
         const plan = metadata.plan || "basic";
         const targetId = metadata.target_id || null;
+        const userId = metadata.user_id || null;
 
         const supabase = createServerClient();
 
@@ -163,6 +167,7 @@ export async function POST(request: Request) {
             active: isActive,
             updated_at: new Date().toISOString(),
             ...(targetId ? { target_id: targetId } : {}),
+            ...(userId ? { user_id: userId } : {}),
           };
 
           if (existingRow) {

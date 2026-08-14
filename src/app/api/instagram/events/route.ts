@@ -1,7 +1,24 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 
 export async function GET(request: Request) {
+  // Paid data: require an authenticated user with an active subscription.
+  const user = await getAuthUser();
+  if (!user) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+  const entitled = await hasActiveSubscription(user.id);
+  if (!entitled) {
+    return NextResponse.json(
+      { success: false, error: "An active subscription is required" },
+      { status: 402 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const username = searchParams.get("username");
   const targetId = searchParams.get("targetId");
