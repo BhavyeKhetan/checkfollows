@@ -6,21 +6,36 @@ import { Badge, Card } from "@/design-system";
 import { CheckoutButton } from "@/components/marketing/checkout-button";
 import { FaqList } from "@/components/marketing/faq-list";
 
+type Tier = "base" | "premium";
+type Cadence = "weekly" | "quarterly";
+
+const BASE_PRICE: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
+const PREMIUM_PRICE: Record<Cadence, number> = { weekly: 12.99, quarterly: 64.99 };
+const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
+
 const FEATURES = [
   "Complete chronological following list",
-  "Daily monitoring with automatic rescan",
+  "Every-other-day monitoring with automatic rescan",
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
-  "Track multiple accounts",
   "No Instagram login required",
   "Cancel anytime — keep access until period end",
 ];
 
 // Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
 // Display-only — the actual Stripe charge stays at the discounted price.
-function anchorPrice(cadence: "weekly" | "quarterly", emailAlerts: boolean): string {
+function anchorPrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): string {
+  if (tier === "premium") {
+    if (cadence === "weekly") return emailAlerts ? "$37.49" : "$32.49";
+    return emailAlerts ? "$187.49" : "$162.49";
+  }
   if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
   return emailAlerts ? "$149.99" : "$124.99";
+}
+
+function livePrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): number {
+  const base = tier === "premium" ? PREMIUM_PRICE[cadence] : BASE_PRICE[cadence];
+  return base + (emailAlerts ? ALERTS_ADDON[cadence] : 0);
 }
 
 const PRICING_FAQS = [
@@ -30,11 +45,11 @@ const PRICING_FAQS = [
   },
   {
     q: "What happens after I subscribe?",
-    a: "We immediately run a full scan of the account you searched, save it as your baseline, and start monitoring it every 24 hours automatically. You'll see new follows and unfollows as they happen.",
+    a: "We immediately run a full scan of the account you searched, save it as your baseline, and start monitoring it every 48 hours automatically. You'll see new follows and unfollows as they happen.",
   },
   {
-    q: "Can I track more than one account?",
-    a: "Yes. Your subscription covers multiple tracked accounts, so you can monitor an ex, a crush, a competitor, or an influencer — all in one dashboard.",
+    q: "How many accounts can I track?",
+    a: "Basic includes 3 tracked accounts total. Premium lets you track unlimited accounts — up to 5 monitored at a time — so you can watch an ex, a crush, a competitor, or an influencer all in one dashboard.",
   },
   {
     q: "Can I cancel anytime?",
@@ -47,7 +62,8 @@ const PRICING_FAQS = [
 ];
 
 export function Pricing() {
-  const [cadence, setCadence] = useState<"weekly" | "quarterly">("quarterly");
+  const [cadence, setCadence] = useState<Cadence>("quarterly");
+  const [tier, setTier] = useState<Tier>("base");
   const [emailAlerts, setEmailAlerts] = useState(false);
 
   return (
@@ -64,7 +80,7 @@ export function Pricing() {
             </div>
           </div>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-[#121212] leading-[1.08]">
-            One plan. <span className="bg-[#E7F256] text-[#121212] px-2.5 py-0.5 rounded-xl border border-black/10 inline-block">Daily monitoring.</span>
+            Two plans. <span className="bg-[#E7F256] text-[#121212] px-2.5 py-0.5 rounded-xl border border-black/10 inline-block">Every-other-day monitoring.</span>
           </h1>
           <p className="mt-6 text-base sm:text-lg text-[#555555] max-w-xl mx-auto leading-relaxed font-medium">
             Stop guessing who they follow. Track changes automatically and get
@@ -76,6 +92,28 @@ export function Pricing() {
       {/* Pricing cards */}
       <section className="py-16 sm:py-20 px-4 sm:px-6 bg-[#FFFFFF]">
         <div className="max-w-3xl mx-auto">
+          {/* Plan tier toggle */}
+          <div className="flex items-center justify-center mb-3">
+            <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
+              <ToggleBtn
+                active={tier === "base"}
+                onClick={() => setTier("base")}
+                label="Basic"
+              />
+              <ToggleBtn
+                active={tier === "premium"}
+                onClick={() => setTier("premium")}
+                label="Premium"
+                badge="Unlimited"
+              />
+            </div>
+          </div>
+          <p className="text-center text-xs text-[#777777] font-semibold mb-8">
+            {tier === "base"
+              ? "3 accounts total · monitoring every 48 hours"
+              : "Unlimited accounts · 5 at a time · monitoring every 48 hours"}
+          </p>
+
           {/* Billing toggle */}
           <div className="flex items-center justify-center mb-10">
             <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
@@ -134,15 +172,15 @@ export function Pricing() {
               <p className="text-sm text-[#555555] mt-0.5">For short-term curiosity</p>
               <div className="mt-6 flex items-baseline gap-2 flex-wrap">
                 <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
-                  {anchorPrice("weekly", emailAlerts)}
+                  {anchorPrice("weekly", emailAlerts, tier)}
                 </span>
                 <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
-                  {emailAlerts ? "$11.99" : "$9.99"}
+                  {"$" + livePrice("weekly", emailAlerts, tier).toFixed(2)}
                 </span>
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                Billed weekly
+                Billed weekly · {tier === "premium" ? "unlimited (5 at a time)" : "3 accounts total"}
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · +$2.00/wk email alerts</span>
                 )}
@@ -150,6 +188,7 @@ export function Pricing() {
               <div className="mt-6 flex-1">
                 <CheckoutButton
                   cadence="weekly"
+                  tier={tier}
                   emailAlerts={emailAlerts}
                   label="Get started"
                   variant={cadence === "weekly" ? "primary" : "secondary"}
@@ -172,15 +211,15 @@ export function Pricing() {
               <p className="text-sm text-[#555555] mt-0.5">For ongoing monitoring</p>
               <div className="mt-6 flex items-baseline gap-2 flex-wrap">
                 <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
-                  {anchorPrice("quarterly", emailAlerts)}
+                  {anchorPrice("quarterly", emailAlerts, tier)}
                 </span>
                 <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
-                  {emailAlerts ? "$59.99" : "$49.99"}
+                  {"$" + livePrice("quarterly", emailAlerts, tier).toFixed(2)}
                 </span>
                 <span className="text-sm font-semibold text-[#777777]">/quarter</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                ≈ {emailAlerts ? "$20.00" : "$16.66"}/mo · Billed every 3 months
+                ≈ {"$" + (livePrice("quarterly", emailAlerts, tier) / 3).toFixed(2)}/mo · Billed every 3 months
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · +$10.00/qtr email alerts</span>
                 )}
@@ -188,6 +227,7 @@ export function Pricing() {
               <div className="mt-6 flex-1">
                 <CheckoutButton
                   cadence="quarterly"
+                  tier={tier}
                   emailAlerts={emailAlerts}
                   label="Get started"
                   variant={cadence === "quarterly" ? "primary" : "secondary"}
@@ -216,7 +256,7 @@ export function Pricing() {
 
           {/* Value props */}
           <div className="grid sm:grid-cols-3 gap-6 mt-10">
-            <MiniValue icon={Clock} title="Daily monitoring" body="We rescan automatically every 24 hours so you never miss a change." />
+            <MiniValue icon={Clock} title="Every-other-day monitoring" body="We rescan automatically every 48 hours so you never miss a change." />
             <MiniValue icon={History} title="Accumulating history" body="Every check builds a permanent timeline you can revisit anytime." />
             <MiniValue icon={Bell} title="Change detection" body="New follows and unfollows appear in your timeline the moment they're detected." />
           </div>

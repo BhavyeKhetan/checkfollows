@@ -6,7 +6,7 @@ import { SeoPage } from "@/components/marketing/seo-page";
 export const metadata: Metadata = {
   title: "Who Unfollowed Me on Instagram — CheckFollows",
   description:
-    "Find out who unfollowed you on Instagram. Track follower changes over time with daily monitoring and alerts. No login required.",
+    "Find out who unfollowed you on Instagram. Track follower changes over time with every-other-day monitoring and alerts. No login required.",
   alternates: { canonical: "/who-unfollowed-me" },
 };
 
@@ -38,7 +38,7 @@ export default function Page() {
             ],
             bullets: [
               "Baseline snapshot on first scan",
-              "Daily automatic re-checks",
+              "Every-other-day automatic re-checks",
               "Clear 'unfollowed' markers with dates",
               "No guesswork — only real changes",
             ],
@@ -79,7 +79,7 @@ export default function Page() {
           },
           {
             q: "How often is my follower list checked?",
-            a: "Paid plans monitor automatically every 24 hours, so unfollows are caught within a day.",
+            a: "Paid plans monitor automatically every 48 hours, so unfollows are caught within a day.",
           },
           {
             q: "Will the person know I'm checking?",

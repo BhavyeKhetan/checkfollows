@@ -17,7 +17,7 @@
 
 import { NextResponse } from "next/server";
 import { processDueScans } from "@/lib/monitoring";
-import { notifySubscribers } from "@/lib/email/alerts";
+import { notifySubscribers, notifySpikeSubscribers } from "@/lib/email/alerts";
 import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -80,6 +80,20 @@ async function runMonitor(request: Request) {
             confirmedEvents
           );
           emailsSent += sent;
+        }
+
+        // Suspicious-spike alert: many new follows in a single scan.
+        const newFollowEvents = scanResult.events
+          .filter((e) => e.eventType === "NEW_FOLLOWING")
+          .map((e) => ({ username: e.username, fullName: e.fullName }));
+        if (newFollowEvents.length > 0) {
+          const spikeSent = await notifySpikeSubscribers(
+            scanResult.targetId,
+            target.username,
+            target.full_name,
+            newFollowEvents
+          );
+          emailsSent += spikeSent;
         }
       }
     }

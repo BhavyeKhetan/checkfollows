@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
+import { getCreditsSummary } from "@/lib/purchases";
 
 /**
  * GET /api/account
@@ -16,10 +17,21 @@ export async function GET() {
   const supabase = createServerClient();
   const active = await hasActiveSubscription(user.id);
 
+  const [spikeRow, credits] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("spike_threshold")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    getCreditsSummary(user.id),
+  ]);
+
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
     .select(
-      "id, target_id, plan, active, user_paused, stripe_subscription_id, created_at, updated_at"
+      "id, target_id, plan, tier, active, user_paused, stripe_subscription_id, created_at, updated_at"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
@@ -52,6 +64,7 @@ export async function GET() {
   const subscriptions = (subs || []).map((s) => ({
     id: s.id,
     plan: s.plan,
+    tier: s.tier,
     active: s.active,
     user_paused: s.user_paused,
     created_at: s.created_at,
@@ -63,6 +76,8 @@ export async function GET() {
     success: true,
     user: { id: user.id, email: user.email },
     hasActiveSubscription: active,
+    spikeThreshold: spikeRow.data?.spike_threshold ?? 5,
+    credits,
     subscriptions,
   });
 }

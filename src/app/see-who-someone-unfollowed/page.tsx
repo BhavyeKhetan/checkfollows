@@ -6,7 +6,7 @@ import { SeoPage } from "@/components/marketing/seo-page";
 export const metadata: Metadata = {
   title: "See Who Someone Unfollowed on Instagram — CheckFollows",
   description:
-    "See who any public Instagram account unfollowed. Track unfollows with daily monitoring and get alerted the moment they cut someone loose. No login.",
+    "See who any public Instagram account unfollowed. Track unfollows with every-other-day monitoring and get alerted the moment they cut someone loose. No login.",
   alternates: { canonical: "/see-who-someone-unfollowed" },
 };
 

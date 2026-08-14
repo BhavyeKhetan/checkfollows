@@ -6,7 +6,7 @@ import { SeoPage } from "@/components/marketing/seo-page";
 export const metadata: Metadata = {
   title: "Instagram Following Tracker — CheckFollows",
   description:
-    "Track who any Instagram account follows with daily automatic monitoring. See new follows and unfollows in a clear timeline. No login required.",
+    "Track who any Instagram account follows with every-other-day automatic monitoring. See new follows and unfollows in a clear timeline. No login required.",
   alternates: { canonical: "/instagram-following-tracker" },
 };
 
@@ -27,7 +27,7 @@ export default function Page() {
         placeholder="Enter a handle to track... (e.g. alex)"
         intro={[
           "Manually checking someone's following list every day is tedious — and Instagram scrambles the order anyway. A real following tracker does the work for you: it records the list, watches for changes, and tells you the moment something shifts.",
-          "CheckFollows is that tracker. Set it up once and we monitor the account every 24 hours, building a permanent history of follows and unfollows you can review anytime.",
+          "CheckFollows is that tracker. Set it up once and we monitor the account every 48 hours, building a permanent history of follows and unfollows you can review anytime.",
         ]}
         sections={[
           {
@@ -36,7 +36,7 @@ export default function Page() {
               "The value isn't just today's list — it's the difference between yesterday's list and today's. New follows, sudden unfollows, and patterns over time are what actually matter.",
             ],
             bullets: [
-              "New follows — detected within 24 hours",
+              "New follows — detected within 48 hours",
               "Unfollows — confirmed before we alert you",
               "True chronological ordering of the list",
               "A day-by-day activity timeline",
@@ -49,7 +49,7 @@ export default function Page() {
             ],
             bullets: [
               "Baseline established on first successful scan",
-              "Daily automatic rescans, no manual clicks",
+              "Every-other-day automatic rescans, no manual clicks",
               "Change detection based on unique account IDs",
               "Suspicious partial scans are flagged, never trusted",
             ],
@@ -74,7 +74,7 @@ export default function Page() {
           },
           {
             q: "How often is the account checked?",
-            a: "Paid plans rescan automatically every 24 hours by default, so changes are caught quickly.",
+            a: "Paid plans rescan automatically every 48 hours by default, so changes are caught quickly.",
           },
           {
             q: "Can I track multiple accounts?",

@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Step = "email" | "relationship" | "scanning" | "paywall";
 type Cadence = "weekly" | "quarterly";
+type Tier = "base" | "premium";
 
 const RELATIONSHIP_OPTIONS = [
   { value: "friend", label: "A friend", emoji: "👋" },
@@ -35,10 +36,9 @@ const RELATIONSHIP_OPTIONS = [
 
 const FEATURES = [
   "Complete chronological following list",
-  "Daily monitoring with automatic rescan",
+  "Every-other-day monitoring with automatic rescan",
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
-  "Track multiple accounts",
   "No Instagram login required",
   "Cancel anytime — keep access until period end",
 ];
@@ -46,7 +46,7 @@ const FEATURES = [
 const PAYWALL_FAQS = [
   {
     q: "How does it work?",
-    a: "We scan the account you searched and save it as a baseline, then automatically rescan every 24 hours to detect new follows and unfollows.",
+    a: "We scan the account you searched and save it as a baseline, then automatically rescan every 48 hours to detect new follows and unfollows.",
   },
   {
     q: "Will they know I checked?",
@@ -59,12 +59,17 @@ const PAYWALL_FAQS = [
 ];
 
 const BASE_PRICES: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
+const PREMIUM_PRICES: Record<Cadence, number> = { weekly: 12.99, quarterly: 64.99 };
 const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
 const PERIOD: Record<Cadence, string> = { weekly: "/week", quarterly: "/quarter" };
 
 // Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
 // Display-only — the actual Stripe charge stays at the discounted price.
-function anchorPrice(cadence: Cadence, emailAlerts: boolean): string {
+function anchorPrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): string {
+  if (tier === "premium") {
+    if (cadence === "weekly") return emailAlerts ? "$37.49" : "$32.49";
+    return emailAlerts ? "$187.49" : "$162.49";
+  }
   if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
   return emailAlerts ? "$149.99" : "$124.99";
 }
@@ -91,6 +96,7 @@ function OnboardingContent() {
   const [email, setEmail] = useState("");
   const [relationship, setRelationship] = useState("");
   const [cadence, setCadence] = useState<Cadence>("quarterly");
+  const [tier, setTier] = useState<Tier>("base");
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
@@ -156,7 +162,8 @@ function OnboardingContent() {
 
   const displayName = username || "this account";
   const total =
-    BASE_PRICES[cadence] + (emailAlerts ? ALERTS_ADDON[cadence] : 0);
+    (tier === "premium" ? PREMIUM_PRICES : BASE_PRICES)[cadence] +
+    (emailAlerts ? ALERTS_ADDON[cadence] : 0);
 
   const handlePaymentSuccess = () => {
     const params = new URLSearchParams();
@@ -273,6 +280,8 @@ function OnboardingContent() {
               username={displayName}
               cadence={cadence}
               setCadence={setCadence}
+              tier={tier}
+              setTier={setTier}
               emailAlerts={emailAlerts}
               setEmailAlerts={setEmailAlerts}
               total={total}
@@ -315,6 +324,9 @@ function OnboardingContent() {
                     <Badge variant="mono" size="sm">
                       {cadence === "weekly" ? "Weekly" : "Quarterly"}
                     </Badge>
+                    <Badge variant="mono" size="sm">
+                      {tier === "premium" ? "Premium" : "Basic"}
+                    </Badge>
                   </div>
                   <p className="text-[#555555] text-xs font-semibold mt-0.5">
                     {"$" + total.toFixed(2)} {PERIOD[cadence]}
@@ -332,6 +344,7 @@ function OnboardingContent() {
               <div className="p-3 sm:p-4">
                 <EmbeddedCheckout
                   cadence={cadence}
+                  tier={tier}
                   emailAlerts={emailAlerts}
                   email={email}
                   username={username || undefined}
@@ -561,6 +574,8 @@ function PaywallStep({
   username,
   cadence,
   setCadence,
+  tier,
+  setTier,
   emailAlerts,
   setEmailAlerts,
   total,
@@ -571,6 +586,8 @@ function PaywallStep({
   username: string;
   cadence: Cadence;
   setCadence: (c: Cadence) => void;
+  tier: Tier;
+  setTier: (t: Tier) => void;
   emailAlerts: boolean;
   setEmailAlerts: (v: boolean) => void;
   total: number;
@@ -599,8 +616,42 @@ function PaywallStep({
         </p>
       </div>
 
-      {/* Billing cadence toggle */}
+      {/* Plan tier toggle */}
       <div className="flex items-center justify-center">
+        <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
+          <button
+            onClick={() => setTier("base")}
+            className={`rounded-full px-5 py-2 text-sm font-bold transition-all ${
+              tier === "base"
+                ? "bg-[#121212] text-[#FFFFFF]"
+                : "text-[#555555] hover:text-[#121212]"
+            }`}
+          >
+            Basic
+          </button>
+          <button
+            onClick={() => setTier("premium")}
+            className={`rounded-full px-5 py-2 text-sm font-bold transition-all flex items-center gap-1.5 ${
+              tier === "premium"
+                ? "bg-[#121212] text-[#FFFFFF]"
+                : "text-[#555555] hover:text-[#121212]"
+            }`}
+          >
+            Premium
+            <span className="text-[10px] font-bold bg-[#E7F256] text-[#121212] px-1.5 py-0.5 rounded-full">
+              Unlimited
+            </span>
+          </button>
+        </div>
+      </div>
+      <p className="text-center text-[11px] text-[#777777] font-semibold mt-2">
+        {tier === "base"
+          ? "3 accounts total"
+          : "Unlimited accounts · 5 at a time"}
+      </p>
+
+      {/* Billing cadence toggle */}
+      <div className="flex items-center justify-center mt-3">
         <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
           <button
             onClick={() => setCadence("weekly")}
@@ -636,10 +687,13 @@ function PaywallStep({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#121212]">
+              {tier === "premium" ? "Premium" : "Basic"} ·{" "}
               {cadence === "weekly" ? "Weekly" : "Quarterly"}
             </h3>
             <p className="text-sm text-[#555555]">
-              {cadence === "weekly" ? "For short-term curiosity" : "For ongoing monitoring"}
+              {tier === "base"
+                ? "3 accounts total"
+                : "Unlimited accounts · 5 at a time"}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -656,7 +710,7 @@ function PaywallStep({
 
         <div className="mt-5 flex items-baseline gap-2 flex-wrap">
           <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
-            {anchorPrice(cadence, emailAlerts)}
+            {anchorPrice(cadence, emailAlerts, tier)}
           </span>
           <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
             ${total.toFixed(2)}
@@ -666,7 +720,7 @@ function PaywallStep({
         <p className="text-xs text-[#888888] mt-2">
           {cadence === "weekly"
             ? "Billed weekly"
-            : "≈ $16.66/mo · Billed every 3 months"}
+            : `≈ $${(total / 3).toFixed(2)}/mo · Billed every 3 months`}
           {emailAlerts && (
             <span className="text-[#047857] font-semibold text-[11px]">
               {" "}· +${ALERTS_ADDON[cadence].toFixed(2)}/email alerts
@@ -785,7 +839,7 @@ function PaywallStep({
             </span>
             <span className="flex items-center gap-2">
               <span className="text-[#999999] font-bold line-through">
-                {anchorPrice(cadence, emailAlerts)}
+                {anchorPrice(cadence, emailAlerts, tier)}
               </span>
               <span className="text-[#121212] font-extrabold text-sm">
                 ${total.toFixed(2)}{PERIOD[cadence]}

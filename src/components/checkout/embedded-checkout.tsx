@@ -19,6 +19,7 @@ export type CheckoutCadence = "weekly" | "quarterly";
 
 interface EmbeddedCheckoutProps {
   cadence: CheckoutCadence;
+  tier?: "base" | "premium";
   emailAlerts: boolean;
   email: string;
   username?: string;
@@ -318,14 +319,16 @@ const clientSecretCache = new Map<
 
 function cacheKeyFor(
   cadence: string,
+  tier: string,
   emailAlerts: boolean,
   email: string
 ): string {
-  return `cf-payment-${cadence}-${emailAlerts ? "alerts" : "base"}-${email}`;
+  return `cf-payment-${cadence}-${tier}-${emailAlerts ? "alerts" : "base"}-${email}`;
 }
 
 export default function EmbeddedCheckout({
   cadence,
+  tier = "base",
   emailAlerts,
   email,
   username,
@@ -341,7 +344,7 @@ export default function EmbeddedCheckout({
   useEffect(() => {
     if (!isValidEmail(email)) return;
 
-    const cacheKey = cacheKeyFor(cadence, emailAlerts, email.trim());
+    const cacheKey = cacheKeyFor(cadence, tier, emailAlerts, email.trim());
     const cached = clientSecretCache.get(cacheKey);
     if (cached) {
       setClientSecret(cached.clientSecret);
@@ -357,6 +360,7 @@ export default function EmbeddedCheckout({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         cadence,
+        tier,
         email_alerts: emailAlerts,
         email: email.trim(),
         username,
@@ -382,7 +386,7 @@ export default function EmbeddedCheckout({
         fetchingRef.current = null;
         setError("Failed to connect to payment server");
       });
-  }, [cadence, emailAlerts, email, username, targetId, relationship]);
+  }, [cadence, tier, emailAlerts, email, username, targetId, relationship]);
 
   if (error) {
     return (

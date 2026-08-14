@@ -13,6 +13,11 @@ import {
   Eye,
   History,
   Lock,
+  Activity,
+  Save,
+  Download,
+  RefreshCw,
+  Users,
 } from "lucide-react";
 import { Button, Badge, Card, Avatar } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
@@ -33,6 +38,7 @@ interface TrackedTarget {
 interface SubscriptionRow {
   id: string;
   plan: string;
+  tier: string;
   active: boolean;
   user_paused: boolean;
   created_at: string;
@@ -44,6 +50,8 @@ interface AccountData {
   success: boolean;
   user: { id: string; email: string | null };
   hasActiveSubscription: boolean;
+  spikeThreshold: number;
+  credits: { export: number; rescan_credits: number; mutuals: number };
   subscriptions: SubscriptionRow[];
 }
 
@@ -63,6 +71,9 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AccountData | null>(null);
   const [error, setError] = useState("");
+  const [spikeThreshold, setSpikeThreshold] = useState(5);
+  const [savingSpike, setSavingSpike] = useState(false);
+  const [spikeSaved, setSpikeSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +100,7 @@ export default function AccountPage() {
             setError(json.error || "Failed to load account");
           } else {
             setData(json);
+            setSpikeThreshold(json.spikeThreshold ?? 5);
           }
         }
       } catch {
@@ -108,12 +120,38 @@ export default function AccountPage() {
     router.replace("/");
   };
 
+  const handleSpikeSave = async () => {
+    setSavingSpike(true);
+    setSpikeSaved(false);
+    try {
+      const res = await fetch("/api/account/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spike_threshold: spikeThreshold }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Failed to save setting");
+      } else {
+        setSpikeThreshold(json.spike_threshold ?? spikeThreshold);
+        setSpikeSaved(true);
+        setTimeout(() => setSpikeSaved(false), 2000);
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setSavingSpike(false);
+    }
+  };
+
   const trackedTargets = (data?.subscriptions || [])
     .map((s) => s.target)
     .filter((t): t is TrackedTarget => !!t);
 
-  const planLabel = (plan: string) =>
-    plan === "pro" ? "Pro (with email alerts)" : "Monitoring";
+  const planLabel = (plan: string, tier?: string) => {
+    const base = tier === "premium" ? "Premium" : "Basic";
+    return plan === "pro" ? `${base} (with email alerts)` : base;
+  };
 
   if (loading) {
     return (
@@ -192,9 +230,10 @@ export default function AccountPage() {
               <p className="text-sm text-[#555555] mt-0.5">
                 {data?.hasActiveSubscription
                   ? `${planLabel(
-                      data.subscriptions.find((s) => s.active)?.plan || "basic"
-                    )} · daily monitoring enabled`
-                  : "Subscribe to unlock full following lists and daily monitoring."}
+                      data.subscriptions.find((s) => s.active)?.plan || "basic",
+                      data.subscriptions.find((s) => s.active)?.tier
+                    )} · every-other-day monitoring enabled`
+                  : "Subscribe to unlock full following lists and every-other-day monitoring."}
               </p>
             </div>
             {!data?.hasActiveSubscription && (
@@ -208,6 +247,79 @@ export default function AccountPage() {
                 </Button>
               </Link>
             )}
+          </div>
+        </Card>
+
+        {/* Spike alerts */}
+        <Card variant="subtle" padding="lg">
+          <div className="flex items-start gap-4">
+            <div className="w-11 h-11 rounded-xl bg-[#EDEDE8] flex items-center justify-center shrink-0 text-[#121212]">
+              <Activity className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-lg font-extrabold text-[#121212]">Suspicious-spike alerts</h2>
+              <p className="text-sm text-[#555555] mt-0.5">
+                Get alerted when a tracked account suddenly follows a burst of new people in one day.
+              </p>
+              <div className="flex items-center gap-3 mt-4 flex-wrap">
+                <label className="text-sm font-bold text-[#121212]">Alert me at</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={spikeThreshold}
+                  onChange={(e) => setSpikeThreshold(parseInt(e.target.value, 10) || 1)}
+                  className="w-20 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-sm font-bold text-[#121212] outline-none focus:border-[#121212]"
+                />
+                <span className="text-sm text-[#555555] font-medium">new follows in one day</span>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSpikeSave}
+                  isLoading={savingSpike}
+                  leftIcon={<Save className="w-4 h-4" />}
+                >
+                  {spikeSaved ? "Saved" : "Save"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* One-time add-ons (credits) */}
+        <Card variant="subtle" padding="lg">
+          <h2 className="text-base font-extrabold text-[#121212] mb-1">One-time add-ons</h2>
+          <p className="text-xs text-[#555555] mb-4">
+            Buy and use add-ons from any tracked account&apos;s page. Remaining balance:
+          </p>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
+              <RefreshCw className="w-5 h-5 text-[#121212] shrink-0" />
+              <div>
+                <div className="text-sm font-extrabold text-[#121212]">
+                  {data?.credits?.rescan_credits ?? 0} left
+                </div>
+                <div className="text-xs text-[#555555]">On-demand rescans</div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
+              <Download className="w-5 h-5 text-[#121212] shrink-0" />
+              <div>
+                <div className="text-sm font-extrabold text-[#121212]">
+                  {data?.credits?.export ?? 0} left
+                </div>
+                <div className="text-xs text-[#555555]">History exports</div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
+              <Users className="w-5 h-5 text-[#121212] shrink-0" />
+              <div>
+                <div className="text-sm font-extrabold text-[#121212]">
+                  {data?.credits?.mutuals ?? 0} left
+                </div>
+                <div className="text-xs text-[#555555]">Mutual-follows reports</div>
+              </div>
+            </div>
           </div>
         </Card>
 

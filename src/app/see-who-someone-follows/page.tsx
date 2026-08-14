@@ -45,7 +45,7 @@ export default function Page() {
           {
             heading: "What you'll see with CheckFollows",
             paragraphs: [
-              "Enter a handle and we return the full following list in true chronological order, with the most recent follows at the top. A free preview shows the profile and its counts instantly; unlocking reveals the complete ordered list and daily change monitoring.",
+              "Enter a handle and we return the full following list in true chronological order, with the most recent follows at the top. A free preview shows the profile and its counts instantly; unlocking reveals the complete ordered list and every-other-day change monitoring.",
             ],
             bullets: [
               "Exact order — newest follow first",

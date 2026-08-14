@@ -18,6 +18,8 @@ import {
   Loader2,
   RefreshCw,
   Clock,
+  Download,
+  Users,
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
@@ -131,6 +133,27 @@ export default function TrackPage() {
   const [togglingMonitoring, setTogglingMonitoring] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [credits, setCredits] = useState({
+    export: 0,
+    rescan_credits: 0,
+    mutuals: 0,
+  });
+  const [rescanning, setRescanning] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [mutualUsername, setMutualUsername] = useState("");
+  const [mutualLoading, setMutualLoading] = useState(false);
+  const [mutualError, setMutualError] = useState("");
+  const [mutualResult, setMutualResult] = useState<{
+    otherUsername: string;
+    mutualCount: number;
+    mutuals: Array<{
+      userId: string;
+      username: string;
+      fullName: string | null;
+      avatarUrl: string | null;
+      isVerified: boolean;
+    }>;
+  } | null>(null);
 
   // ── Auth + subscription gate ──────────────────────────
   // Viewing real follow data is paid. Redirect unauthenticated users to
@@ -165,6 +188,7 @@ export default function TrackPage() {
         }
         if (!cancelled) {
           setUserEmail(data.user?.email || user.email || "");
+          if (data.credits) setCredits(data.credits);
           setAuthorized(true);
         }
       } catch {
@@ -291,6 +315,139 @@ export default function TrackPage() {
     finally { setTogglingMonitoring(false); }
   };
 
+  const purchaseOneTime = async (
+    kind: "export" | "rescan_credits" | "mutuals",
+    targetId?: string
+  ) => {
+    try {
+      const res = await fetch("/api/stripe/one-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          targetId: targetId || target?.id,
+          username,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.assign(data.url);
+      } else {
+        window.alert(data.error || "Could not start checkout");
+      }
+    } catch {
+      window.alert("Network error");
+    }
+  };
+
+  const handleRescan = async () => {
+    if (!target || rescanning) return;
+    if (credits.rescan_credits <= 0) {
+      purchaseOneTime("rescan_credits", target.id);
+      return;
+    }
+    setRescanning(true);
+    try {
+      const res = await fetch("/api/instagram/rescan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: target.id }),
+      });
+      const data = await res.json();
+      if (res.status === 402 && data.needsPurchase) {
+        purchaseOneTime("rescan_credits", target.id);
+        return;
+      }
+      if (!res.ok) {
+        window.alert(data.error || "Rescan failed");
+        return;
+      }
+      setCredits((c) => ({
+        ...c,
+        rescan_credits: Math.max(0, c.rescan_credits - 1),
+      }));
+      await loadData();
+    } catch {
+      window.alert("Network error");
+    } finally {
+      setRescanning(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!target || exporting) return;
+    if (credits.export <= 0) {
+      purchaseOneTime("export", target.id);
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await fetch(
+        `/api/instagram/export?targetId=${encodeURIComponent(target.id)}`
+      );
+      if (res.status === 402) {
+        const data = await res.json().catch(() => ({}));
+        if (data.needsPurchase) {
+          purchaseOneTime("export", target.id);
+          return;
+        }
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        window.alert(data.error || "Export failed");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `checkfollows-${target.username}-history.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setCredits((c) => ({ ...c, export: Math.max(0, c.export - 1) }));
+    } catch {
+      window.alert("Network error");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleMutuals = async () => {
+    const other = mutualUsername.replace(/^@/, "").trim();
+    if (!target || !other || mutualLoading) return;
+    if (credits.mutuals <= 0) {
+      purchaseOneTime("mutuals", target.id);
+      return;
+    }
+    setMutualLoading(true);
+    setMutualError("");
+    setMutualResult(null);
+    try {
+      const res = await fetch("/api/instagram/mutuals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: target.id, username: other }),
+      });
+      const data = await res.json();
+      if (res.status === 402 && data.needsPurchase) {
+        purchaseOneTime("mutuals", target.id);
+        return;
+      }
+      if (!res.ok) {
+        setMutualError(data.error || "Mutual follows failed");
+        return;
+      }
+      setMutualResult(data);
+      setCredits((c) => ({ ...c, mutuals: Math.max(0, c.mutuals - 1) }));
+    } catch {
+      setMutualError("Network error");
+    } finally {
+      setMutualLoading(false);
+    }
+  };
+
   // ─── Post-payment success handling ───
   // Stripe redirects here with ?session_id=...&success=true. We verify the
   // session, activate monitoring, and establish the baseline.
@@ -324,6 +481,40 @@ export default function TrackPage() {
       }
     })();
   }, [loadData]);
+
+  // ─── One-time purchase success handling ───
+  // Stripe returns here with ?purchase=...&success=true. Poll /api/account a
+  // few times so the freshly-credited balance shows up (webhook timing).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchase = params.get("purchase");
+    if (params.get("success") !== "true" || !purchase) return;
+
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < 4; i++) {
+        if (cancelled) return;
+        try {
+          const res = await fetch("/api/account");
+          const data = await res.json();
+          if (data?.credits) {
+            setCredits(data.credits);
+            break;
+          }
+        } catch {
+          /* ignore */
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("purchase");
+      url.searchParams.delete("success");
+      window.history.replaceState({}, "", url.toString());
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredEvents = activeTab === "all"
     ? events
@@ -490,6 +681,112 @@ export default function TrackPage() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* ─── Add-ons (upsells) ─── */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-6 w-full">
+        <Card padding="lg">
+          <h2 className="text-base font-extrabold text-[#121212]">Add-ons</h2>
+          <p className="text-xs text-[#555555] mt-0.5 mb-5">
+            One-time tools for this account.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4">
+            {/* Rescan now */}
+            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col">
+              <RefreshCw className="w-5 h-5 text-[#121212] mb-2" />
+              <h3 className="text-sm font-extrabold text-[#121212]">Rescan now</h3>
+              <p className="text-xs text-[#555555] mt-1 flex-1">
+                Skip the 24h wait and check for changes immediately.
+              </p>
+              <Button
+                variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
+                size="sm"
+                className="mt-3"
+                onClick={handleRescan}
+                isLoading={rescanning}
+                fullWidth
+              >
+                {credits.rescan_credits > 0
+                  ? `Rescan now (${credits.rescan_credits} left)`
+                  : "Buy a rescan"}
+              </Button>
+            </div>
+
+            {/* Export timeline */}
+            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col">
+              <Download className="w-5 h-5 text-[#121212] mb-2" />
+              <h3 className="text-sm font-extrabold text-[#121212]">Export timeline</h3>
+              <p className="text-xs text-[#555555] mt-1 flex-1">
+                Download the full follow/unfollow history as a CSV.
+              </p>
+              <Button
+                variant={credits.export > 0 ? "primary" : "secondary"}
+                size="sm"
+                className="mt-3"
+                onClick={handleExport}
+                isLoading={exporting}
+                fullWidth
+              >
+                {credits.export > 0 ? "Export CSV" : "Buy export"}
+              </Button>
+            </div>
+
+            {/* Mutual follows */}
+            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col">
+              <Users className="w-5 h-5 text-[#121212] mb-2" />
+              <h3 className="text-sm font-extrabold text-[#121212]">Mutual follows</h3>
+              <p className="text-xs text-[#555555] mt-1 flex-1">
+                See who they follow in common with another account.
+              </p>
+              <div className="flex gap-2 mt-3">
+                <input
+                  value={mutualUsername}
+                  onChange={(e) => setMutualUsername(e.target.value)}
+                  placeholder="@username"
+                  className="min-w-0 flex-1 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-sm font-medium text-[#121212] placeholder:text-[#999999] outline-none focus:border-[#121212]"
+                />
+                <Button
+                  variant={credits.mutuals > 0 ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={handleMutuals}
+                  isLoading={mutualLoading}
+                >
+                  Go
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {mutualResult && (
+            <div className="mt-4 rounded-xl bg-[#F9F9F7] border border-[#E2E2DC] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-extrabold text-[#121212]">
+                  @{target.username} and @{mutualResult.otherUsername}
+                </h4>
+                <Badge variant="lime" size="sm">
+                  {mutualResult.mutualCount} mutual
+                </Badge>
+              </div>
+              {mutualResult.mutuals.length === 0 ? (
+                <p className="text-sm text-[#555555]">No mutual follows found.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {mutualResult.mutuals.map((m) => (
+                    <span
+                      key={m.userId}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[#E2E2DC] bg-white px-3 py-1 text-xs font-bold text-[#121212]"
+                    >
+                      @{m.username}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {mutualError && (
+            <p className="mt-2 text-xs font-semibold text-[#B91C1C]">{mutualError}</p>
+          )}
+        </Card>
       </section>
 
       {/* ─── Timeline ─── */}

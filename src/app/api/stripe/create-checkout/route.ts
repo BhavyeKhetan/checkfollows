@@ -4,6 +4,7 @@ import {
   getStripePriceId,
   getEmailAlertsPriceId,
   subscriptionClientSecret,
+  type PlanTier,
 } from "@/lib/stripe";
 import { getAuthUser } from "@/lib/supabase/auth";
 
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
 
     const cadence: "weekly" | "quarterly" =
       body.cadence === "quarterly" ? "quarterly" : "weekly";
+    const tier: PlanTier = body.tier === "premium" ? "premium" : "base";
     const emailAlerts =
       body.email_alerts === true || body.email_alerts === "true";
     const email =
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
     }
 
     const items: Array<{ price: string }> = [
-      { price: getStripePriceId(cadence) },
+      { price: getStripePriceId(cadence, tier) },
     ];
     if (emailAlerts) {
       items.push({ price: getEmailAlertsPriceId(cadence) });
@@ -64,6 +66,7 @@ export async function POST(request: Request) {
     const metadata: Record<string, string> = {
       product: "checkfollows",
       cadence,
+      tier,
       plan,
       email,
       email_alerts: String(emailAlerts),
@@ -93,6 +96,7 @@ export async function POST(request: Request) {
       customerId: customer.id,
       subscriptionId: subscription.id,
       cadence,
+      tier,
       emailAlerts,
     });
   } catch (error) {

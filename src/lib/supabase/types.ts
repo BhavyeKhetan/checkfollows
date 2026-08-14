@@ -73,10 +73,12 @@ export interface Database {
           user_id: string | null;
           email: string;
           plan: string;
+          tier: string;
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           active: boolean;
           user_paused: boolean;
+          spike_threshold: number;
           created_at: string;
           updated_at: string;
         };
@@ -86,10 +88,12 @@ export interface Database {
           user_id?: string | null;
           email: string;
           plan?: string;
+          tier?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           active?: boolean;
           user_paused?: boolean;
+          spike_threshold?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -99,10 +103,12 @@ export interface Database {
           user_id?: string | null;
           email?: string;
           plan?: string;
+          tier?: string;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           active?: boolean;
           user_paused?: boolean;
+          spike_threshold?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -287,6 +293,39 @@ export interface Database {
           username?: string | null;
           target_id?: string | null;
           relationship?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      one_time_purchases: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          target_id: string | null;
+          credits: number;
+          consumed: number;
+          stripe_session_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          kind: string;
+          target_id?: string | null;
+          credits?: number;
+          consumed?: number;
+          stripe_session_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          kind?: string;
+          target_id?: string | null;
+          credits?: number;
+          consumed?: number;
+          stripe_session_id?: string | null;
           created_at?: string;
         };
         Relationships: [];

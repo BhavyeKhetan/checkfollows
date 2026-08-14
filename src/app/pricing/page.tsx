@@ -5,7 +5,7 @@ import { Pricing } from "@/components/marketing/pricing";
 export const metadata: Metadata = {
   title: "Pricing — CheckFollows",
   description:
-    "Simple pricing for CheckFollows. Track who any Instagram account follows with daily monitoring, from $9.99/week. Cancel anytime.",
+    "Simple pricing for CheckFollows. Track who any Instagram account follows with every-other-day monitoring, from $9.99/week. Cancel anytime.",
   alternates: {
     canonical: "/pricing",
   },

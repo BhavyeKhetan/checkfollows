@@ -335,3 +335,172 @@ export async function notifySubscribers(
 
   return sent;
 }
+
+// ─── Suspicious spike alerts ─────────────────────────────
+
+export interface SpikePayload {
+  targetUsername: string;
+  targetFullName: string | null;
+  subscriberEmail: string;
+  count: number;
+  threshold: number;
+  follows: Array<{ username: string; fullName: string | null }>;
+}
+
+function buildSpikeHtml(payload: SpikePayload): string {
+  const displayName = payload.targetFullName
+    ? escapeHtml(payload.targetFullName)
+    : `@${escapeHtml(payload.targetUsername)}`;
+  const timelineUrl = `${PUBLIC_BASE_URL}/track/${encodeURIComponent(payload.targetUsername)}`;
+
+  const follows = payload.follows
+    .map((f) => {
+      const name = f.fullName ? escapeHtml(f.fullName) : "";
+      return `<tr>
+          <td style="padding:10px 16px;border-bottom:1px solid #F0F0ED;">
+            <span style="font-size:15px;font-weight:700;color:${INK};">@${escapeHtml(f.username)}</span>${
+        name ? ` <span style="font-size:13px;color:${TEXT_SECONDARY};">· ${name}</span>` : ""
+      }
+          </td>
+        </tr>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background-color:#F4F4F1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F4F4F1;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#FFFFFF;border:1px solid ${BORDER};border-radius:16px;overflow:hidden;">
+          <tr>
+            <td style="background-color:${INK};padding:20px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td width="30" height="30" align="center" valign="middle" style="border-radius:50%;text-align:center;">
+                    <span style="font-size:16px;color:${LIME};line-height:30px;">⚡</span>
+                  </td>
+                  <td style="padding-left:10px;vertical-align:middle;">
+                    <span style="font-size:17px;font-weight:800;color:#FFFFFF;letter-spacing:-0.01em;">CheckFollows</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 4px;">
+              <div style="font-size:24px;font-weight:800;color:${INK};letter-spacing:-0.02em;line-height:1.2;">Unusual activity detected</div>
+              <div style="font-size:14px;color:${TEXT_SECONDARY};margin-top:6px;">
+                ${displayName} <span style="color:${TEXT_TERTIARY};">(@${escapeHtml(payload.targetUsername)})</span> followed
+                <strong style="color:${INK};">${payload.count}</strong> account${payload.count !== 1 ? "s" : ""} in one day
+                (your alert threshold is ${payload.threshold}).
+              </div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;border:1px solid ${BORDER};border-radius:12px;overflow:hidden;">
+                ${follows}
+              </table>
+              <div style="margin-top:28px;padding-bottom:24px;">
+                <a href="${timelineUrl}" style="display:inline-block;background-color:${LIME};color:${INK};text-decoration:none;font-size:14px;font-weight:800;padding:12px 22px;border-radius:8px;">View full timeline →</a>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:${SURFACE_SUBTLE};border-top:1px solid ${BORDER};padding:18px 28px;">
+              <div style="font-size:12px;color:${TEXT_TERTIARY};line-height:1.6;">
+                You're receiving this because you're tracking <strong style="color:${TEXT_SECONDARY};">@${escapeHtml(payload.targetUsername)}</strong> on CheckFollows with spike alerts enabled.
+              </div>
+              <div style="font-size:11px;color:#999999;margin-top:6px;">CheckFollows · team@checkfollows.com</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildSpikeText(payload: SpikePayload): string {
+  const targetName = payload.targetFullName || `@${payload.targetUsername}`;
+  const lines = payload.follows.map(
+    (f) => `  + @${f.username}${f.fullName ? ` — ${f.fullName}` : ""}`
+  );
+  return [
+    `Unusual activity: ${targetName} (@${payload.targetUsername}) followed ${payload.count} accounts in one day (threshold: ${payload.threshold}).`,
+    "",
+    ...lines,
+    "",
+    `View full timeline: ${PUBLIC_BASE_URL}/track/${payload.targetUsername}`,
+  ].join("\n");
+}
+
+export async function sendSpikeEmail(payload: SpikePayload): Promise<boolean> {
+  const resend = getResend();
+  if (!resend) {
+    console.log("[Alerts] Resend not configured, skipping spike email to", payload.subscriberEmail);
+    return false;
+  }
+
+  const targetName = payload.targetFullName || `@${payload.targetUsername}`;
+  const subject = `Unusual activity: ${targetName} followed ${payload.count} accounts in one day`;
+
+  try {
+    await resend.emails.send({
+      from: `CheckFollows <${FROM_EMAIL}>`,
+      to: payload.subscriberEmail,
+      subject,
+      text: buildSpikeText(payload),
+      html: buildSpikeHtml(payload),
+    });
+    console.log(`[Alerts] Spike email sent to ${payload.subscriberEmail} for @${payload.targetUsername} (${payload.count} follows)`);
+    return true;
+  } catch (err) {
+    console.error("[Alerts] Failed to send spike email:", err);
+    return false;
+  }
+}
+
+/**
+ * Send a "suspicious spike" alert when a target follows >= the subscriber's
+ * configured threshold in a single scan. Pro (email-alerts) subscribers only.
+ */
+export async function notifySpikeSubscribers(
+  targetId: string,
+  targetUsername: string,
+  targetFullName: string | null,
+  newFollows: Array<{ username: string; fullName: string | null }>
+): Promise<number> {
+  if (newFollows.length === 0) return 0;
+
+  const { createServerClient } = await import("@/lib/supabase/server");
+  const supabase = createServerClient();
+
+  const { data: subscribers } = await supabase
+    .from("subscriptions")
+    .select("email, spike_threshold")
+    .eq("target_id", targetId)
+    .eq("active", true)
+    .eq("plan", "pro");
+
+  if (!subscribers || subscribers.length === 0) return 0;
+
+  let sent = 0;
+  for (const sub of subscribers) {
+    const threshold =
+      typeof sub.spike_threshold === "number" && sub.spike_threshold > 0
+        ? sub.spike_threshold
+        : 5;
+    if (newFollows.length < threshold) continue;
+    if (!sub.email) continue;
+    const ok = await sendSpikeEmail({
+      targetUsername,
+      targetFullName,
+      subscriberEmail: sub.email,
+      count: newFollows.length,
+      threshold,
+      follows: newFollows,
+    });
+    if (ok) sent++;
+  }
+
+  return sent;
+}

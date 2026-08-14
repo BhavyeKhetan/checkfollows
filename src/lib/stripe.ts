@@ -17,21 +17,63 @@ export const PRICE_IDS: Record<string, string> = {
   quarterly: process.env.STRIPE_PRICE_QUARTERLY_ID || "",
 };
 
+/** Premium plan price IDs (unlimited accounts, 5 at a time). */
+export const PREMIUM_PRICE_IDS: Record<string, string> = {
+  weekly: process.env.STRIPE_PRICE_PREMIUM_WEEKLY_ID || "",
+  quarterly: process.env.STRIPE_PRICE_PREMIUM_QUARTERLY_ID || "",
+};
+
+export type PlanTier = "base" | "premium";
+
+export function getTierPriceIds(tier: PlanTier = "base"): Record<string, string> {
+  return tier === "premium" ? PREMIUM_PRICE_IDS : PRICE_IDS;
+}
+
 /** Email-alerts upsell add-on price IDs (mirrors the base cadence). */
 export const EMAIL_ALERTS_PRICE_IDS: Record<string, string> = {
   weekly: process.env.STRIPE_EMAIL_ALERTS_WEEKLY_ID || "",
   quarterly: process.env.STRIPE_EMAIL_ALERTS_QUARTERLY_ID || "",
 };
 
-export function getStripePriceId(cadence: "weekly" | "quarterly" = "weekly"): string {
-  const id = PRICE_IDS[cadence];
-  if (!id) throw new Error(`STRIPE_PRICE_${cadence.toUpperCase()}_ID is not configured`);
+export function getStripePriceId(
+  cadence: "weekly" | "quarterly" = "weekly",
+  tier: PlanTier = "base"
+): string {
+  const id = getTierPriceIds(tier)[cadence];
+  if (!id) {
+    const prefix = tier === "premium" ? "STRIPE_PRICE_PREMIUM_" : "STRIPE_PRICE_";
+    throw new Error(`${prefix}${cadence.toUpperCase()}_ID is not configured`);
+  }
   return id;
 }
 
 export function getEmailAlertsPriceId(cadence: "weekly" | "quarterly"): string {
   const id = EMAIL_ALERTS_PRICE_IDS[cadence];
   if (!id) throw new Error(`STRIPE_EMAIL_ALERTS_${cadence.toUpperCase()}_ID is not configured`);
+  return id;
+}
+
+/** One-time upsell price IDs: history export, on-demand rescan, mutuals. */
+export const ONE_TIME_PRICE_IDS: Record<
+  "export" | "rescan_credits" | "mutuals",
+  string
+> = {
+  export: process.env.STRIPE_PRICE_EXPORT_ID || "",
+  rescan_credits: process.env.STRIPE_PRICE_RESCAN_ID || "",
+  mutuals: process.env.STRIPE_PRICE_MUTUALS_ID || "",
+};
+
+export function getOneTimePriceId(
+  kind: "export" | "rescan_credits" | "mutuals"
+): string {
+  const envKey =
+    kind === "export"
+      ? "STRIPE_PRICE_EXPORT_ID"
+      : kind === "rescan_credits"
+        ? "STRIPE_PRICE_RESCAN_ID"
+        : "STRIPE_PRICE_MUTUALS_ID";
+  const id = ONE_TIME_PRICE_IDS[kind];
+  if (!id) throw new Error(`${envKey} is not configured`);
   return id;
 }
 

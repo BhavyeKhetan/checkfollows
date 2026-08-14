@@ -27,8 +27,8 @@ export default function AboutPage() {
         <p>
           Search is free. A quick preview shows the profile and its follower and
           following counts. For the full picture, a subscription unlocks the
-          complete following history and, most importantly, continuous daily
-          monitoring — so you see changes as they happen instead of after the
+          complete following history and, most importantly, continuous
+          every-other-day monitoring — so you see changes as they happen instead of after the
           fact.
         </p>
       </LegalSection>
@@ -52,8 +52,8 @@ export default function AboutPage() {
             <strong>Preview</strong> the profile and its counts instantly.
           </li>
           <li>
-            <strong>Unlock</strong> the full following history and daily
-            monitoring with a weekly or quarterly plan.
+            <strong>Unlock</strong> the full following history and
+            every-other-day monitoring with a weekly or quarterly plan.
           </li>
           <li>
             <strong>Get alerted</strong> (on Pro) when new follows or unfollows

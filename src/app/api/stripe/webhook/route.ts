@@ -32,6 +32,28 @@ export async function POST(request: Request) {
         const subscriptionId = session.subscription as string;
         const metadata = session.metadata || {};
 
+        // ─── One-time upsell purchases (export / rescan / mutuals) ───
+        if (session.mode === "payment" && metadata.kind) {
+          const otpUserId = metadata.user_id || null;
+          if (otpUserId) {
+            const quantity = parseInt(metadata.quantity || "1", 10) || 1;
+            await createServerClient().from("one_time_purchases").insert({
+              user_id: otpUserId,
+              kind: metadata.kind,
+              target_id: metadata.target_id || null,
+              credits: quantity,
+              consumed: 0,
+              stripe_session_id: session.id,
+            });
+            console.log("One-time purchase credited:", {
+              userId: otpUserId,
+              kind: metadata.kind,
+              quantity,
+            });
+          }
+          break;
+        }
+
         console.log("Checkout completed:", {
           sessionId: session.id,
           customerEmail,
@@ -52,12 +74,14 @@ export async function POST(request: Request) {
             .maybeSingle();
 
           const plan = metadata.plan || "basic";
+          const tier = metadata.tier || "base";
           const targetId = metadata.target_id || null;
           const userId = metadata.user_id || null;
 
           const subRow = {
             email: customerEmail,
             plan,
+            tier,
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
             active: true,
@@ -77,6 +101,7 @@ export async function POST(request: Request) {
               .insert({
                 email: customerEmail,
                 plan,
+                tier,
                 stripe_customer_id: customerId,
                 stripe_subscription_id: subscriptionId,
                 active: true,
@@ -111,6 +136,7 @@ export async function POST(request: Request) {
                     .from("subscriptions")
                     .update({
                       plan,
+                      tier,
                       stripe_customer_id: customerId,
                       stripe_subscription_id: subscriptionId,
                       active: true,
@@ -144,6 +170,7 @@ export async function POST(request: Request) {
         const metadata = subscription.metadata || {};
         const email = metadata.email || "";
         const plan = metadata.plan || "basic";
+        const tier = metadata.tier || "base";
         const targetId = metadata.target_id || null;
         const userId = metadata.user_id || null;
 
@@ -162,6 +189,7 @@ export async function POST(request: Request) {
           const base = {
             email,
             plan,
+            tier,
             stripe_customer_id: (subscription.customer as string) || null,
             stripe_subscription_id: subscription.id,
             active: isActive,

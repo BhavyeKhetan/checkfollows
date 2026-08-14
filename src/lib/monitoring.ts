@@ -33,6 +33,12 @@ const SUSPECT_THRESHOLD = parseFloat(
 );
 const BATCH_SIZE = parseInt(process.env.MONITORING_BATCH_SIZE || "10", 10);
 
+// Monitoring cadence: every other day (48h) instead of daily (24h).
+const DEFAULT_INTERVAL_HOURS = parseInt(
+  process.env.MONITORING_INTERVAL_HOURS || "48",
+  10
+);
+
 // ─── Types ────────────────────────────────────────────────
 
 export interface ScanResult {
@@ -224,7 +230,7 @@ async function storeBaselineSnapshot(
     .update({
       last_scanned_at: new Date().toISOString(),
       next_scan_at: new Date(
-        Date.now() + 24 * 60 * 60 * 1000
+        Date.now() + DEFAULT_INTERVAL_HOURS * 60 * 60 * 1000
       ).toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -296,7 +302,7 @@ export async function upsertInstagramTarget(profile: {
       is_verified: profile.isVerified,
       following_count: profile.followingCount,
       follower_count: profile.followerCount,
-      scan_interval_hours: 24,
+      scan_interval_hours: DEFAULT_INTERVAL_HOURS,
       monitoring_enabled: false,
     })
     .select(
@@ -379,6 +385,10 @@ async function processTargetDiff(
       currentMap,
       "NEW_FOLLOWING",
       "STOPPED_FOLLOWING"
+    ).map((e) =>
+      // New follows are accepted after one valid scan (additions are less
+      // risky than removals). Mark them confirmed so alerts fire immediately.
+      e.eventType === "NEW_FOLLOWING" ? { ...e, confirmed: true } : e
     );
   }
 
@@ -404,7 +414,7 @@ async function processTargetDiff(
       full_name: e.fullName,
       avatar_url: e.avatarUrl,
       is_verified: e.isVerified,
-      confirmed: false,
+      confirmed: e.confirmed,
       previous_snapshot_id: prevSnapshot?.id || null,
       current_snapshot_id: newSnapshot.id,
     }));
@@ -462,7 +472,7 @@ async function processTargetDiff(
   }
 
   // Schedule next scan
-  const intervalHours = target.monitoring_interval_hours || 24;
+  const intervalHours = target.monitoring_interval_hours || DEFAULT_INTERVAL_HOURS;
   const nextScanAt = new Date(
     Date.now() + intervalHours * 60 * 60 * 1000
   ).toISOString();
@@ -566,7 +576,10 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
     return processTargetDiff(target, scan, entries);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    const failBackoffHours = Math.min((target.scan_interval_hours || 24) * 2, 24);
+    const failBackoffHours = Math.min(
+      (target.scan_interval_hours || DEFAULT_INTERVAL_HOURS) * 2,
+      24
+    );
     const nextRetryAt = new Date(Date.now() + failBackoffHours * 60 * 60 * 1000).toISOString();
 
     await supabase
@@ -677,7 +690,9 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
       }
 
       const currentMap = buildUserMap(entries);
-      events = diffLists(prevMap, currentMap, "NEW_FOLLOWER", "LOST_FOLLOWER");
+      events = diffLists(prevMap, currentMap, "NEW_FOLLOWER", "LOST_FOLLOWER").map(
+        (e) => (e.eventType === "NEW_FOLLOWER" ? { ...e, confirmed: true } : e)
+      );
     }
 
     const { data: newSnapshot } = await supabase
@@ -701,7 +716,7 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
         full_name: e.fullName,
         avatar_url: e.avatarUrl,
         is_verified: e.isVerified,
-        confirmed: false,
+        confirmed: e.confirmed,
         previous_snapshot_id: prevSnapshot?.id || null,
         current_snapshot_id: newSnapshot.id,
       }));
@@ -856,7 +871,7 @@ export async function processDueScans(): Promise<{
 
         // Back off retries so a provider outage doesn't re-fire every scheduler run
         const failBackoffHours = Math.min(
-          (target.monitoring_interval_hours || 24) * 2,
+          (target.monitoring_interval_hours || DEFAULT_INTERVAL_HOURS) * 2,
           24
         );
         const nextRetryAt = new Date(
@@ -1135,7 +1150,7 @@ export async function getLatestSnapshot(
 
 export async function enableMonitoring(
   targetId: string,
-  intervalHours: number = 24
+  intervalHours: number = DEFAULT_INTERVAL_HOURS
 ): Promise<void> {
   const supabase = createServerClient();
 

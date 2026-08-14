@@ -2,12 +2,31 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
-import { getStripe, getStripePriceId, getEmailAlertsPriceId } from "@/lib/stripe";
+import {
+  getStripe,
+  getStripePriceId,
+  getEmailAlertsPriceId,
+  type PlanTier,
+} from "@/lib/stripe";
 
-const MAX_TRACKED = parseInt(
-  process.env.MAX_TRACKED_ACCOUNTS_PER_USER || "5",
+// Plan tier account limits.
+//   base    → 3 accounts total, ever (lifetime).
+//   premium → unlimited accounts, but only 5 monitored at a time.
+const BASE_LIFETIME_CAP = parseInt(process.env.BASE_LIFETIME_CAP || "3", 10);
+const PREMIUM_CONCURRENT_CAP = parseInt(
+  process.env.PREMIUM_CONCURRENT_CAP || "5",
   10
 );
+
+function capForTier(tier: PlanTier): number {
+  return tier === "premium" ? PREMIUM_CONCURRENT_CAP : BASE_LIFETIME_CAP;
+}
+
+function capLabelForTier(tier: PlanTier): string {
+  return tier === "premium"
+    ? `${PREMIUM_CONCURRENT_CAP} at a time`
+    : `${BASE_LIFETIME_CAP} total accounts`;
+}
 
 /**
  * Track Changes endpoint.
@@ -45,6 +64,20 @@ export async function POST(request: Request) {
     }
     const email =
       authUser.email || (typeof body.email === "string" ? body.email : "");
+    const tier: PlanTier = body.tier === "premium" ? "premium" : "base";
+
+    // Count tracked accounts for a tier. Premium counts concurrent (active)
+    // accounts; base counts lifetime (all rows, ever).
+    const countTracked = async (t: PlanTier) => {
+      let q = supabase
+        .from("subscriptions")
+        .select("*", { count: "exact", head: true })
+        .eq("email", email)
+        .not("target_id", "is", null);
+      if (t === "premium") q = q.eq("active", true);
+      const { count } = await q;
+      return count ?? 0;
+    };
 
     // ─── STOP: disable monitoring + mark user-paused ──
     // user_paused = true prevents Stripe lifecycle events from silently
@@ -128,7 +161,7 @@ export async function POST(request: Request) {
     //    them and clear the pause flag on restart.
     const { data: paidSub } = await supabase
       .from("subscriptions")
-      .select("stripe_customer_id, stripe_subscription_id, plan")
+      .select("stripe_customer_id, stripe_subscription_id, plan, tier")
       .eq("email", email)
       .or("active.eq.true,user_paused.eq.true")
       .not("stripe_subscription_id", "is", null)
@@ -136,21 +169,20 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (paidSub) {
-      const { count } = await supabase
-        .from("subscriptions")
-        .select("*", { count: "exact", head: true })
-        .eq("email", email)
-        .eq("active", true)
-        .not("target_id", "is", null);
+      const paidTier: PlanTier =
+        paidSub.tier === "premium" ? "premium" : "base";
+      const count = await countTracked(paidTier);
+      const cap = capForTier(paidTier);
 
-      if (count !== null && count >= MAX_TRACKED) {
+      if (count >= cap) {
         return NextResponse.json(
           {
             success: false,
-            error: `You're tracking ${count} accounts already — the limit is ${MAX_TRACKED}. Upgrade to track more.`,
+            error: `You're tracking ${count} accounts already — the ${paidTier} plan allows ${capLabelForTier(paidTier)}. Upgrade to Premium to track more.`,
             atLimit: true,
             currentCount: count,
-            maxAllowed: MAX_TRACKED,
+            maxAllowed: cap,
+            tier: paidTier,
           },
           { status: 402 }
         );
@@ -170,6 +202,7 @@ export async function POST(request: Request) {
           .update({
             user_id: authUser.id,
             plan: paidSub.plan || "basic",
+            tier: paidTier,
             stripe_customer_id: paidSub.stripe_customer_id,
             stripe_subscription_id: paidSub.stripe_subscription_id,
             active: true,
@@ -185,6 +218,7 @@ export async function POST(request: Request) {
             user_id: authUser.id,
             email,
             plan: paidSub.plan || "basic",
+            tier: paidTier,
             stripe_customer_id: paidSub.stripe_customer_id,
             stripe_subscription_id: paidSub.stripe_subscription_id,
             active: true,
@@ -209,21 +243,18 @@ export async function POST(request: Request) {
     }
 
     // 3) No paid sub → cap check + route through Stripe Checkout
-    const { count } = await supabase
-      .from("subscriptions")
-      .select("*", { count: "exact", head: true })
-      .eq("email", email)
-      .eq("active", true)
-      .not("target_id", "is", null);
+    const count = await countTracked(tier);
+    const cap = capForTier(tier);
 
-    if (count !== null && count >= MAX_TRACKED) {
+    if (count >= cap) {
       return NextResponse.json(
         {
           success: false,
-          error: `You're tracking ${count} accounts already — the limit is ${MAX_TRACKED}. Upgrade to track more.`,
+          error: `You've tracked ${count} accounts already — the ${tier} plan allows ${capLabelForTier(tier)}. Upgrade to Premium to track more.`,
           atLimit: true,
           currentCount: count,
-          maxAllowed: MAX_TRACKED,
+          maxAllowed: cap,
+          tier,
         },
         { status: 402 }
       );
@@ -231,7 +262,7 @@ export async function POST(request: Request) {
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
     const stripe = getStripe();
-    const priceId = getStripePriceId("weekly");
+    const priceId = getStripePriceId("weekly", tier);
 
     const lineItems: Array<{ price: string; quantity: number }> = [
       { price: priceId, quantity: 1 },
@@ -257,6 +288,7 @@ export async function POST(request: Request) {
         metadata: {
           product: "checkfollows",
           cadence: "weekly",
+          tier,
           plan,
           email_alerts: String(emailAlerts),
           target_id: targetId,
@@ -268,6 +300,7 @@ export async function POST(request: Request) {
       metadata: {
         product: "checkfollows",
         cadence: "weekly",
+        tier,
         plan,
         email_alerts: String(emailAlerts),
         target_id: targetId,

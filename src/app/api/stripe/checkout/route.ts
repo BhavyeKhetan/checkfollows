@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getStripe, getStripePriceId, getEmailAlertsPriceId } from "@/lib/stripe";
+import {
+  getStripe,
+  getStripePriceId,
+  getEmailAlertsPriceId,
+  type PlanTier,
+} from "@/lib/stripe";
 
 export async function POST(request: Request) {
   try {
@@ -8,12 +13,14 @@ export async function POST(request: Request) {
 
     let cadence: "weekly" | "quarterly" = "weekly";
     let emailAlerts = false;
+    let tier: PlanTier = "base";
     const targetMeta: Record<string, string> = {};
     let customerEmail: string | undefined;
 
     try {
       const body = await request.json();
       if (body.cadence === "quarterly") cadence = "quarterly";
+      if (body.tier === "premium") tier = "premium";
       if (body.email_alerts === true || body.email_alerts === "true") emailAlerts = true;
       if (body.username) targetMeta.username = String(body.username);
       if (body.targetId) targetMeta.target_id = String(body.targetId);
@@ -25,7 +32,7 @@ export async function POST(request: Request) {
       // no body — default to weekly
     }
 
-    const priceId = getStripePriceId(cadence);
+    const priceId = getStripePriceId(cadence, tier);
 
     const lineItems: Array<{ price: string; quantity: number }> = [
       { price: priceId, quantity: 1 },
@@ -39,6 +46,7 @@ export async function POST(request: Request) {
     const sharedMetadata = {
       product: "checkfollows",
       cadence,
+      tier,
       plan,
       email_alerts: String(emailAlerts),
       ...targetMeta,
@@ -56,7 +64,7 @@ export async function POST(request: Request) {
       metadata: sharedMetadata,
     });
 
-    return NextResponse.json({ url: session.url, cadence, emailAlerts });
+    return NextResponse.json({ url: session.url, cadence, emailAlerts, tier });
   } catch (error: unknown) {
     console.error("Stripe checkout error:", error);
     return NextResponse.json(

@@ -58,7 +58,7 @@ export const BLOG_POSTS: BlogPost[] = [
         bullets: [
           "True chronological order — newest first",
           "New follows and unfollows clearly marked",
-          "Daily monitoring with change alerts",
+          "Every-other-day monitoring with change alerts",
           "A permanent timeline you can revisit",
         ],
       },
@@ -106,7 +106,7 @@ export const BLOG_POSTS: BlogPost[] = [
         bullets: [
           "No Instagram login or password required",
           "Reads only public data",
-          "Daily automatic re-checks",
+          "Every-other-day automatic re-checks",
           "Confirmed unfollows with timestamps",
           "A permanent record of everyone who left",
         ],
@@ -175,7 +175,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: "5. Does history accumulate?",
         paragraphs: [
           "The real value of a tracker compounds over time. Every day of monitoring adds to a timeline that becomes more valuable the longer you keep it. That's what makes a subscription worth keeping — and what makes cancellation feel like losing something.",
-          "CheckFollows checks every box: daily automatic monitoring, dual follow/unfollow detection, confirmed change reporting, password-free privacy, and a permanent accumulating history. Start tracking today and see the difference for yourself.",
+          "CheckFollows checks every box: every-other-day automatic monitoring, dual follow/unfollow detection, confirmed change reporting, password-free privacy, and a permanent accumulating history. Start tracking today and see the difference for yourself.",
         ],
       },
     ],

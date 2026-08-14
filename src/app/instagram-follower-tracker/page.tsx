@@ -6,7 +6,7 @@ import { SeoPage } from "@/components/marketing/seo-page";
 export const metadata: Metadata = {
   title: "Instagram Follower Tracker — CheckFollows",
   description:
-    "Track follower growth and lost followers on any public Instagram account. Daily monitoring, change alerts, and a full history. No login required.",
+    "Track follower growth and lost followers on any public Instagram account. Every-other-day monitoring, change alerts, and a full history. No login required.",
   alternates: { canonical: "/instagram-follower-tracker" },
 };
 
@@ -78,7 +78,7 @@ export default function Page() {
           },
           {
             q: "How often is data refreshed?",
-            a: "Paid plans refresh automatically every 24 hours.",
+            a: "Paid plans refresh automatically every 48 hours.",
           },
           {
             q: "Is it safe?",
