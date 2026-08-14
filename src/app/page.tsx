@@ -1194,7 +1194,7 @@ export default function Home() {
                   onClick={() => handleStartSignup("alex.rivera")}
                   className="font-extrabold text-base px-8 py-4 shadow-lg"
                 >
-                  🚀 Get Started &amp; Sign Up
+                  Get Started &amp; Sign Up
                 </Button>
               </Card>
             </motion.div>
