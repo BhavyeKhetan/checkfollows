@@ -14,20 +14,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.checkfollows.com"),
   title: "CheckFollows — See who they recently followed on Instagram",
   description:
-    "Enter any public Instagram username to see recent follows, recent followers, and track changes over time. No Instagram login required.",
+    "Search any public Instagram account to see who they recently followed and their newest followers. 100% anonymous — no Instagram login needed.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.png",
+  },
   openGraph: {
-    title: "CheckFollows — See who they recently followed on Instagram",
-    description:
-      "Enter any public Instagram username to see recent follows and recent followers. Private search, no login required.",
     type: "website",
+    url: "https://www.checkfollows.com",
+    siteName: "CheckFollows",
+    title: "See who they recently followed on Instagram",
+    description:
+      "Search any public Instagram account to see their recent follows and new followers — 100% anonymous, no login needed.",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "CheckFollows — See who they recently followed on Instagram",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "CheckFollows — See who they recently followed on Instagram",
+    title: "See who they recently followed on Instagram",
     description:
-      "Enter any public Instagram username to see recent follows and recent followers. No login required.",
+      "Search any public Instagram account to see their recent follows and new followers — 100% anonymous, no login needed.",
+    images: ["/og.png"],
   },
 };
 

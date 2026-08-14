@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 1200px;
+        height: 630px;
+        background-color: #ffffff;
+        background-image: radial-gradient(#e2e2dc 1.4px, transparent 1.4px);
+        background-size: 28px 28px;
+        color: #121212;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .frame {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        padding: 60px 72px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* subtle inner border to frame the card */
+      .frame::after {
+        content: "";
+        position: absolute;
+        inset: 20px;
+        border: 1px solid #e2e2dc;
+        border-radius: 24px;
+        pointer-events: none;
+      }
+
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 9999px;
+        background: #121212;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .icon svg {
+        width: 26px;
+        height: 26px;
+      }
+      .wordmark {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #121212;
+        border: 1px solid #121212;
+        border-radius: 9999px;
+        padding: 8px 16px;
+        background: #ffffff;
+        margin-bottom: 24px;
+      }
+      .badge .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: #e7f256;
+        border: 1px solid #121212;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 88px;
+        line-height: 1.02;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+      }
+      .highlight {
+        display: inline-block;
+        background: #e7f256;
+        border: 1px solid rgba(18, 18, 18, 0.1);
+        border-radius: 18px;
+        padding: 2px 18px;
+        margin-top: 6px;
+      }
+
+      .subtitle {
+        margin: 24px 0 0 0;
+        font-size: 28px;
+        font-weight: 500;
+        color: #555555;
+        letter-spacing: -0.01em;
+        max-width: 760px;
+        line-height: 1.35;
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+      }
+      .domain {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #121212;
+      }
+      .domain .lime {
+        color: #121212;
+        background: #e7f256;
+        border-radius: 6px;
+        padding: 1px 6px;
+      }
+      .tagline {
+        font-size: 20px;
+        font-weight: 600;
+        color: #777777;
+        letter-spacing: -0.01em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="header">
+        <div class="icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M26 4L14 24h7l-3 16 18-22h-7l3-14H26z" fill="#E7F256" />
+          </svg>
+        </div>
+        <span class="wordmark">CheckFollows</span>
+      </div>
+
+      <div class="content">
+        <span class="badge">
+          <span class="dot"></span>100% ANONYMOUS &middot; NO INSTAGRAM LOGIN
+        </span>
+        <h1>
+          See who they<br />
+          <span class="highlight">recently followed</span>
+        </h1>
+        <p class="subtitle">
+          Enter any public Instagram handle to see their latest follows and new
+          followers — privately, in seconds.
+        </p>
+      </div>
+
+      <div class="footer">
+        <span class="domain">checkfollows.com</span>
+        <span class="tagline">Private by design</span>
+      </div>
+    </div>
+  </body>
+</html>
