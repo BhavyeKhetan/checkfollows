@@ -1,12 +1,16 @@
 /**
- * Cron endpoint — triggered by Vercel Cron Jobs.
- * Scans all instagram_targets where monitoring_enabled=true AND next_scan_at <= now().
+ * Cron endpoint — scans all instagram_targets where monitoring_enabled=true
+ * AND next_scan_at <= now(), batched, with diff + email alerts.
  *
- * Architecture:
- *   - Scheduler runs every hour (vercel.json cron)
- *   - Query: monitoring_enabled=true, next_scan_at <= now()
- *   - Batch by MONITORING_BATCH_SIZE (default 10)
- *   - Scan frequency is set per target (default 24h)
+ * Scheduling:
+ *   - Supabase pg_cron fires this HOURLY via POST (see migration
+ *     20260816000000_add_hourly_monitor_cron.sql). Hourly is the real
+ *     cadence — targets are picked up within ~1h of their 24h due time.
+ *   - Vercel Cron fires this once/day (0 0 * * *) as a safety net, since
+ *     Vercel cron is limited to one run/day on this plan.
+ *
+ * Both schedulers are safe to overlap: processDueScans() atomically claims
+ * due targets, so a target is only ever scanned once per window.
  *
  * Protected by CRON_SECRET.
  */
@@ -17,6 +21,15 @@ import { notifySubscribers } from "@/lib/email/alerts";
 import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
+  return runMonitor(request);
+}
+
+// pg_net only offers http_post, so the Supabase scheduler calls us via POST.
+export async function POST(request: Request) {
+  return runMonitor(request);
+}
+
+async function runMonitor(request: Request) {
   const { searchParams } = new URL(request.url);
   const authHeader = request.headers.get("authorization") || "";
   const querySecret = searchParams.get("secret");

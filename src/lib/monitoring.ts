@@ -791,7 +791,29 @@ export async function processDueScans(): Promise<{
     paidTargetIds.has(t.id)
   );
 
-  if (eligibleTargets.length === 0) {
+  const eligibleIds = eligibleTargets.map((t) => t.id);
+  if (eligibleIds.length === 0) {
+    return { scanned: 0, failed: 0, suspect: 0, results: [] };
+  }
+
+  // ─── Atomic claim (concurrency-safe) ─────────────────
+  // The hourly Supabase scheduler AND the daily Vercel cron can overlap.
+  // Reserve due targets by bumping next_scan_at forward in one atomic UPDATE.
+  // A concurrent run that already claimed a row will no longer match
+  // `next_scan_at <= now`, so it silently skips it — no double scans.
+  const claimUntil = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const { data: claimedTargets } = await supabase
+    .from("instagram_targets")
+    .update({ next_scan_at: claimUntil })
+    .in("id", eligibleIds)
+    .lte("next_scan_at", now)
+    .select("id, username, monitoring_interval_hours");
+
+  const batchTargets = (claimedTargets || []).filter((t) =>
+    paidTargetIds.has(t.id)
+  );
+
+  if (batchTargets.length === 0) {
     return { scanned: 0, failed: 0, suspect: 0, results: [] };
   }
 
@@ -801,8 +823,8 @@ export async function processDueScans(): Promise<{
   let suspect = 0;
 
   // ─── TRUE BATCHING: One Apify call per batch ─────────
-  for (let i = 0; i < eligibleTargets.length; i += BATCH_SIZE) {
-    const batch = eligibleTargets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < batchTargets.length; i += BATCH_SIZE) {
+    const batch = batchTargets.slice(i, i + BATCH_SIZE);
     const batchUsernames = batch.map((t) => t.username);
 
     // Make ONE Apify call for all targets in this batch
@@ -831,6 +853,22 @@ export async function processDueScans(): Promise<{
           })
           .select("id")
           .maybeSingle();
+
+        // Back off retries so a provider outage doesn't re-fire every scheduler run
+        const failBackoffHours = Math.min(
+          (target.monitoring_interval_hours || 24) * 2,
+          24
+        );
+        const nextRetryAt = new Date(
+          Date.now() + failBackoffHours * 60 * 60 * 1000
+        ).toISOString();
+        await supabase
+          .from("instagram_targets")
+          .update({
+            next_scan_at: nextRetryAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", target.id);
 
         results.push({
           scanId: failScan?.id || "",
