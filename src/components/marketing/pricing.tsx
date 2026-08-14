@@ -16,6 +16,13 @@ const FEATURES = [
   "Cancel anytime — keep access until period end",
 ];
 
+// Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
+// Display-only — the actual Stripe charge stays at the discounted price.
+function anchorPrice(cadence: "weekly" | "quarterly", emailAlerts: boolean): string {
+  if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
+  return emailAlerts ? "$149.99" : "$124.99";
+}
+
 const PRICING_FAQS = [
   {
     q: "When do I get charged?",
@@ -48,9 +55,14 @@ export function Pricing() {
       {/* Hero */}
       <section className="relative ramp-grid-bg pt-14 pb-16 sm:pt-20 sm:pb-24 px-4 sm:px-6 border-b border-[#E2E2DC]">
         <div className="max-w-3xl mx-auto text-center flex flex-col items-center">
-          <Badge variant="mono" size="md" className="mb-6">
-            SIMPLE PRICING &middot; CANCEL ANYTIME
-          </Badge>
+          <div className="flex flex-col items-center gap-4 mb-6">
+            <Badge variant="mono" size="md">
+              SIMPLE PRICING &middot; CANCEL ANYTIME
+            </Badge>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#121212] text-[#E7F256] px-5 py-2 text-[11px] sm:text-xs font-extrabold uppercase tracking-widest shadow-md border border-black/20">
+              <Zap className="w-3.5 h-3.5" /> 60% OFF LAUNCH PRICING &mdash; THIS WEEK ONLY
+            </div>
+          </div>
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-[#121212] leading-[1.08]">
             One plan. <span className="bg-[#E7F256] text-[#121212] px-2.5 py-0.5 rounded-xl border border-black/10 inline-block">Daily monitoring.</span>
           </h1>
@@ -111,13 +123,19 @@ export function Pricing() {
             {/* Weekly */}
             <Card
               padding="lg"
-              className={`flex flex-col ${
+              className={`relative flex flex-col ${
                 cadence === "weekly" ? "border-2 border-[#E7F256] shadow-[0_4px_20px_rgba(231,242,86,0.35)]" : ""
               }`}
             >
+              <Badge variant="lime" size="sm" className="absolute -top-3 right-6">
+                <Zap className="w-3 h-3" /> 60% OFF
+              </Badge>
               <h3 className="text-lg font-bold text-[#121212]">Weekly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For short-term curiosity</p>
-              <div className="mt-6 flex items-baseline gap-1">
+              <div className="mt-6 flex items-baseline gap-2 flex-wrap">
+                <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
+                  {anchorPrice("weekly", emailAlerts)}
+                </span>
                 <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
                   {emailAlerts ? "$11.99" : "$9.99"}
                 </span>
@@ -148,11 +166,14 @@ export function Pricing() {
               }`}
             >
               <Badge variant="lime" size="sm" className="absolute -top-3 left-6">
-                <Zap className="w-3 h-3" /> Best value · Save 60%
+                <Zap className="w-3 h-3" /> Best value · 60% OFF
               </Badge>
               <h3 className="text-lg font-bold text-[#121212]">Quarterly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For ongoing monitoring</p>
-              <div className="mt-6 flex items-baseline gap-1">
+              <div className="mt-6 flex items-baseline gap-2 flex-wrap">
+                <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
+                  {anchorPrice("quarterly", emailAlerts)}
+                </span>
                 <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
                   {emailAlerts ? "$59.99" : "$49.99"}
                 </span>

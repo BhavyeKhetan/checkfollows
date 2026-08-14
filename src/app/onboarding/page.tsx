@@ -61,6 +61,13 @@ const BASE_PRICES: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
 const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
 const PERIOD: Record<Cadence, string> = { weekly: "/week", quarterly: "/quarter" };
 
+// Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
+// Display-only — the actual Stripe charge stays at the discounted price.
+function anchorPrice(cadence: Cadence, emailAlerts: boolean): string {
+  if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
+  return emailAlerts ? "$149.99" : "$124.99";
+}
+
 const SCAN_MESSAGES = [
   "Connecting to Instagram…",
   "Fetching @{u} recent follows…",
@@ -615,14 +622,22 @@ function PaywallStep({
               {cadence === "weekly" ? "For short-term curiosity" : "For ongoing monitoring"}
             </p>
           </div>
-          {cadence === "quarterly" && (
+          <div className="flex items-center gap-1.5">
             <Badge variant="lime" size="sm">
-              <Sparkles className="w-3 h-3" /> Best value
+              <Zap className="w-3 h-3" /> 60% OFF
             </Badge>
-          )}
+            {cadence === "quarterly" && (
+              <Badge variant="lime" size="sm">
+                <Sparkles className="w-3 h-3" /> Best value
+              </Badge>
+            )}
+          </div>
         </div>
 
-        <div className="mt-5 flex items-baseline gap-1">
+        <div className="mt-5 flex items-baseline gap-2 flex-wrap">
+          <span className="text-lg font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
+            {anchorPrice(cadence, emailAlerts)}
+          </span>
           <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
             ${total.toFixed(2)}
           </span>
@@ -723,8 +738,13 @@ function PaywallStep({
               {cadence === "weekly" ? "Weekly" : "Quarterly"}
               {emailAlerts ? " + alerts" : ""}
             </span>
-            <span className="text-[#121212] font-extrabold text-sm">
-              ${total.toFixed(2)}{PERIOD[cadence]}
+            <span className="flex items-center gap-2">
+              <span className="text-[#999999] font-bold line-through">
+                {anchorPrice(cadence, emailAlerts)}
+              </span>
+              <span className="text-[#121212] font-extrabold text-sm">
+                ${total.toFixed(2)}{PERIOD[cadence]}
+              </span>
             </span>
           </div>
           <Button
