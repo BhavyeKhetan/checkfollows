@@ -1,0 +1,29 @@
+{
+  "note": "Deterministic seed topic pool used as the fallback source for topic discovery until Google Search Console data is available. Once GSC raw data exists, live query mining takes precedence over this pool.",
+  "topics": [
+    { "keyword": "how to see who someone recently followed on instagram", "category": "how-to" },
+    { "keyword": "how to see who unfollowed you on instagram", "category": "how-to" },
+    { "keyword": "does instagram show who you recently followed", "category": "platforms" },
+    { "keyword": "instagram following list not in chronological order", "category": "platforms" },
+    { "keyword": "how to see someones recent follows on instagram", "category": "how-to" },
+    { "keyword": "how to see new followers on instagram", "category": "how-to" },
+    { "keyword": "how to see who someone follows in order", "category": "how-to" },
+    { "keyword": "how to tell if someone unfollowed you on instagram", "category": "how-to" },
+    { "keyword": "how to see mutual followers on instagram", "category": "how-to" },
+    { "keyword": "how to see who someone follows without login", "category": "how-to" },
+    { "keyword": "instagram followers in order of most recent", "category": "platforms" },
+    { "keyword": "how to find out who your boyfriend recently followed on instagram", "category": "scenarios" },
+    { "keyword": "do people get notified when you follow them on instagram", "category": "platforms" },
+    { "keyword": "how to see who someone follows most recently", "category": "how-to" },
+    { "keyword": "how to see removed followers on instagram", "category": "how-to" },
+    { "keyword": "instagram following list order algorithm", "category": "platforms" },
+    { "keyword": "how to see who unfollowed you without an app", "category": "how-to" },
+    { "keyword": "how to see someones following list in chronological order", "category": "how-to" },
+    { "keyword": "how to check who someone recently followed", "category": "how-to" },
+    { "keyword": "instagram follower tracker without password", "category": "buyers-guide" },
+    { "keyword": "how to see recent followers on instagram", "category": "how-to" },
+    { "keyword": "does instagram notify when you unfollow someone", "category": "platforms" },
+    { "keyword": "how to see who someone follows on threads", "category": "how-to" },
+    { "keyword": "instagram following tracker vs follower tracker", "category": "compare" }
+  ]
+}

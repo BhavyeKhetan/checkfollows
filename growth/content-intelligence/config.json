@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "compositeWeights": { "funnel": 0.40, "gsc": 0.30, "engagement": 0.30 },
+  "weeklyTargets": { "newPosts": 12, "refreshes": 3 },
+  "dedupThreshold": 0.70,
+  "infantAgeDays": 21,
+  "underperformerPercentile": 10,
+  "minImpressionsForScoring": 100
+}

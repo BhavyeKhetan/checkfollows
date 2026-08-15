@@ -1,0 +1,125 @@
+name: Weekly Content Intelligence (OpenClaw)
+
+on:
+  schedule:
+    # Thursday 8am UTC — offset from Content History's Monday run so the
+    # shared OpenClaw VPS is not occupied on the same day.
+    - cron: "0 8 * * 4"
+  workflow_dispatch:
+    inputs:
+      report_date:
+        description: "Optional report date in YYYY-MM-DD"
+        required: false
+      dry_run:
+        description: "Collect, score, and plan only; skip drafting, validation, push, and search submission"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  weekly-content-intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CONTENT_INTELLIGENCE_MAX_NEW_TOPICS: 2
+      CONTENT_INTELLIGENCE_MAX_REFRESHES: 0
+      OPENCLAW_COMPLETION_TIMEOUT_MS: 900000
+      OPENCLAW_COMPLETION_RETRIES: 0
+      # Build-time env placeholders (real values live in Vercel, not needed at build).
+      NEXT_PUBLIC_SUPABASE_URL: https://dummy.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy_anon_key
+      SUPABASE_SERVICE_ROLE_KEY: dummy_service_role_key
+      STRIPE_SECRET_KEY: sk_test_dummy
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_dummy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify OpenClaw availability
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != 'true' }}
+        run: npm run automation:openclaw-smoke
+        env:
+          OPENCLAW_API_URL: ${{ secrets.OPENCLAW_API_URL }}
+          OPENCLAW_API_KEY: ${{ secrets.OPENCLAW_API_KEY }}
+
+      - name: Preflight provider access
+        run: npm run automation:weekly-content -- preflight
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          OPENCLAW_API_URL: ${{ secrets.OPENCLAW_API_URL }}
+          OPENCLAW_API_KEY: ${{ secrets.OPENCLAW_API_KEY }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+
+      - name: Collect provider data
+        run: npm run automation:weekly-content -- collect
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          GSC_URL_INSPECTION_DELAY_MS: ${{ secrets.GSC_URL_INSPECTION_DELAY_MS }}
+          GSC_URL_INSPECTION_LIMIT: ${{ secrets.GSC_URL_INSPECTION_LIMIT }}
+
+      - name: Score content inventory
+        run: npm run automation:weekly-content -- score
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+
+      - name: Plan deterministic topics
+        run: npm run automation:weekly-content -- plan
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+
+      - name: Draft with staged OpenClaw calls
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != 'true' }}
+        run: npm run automation:weekly-content -- draft
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+          OPENCLAW_API_URL: ${{ secrets.OPENCLAW_API_URL }}
+          OPENCLAW_API_KEY: ${{ secrets.OPENCLAW_API_KEY }}
+
+      - name: Validate generated content
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != 'true' }}
+        run: npm run automation:weekly-content -- validate
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+
+      - name: Enforce policy and push
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != 'true' }}
+        run: npm run automation:policy -- weekly-content-intelligence --write-back
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+
+      - name: Submit search engine updates
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run != 'true' }}
+        run: npm run automation:submit-latest-content
+        continue-on-error: true
+        env:
+          AUTOMATION_REPORT_DATE: ${{ inputs.report_date }}
+          GSC_SERVICE_ACCOUNT_JSON: ${{ secrets.GSC_SERVICE_ACCOUNT_JSON }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}

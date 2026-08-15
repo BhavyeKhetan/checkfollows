@@ -1,0 +1,253 @@
+{
+  "date": "2026-08-15",
+  "blocked": false,
+  "sourceEvidence": {
+    "gscPath": "raw/gsc-2026-08-15.json",
+    "gscPeriod": "not pulled",
+    "analysisPath": "analysis/2026-08-15.json",
+    "indexingPath": "raw/gsc-indexing-2026-08-15.json",
+    "indexCoverageSummary": {
+      "other": 3
+    },
+    "decision": "Selected deterministic topics (GSC-derived or seed pool) and mature refresh targets before OpenClaw drafting."
+  },
+  "newTopics": [
+    {
+      "rank": 1,
+      "title": "How to See Who Someone Recently Followed on Instagram?",
+      "keyword": "how to see who someone recently followed on instagram",
+      "category": "how-to",
+      "slug": "how-to-see-who-someone-recently-followed-on-instagram",
+      "gapReason": "Seed topic pool (pre-GSC): \"how to see who someone recently followed on instagram\".",
+      "suggestedFormat": "Answer-first guide to seeing recent follows/followers with concrete in-app steps and a named tool.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 2,
+      "title": "Does Instagram Show Who You Recently Followed?",
+      "keyword": "does instagram show who you recently followed",
+      "category": "platforms",
+      "slug": "does-instagram-show-who-you-recently-followed",
+      "gapReason": "Seed topic pool (pre-GSC): \"does instagram show who you recently followed\".",
+      "suggestedFormat": "Answer-first guide to seeing recent follows/followers with concrete in-app steps and a named tool.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 3,
+      "title": "Instagram Following List Not in Chronological Order?",
+      "keyword": "instagram following list not in chronological order",
+      "category": "platforms",
+      "slug": "instagram-following-list-not-in-chronological-order",
+      "gapReason": "Seed topic pool (pre-GSC): \"instagram following list not in chronological order\".",
+      "suggestedFormat": "Answer-first explainer of Instagram's following/follower list ordering with the exact in-app path and what changes are hidden.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 4,
+      "title": "How to See Someones Recent Follows on Instagram?",
+      "keyword": "how to see someones recent follows on instagram",
+      "category": "how-to",
+      "slug": "how-to-see-someones-recent-follows-on-instagram",
+      "gapReason": "Seed topic pool (pre-GSC): \"how to see someones recent follows on instagram\".",
+      "suggestedFormat": "Answer-first guide to seeing recent follows/followers with concrete in-app steps and a named tool.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 5,
+      "title": "Instagram Followers in Order of Most Recent?",
+      "keyword": "instagram followers in order of most recent",
+      "category": "platforms",
+      "slug": "instagram-followers-in-order-of-most-recent",
+      "gapReason": "Seed topic pool (pre-GSC): \"instagram followers in order of most recent\".",
+      "suggestedFormat": "Answer-first explainer of Instagram's following/follower list ordering with the exact in-app path and what changes are hidden.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 6,
+      "title": "How to Find Out Who Your Boyfriend Recently Followed on Instagram?",
+      "keyword": "how to find out who your boyfriend recently followed on instagram",
+      "category": "how-to",
+      "slug": "how-to-find-out-who-your-boyfriend-recently-followed-on-instagram",
+      "gapReason": "Seed topic pool (pre-GSC): \"how to find out who your boyfriend recently followed on instagram\".",
+      "suggestedFormat": "Answer-first guide to seeing recent follows/followers with concrete in-app steps and a named tool.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 7,
+      "title": "Do People Get Notified When You Follow Them on Instagram?",
+      "keyword": "do people get notified when you follow them on instagram",
+      "category": "how-to",
+      "slug": "do-people-get-notified-when-you-follow-them-on-instagram",
+      "gapReason": "Seed topic pool (pre-GSC): \"do people get notified when you follow them on instagram\".",
+      "suggestedFormat": "Answer-first factual lookup guide with a named Instagram surface and concrete verification steps.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 8,
+      "title": "Instagram Following List Order Algorithm?",
+      "keyword": "instagram following list order algorithm",
+      "category": "platforms",
+      "slug": "instagram-following-list-order-algorithm",
+      "gapReason": "Seed topic pool (pre-GSC): \"instagram following list order algorithm\".",
+      "suggestedFormat": "Answer-first explainer of Instagram's following/follower list ordering with the exact in-app path and what changes are hidden.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 9,
+      "title": "How to See Someones Following List in Chronological Order?",
+      "keyword": "how to see someones following list in chronological order",
+      "category": "how-to",
+      "slug": "how-to-see-someones-following-list-in-chronological-order",
+      "gapReason": "Seed topic pool (pre-GSC): \"how to see someones following list in chronological order\".",
+      "suggestedFormat": "Answer-first explainer of Instagram's following/follower list ordering with the exact in-app path and what changes are hidden.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 10,
+      "title": "Does Instagram Notify When You Unfollow Someone?",
+      "keyword": "does instagram notify when you unfollow someone",
+      "category": "platforms",
+      "slug": "does-instagram-notify-when-you-unfollow-someone",
+      "gapReason": "Seed topic pool (pre-GSC): \"does instagram notify when you unfollow someone\".",
+      "suggestedFormat": "Answer-first unfollow detection guide with named surface, notification behavior, and a safe password-free method.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 11,
+      "title": "How to See Who Someone Follows on Threads?",
+      "keyword": "how to see who someone follows on threads",
+      "category": "how-to",
+      "slug": "how-to-see-who-someone-follows-on-threads",
+      "gapReason": "Seed topic pool (pre-GSC): \"how to see who someone follows on threads\".",
+      "suggestedFormat": "Answer-first factual lookup guide with a named Instagram surface and concrete verification steps.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    },
+    {
+      "rank": 12,
+      "title": "Instagram Following Tracker vs Follower Tracker?",
+      "keyword": "instagram following tracker vs follower tracker",
+      "category": "compare",
+      "slug": "instagram-following-tracker-vs-follower-tracker",
+      "gapReason": "Seed topic pool (pre-GSC): \"instagram following tracker vs follower tracker\".",
+      "suggestedFormat": "Answer-first factual lookup guide with a named Instagram surface and concrete verification steps.",
+      "relatedSlugs": [
+        "why-instagram-scrambles-following-list",
+        "how-to-see-who-unfollowed-you",
+        "instagram-following-tracker-buyers-guide"
+      ],
+      "sourceSlug": "",
+      "opportunityScore": 0
+    }
+  ],
+  "rejectedTopics": [
+    {
+      "title": "How to See Who Unfollowed You on Instagram?",
+      "keyword": "how to see who unfollowed you on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 1,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    },
+    {
+      "title": "How to See New Followers on Instagram?",
+      "keyword": "how to see new followers on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 0.76,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    },
+    {
+      "title": "How to Tell If Someone Unfollowed You on Instagram?",
+      "keyword": "how to tell if someone unfollowed you on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 0.76,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    },
+    {
+      "title": "How to See Mutual Followers on Instagram?",
+      "keyword": "how to see mutual followers on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 0.71,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    },
+    {
+      "title": "How to See Removed Followers on Instagram?",
+      "keyword": "how to see removed followers on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 0.71,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    },
+    {
+      "title": "How to See Recent Followers on Instagram?",
+      "keyword": "how to see recent followers on instagram",
+      "rejectionReason": "dedup",
+      "similarity": 0.71,
+      "closestMatch": "how to see who unfollowed you on instagram"
+    }
+  ],
+  "refreshTargets": []
+}

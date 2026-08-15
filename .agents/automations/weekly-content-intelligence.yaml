@@ -1,0 +1,22 @@
+id: weekly-content-intelligence
+mode: autoship_main
+allowed_paths:
+  - src/lib/blog-posts.ts
+  - src/app/blog/**
+  - public/llms.txt
+  - public/llms-full.txt
+  - growth/content-intelligence/**
+required_checks:
+  - npm run build
+commit_message: "content-intelligence: week of {date}"
+branch_name: "automation/{id}-{date}-{run_id}"
+outputs:
+  - growth/content-intelligence/raw/**
+  - growth/content-intelligence/logs/**
+  - growth/content-intelligence/analysis/**
+  - growth/content-intelligence/new-entries-*.json
+  - growth/content-intelligence/state/**
+  - src/lib/blog-posts.ts
+  - src/app/blog/**
+  - public/llms.txt
+  - public/llms-full.txt

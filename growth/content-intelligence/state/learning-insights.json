@@ -1,0 +1,97 @@
+{
+  "lastUpdated": "2026-08-15",
+  "persistentPatterns": {
+    "source": "Adapted from the Content History content-intelligence playbook (2026-04/05 indexation findings) for the CheckFollows Instagram-tracking domain. These are HARD filters, not multipliers. The agent must apply them during topic selection and reject candidates that fail.",
+    "evidence": {
+      "winningPages": [],
+      "stuckPages": []
+    },
+    "winningIntent": "DETECTION / FORENSICS. The reader wants a concrete factual answer about a specific Instagram surface or behavior: following-list order, recent follows, unfollows, new followers, mutuals, or notifications. Queries are specific, transactional, and answerable. Google indexes these because a direct factual answer satisfies searcher intent better than generic relationship content.",
+    "requiredShape": [
+      "Title MUST name a specific platform or surface (Instagram, Threads, following list, follower list, notifications) — NOT a generic relationship-category page",
+      "Title MUST be a factual question with one verifiable answer, not an opinion or emotional question",
+      "Preferred title templates: 'how to see [behavior] on instagram', 'does instagram [notify/show] [behavior]', 'why is [surface] not in [order]', 'how to see who [person] recently followed'"
+    ],
+    "bannedPatterns": [
+      "Emotional self-validation framings: 'am i being [emotion]', 'am i overreacting', 'is it wrong to feel', 'should i be [emotion]'",
+      "Broad relationship advice without a specific Instagram surface anchor: 'how to trust again', 'how to heal', 'signs he is cheating'",
+      "Opinion/debate framings: 'is it cheating to follow', 'is it normal to check', 'should I confront'",
+      "Generic category pages without a specific named subject"
+    ],
+    "topicExpansionAxes": {
+      "platforms": [
+        "Instagram",
+        "Threads",
+        "TikTok",
+        "Snapchat",
+        "Twitter/X"
+      ],
+      "surfaces": [
+        "following list",
+        "followers list",
+        "recent follows",
+        "new followers",
+        "unfollows",
+        "mutual followers",
+        "close friends",
+        "story viewers",
+        "activity status",
+        "notifications"
+      ],
+      "intents": [
+        "how to see who someone recently followed",
+        "how to see who unfollowed you",
+        "why is the following list not chronological",
+        "how to see new followers",
+        "does instagram notify when you follow/unfollow",
+        "how to see who someone follows in order"
+      ],
+      "tools": [
+        "following tracker",
+        "follower tracker",
+        "unfollow tracker",
+        "story viewer",
+        "CheckFollows"
+      ]
+    },
+    "howToApply": "For each candidate topic: (a) does it name a specific platform/surface from topicExpansionAxes, (b) does the title match a requiredShape template, (c) does it avoid ALL bannedPatterns. If any of a/b/c fails, reject the candidate and log it in topic-registry.json with reason 'pattern-filter'."
+  },
+  "weeklyInsights": [
+    {
+      "week": "2026-08-15",
+      "topPerformingCategories": [],
+      "topIndexedCategories": [],
+      "avgScoreByCategory": {},
+      "indexCoverageSummary": {
+        "other": 3
+      },
+      "indexCoverageByCategory": {
+        "guides": {
+          "other": 1
+        },
+        "how-to": {
+          "other": 1
+        },
+        "buyers-guide": {
+          "other": 1
+        }
+      },
+      "indexCopyPatternSummary": {
+        "other": {
+          "count": 3,
+          "avgWordCount": 333,
+          "avgFirstParagraphWords": 30.3,
+          "directAnswerFirstSentenceRate": 33.3,
+          "titleQuestionRate": 66.7,
+          "avgEntityHitsFirstParagraph": 1.3,
+          "avgEvidenceHitsFirstParagraph": 4.3,
+          "reassuranceFirstOpeningRate": 0
+        }
+      },
+      "recommendations": [
+        "Before selecting topics, compare indexed vs not-indexed copy features and reject reassurance-first openings.",
+        "For factual/platform pages, require direct-answer first sentence plus Instagram surface and evidence terms in the opening paragraph."
+      ]
+    }
+  ]
+}

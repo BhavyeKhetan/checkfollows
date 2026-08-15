@@ -4,6 +4,11 @@ export type BlogSection = {
   bullets?: string[];
 };
 
+export type FAQItem = {
+  question: string;
+  answer: string;
+};
+
 export type BlogPost = {
   slug: string;
   title: string;
@@ -12,7 +17,23 @@ export type BlogPost = {
   readTime: string;
   category: string;
   sections: BlogSection[];
+  faq?: FAQItem[];
+  relatedSlugs?: string[];
 };
+
+const CATEGORY_LABELS: Record<string, string> = {
+  "how-to": "How-to",
+  guides: "Guides",
+  compare: "Compare",
+  "buyers-guide": "Buyer's guide",
+  platforms: "Platforms",
+  privacy: "Privacy",
+  scenarios: "Scenarios",
+};
+
+export function formatCategory(category: string): string {
+  return CATEGORY_LABELS[category] || category;
+}
 
 export const BLOG_POSTS: BlogPost[] = [
   {
@@ -22,7 +43,25 @@ export const BLOG_POSTS: BlogPost[] = [
       "Instagram doesn't show you who someone followed most recently. Here's why the list is scrambled — and how to see the true chronological order.",
     date: "2026-08-04",
     readTime: "4 min read",
-    category: "Guides",
+    category: "guides",
+    faq: [
+      {
+        question: "Does Instagram show the following list in the order people were followed?",
+        answer:
+          "No. Instagram ranks the list by mutual connections and engagement signals, not by date. The account someone followed most recently can sit far down the list.",
+      },
+      {
+        question: "Can you see someone's recent follows in the Instagram app?",
+        answer:
+          "Not reliably. Instagram does not expose a chronological follows view, so the native list does not reveal who someone followed most recently.",
+      },
+      {
+        question: "Is there a way to see the real follow order?",
+        answer:
+          "Yes. A public-data tool like CheckFollows snapshots the following list and reconstructs the true chronological order without any Instagram login.",
+      },
+    ],
+    relatedSlugs: ["how-to-see-who-unfollowed-you", "instagram-following-tracker-buyers-guide"],
     sections: [
       {
         paragraphs: [
@@ -77,7 +116,25 @@ export const BLOG_POSTS: BlogPost[] = [
       "Instagram never tells you when someone unfollows. Here's how to find out safely — without handing your password to a scam app.",
     date: "2026-08-06",
     readTime: "5 min read",
-    category: "Guides",
+    category: "how-to",
+    faq: [
+      {
+        question: "Does Instagram tell you when someone unfollows you?",
+        answer:
+          "No. Instagram never sends a notification for unfollows, which is why the change is only visible in your follower count or through a tracker.",
+      },
+      {
+        question: "Do I need to hand over my password to see unfollows?",
+        answer:
+          "No. A safe tracker reads only public data, so your password is never required and your account is never put at risk.",
+      },
+      {
+        question: "Why does one missing follower not always mean an unfollow?",
+        answer:
+          "Instagram sometimes returns inconsistent lists, so a good tracker confirms a removal across consecutive checks before reporting it.",
+      },
+    ],
+    relatedSlugs: ["why-instagram-scrambles-following-list", "instagram-following-tracker-buyers-guide"],
     sections: [
       {
         paragraphs: [
@@ -132,7 +189,25 @@ export const BLOG_POSTS: BlogPost[] = [
       "Not all following trackers are built the same. Here's what actually matters — monitoring frequency, change detection, and privacy — before you subscribe.",
     date: "2026-08-09",
     readTime: "6 min read",
-    category: "Buyer's guide",
+    category: "buyers-guide",
+    faq: [
+      {
+        question: "What is the most important thing to check before paying for a tracker?",
+        answer:
+          "That it re-scans automatically on a schedule, not only when you click a button. A tracker without automatic monitoring is just a manual tool with extra steps.",
+      },
+      {
+        question: "Does a following tracker need my Instagram password?",
+        answer:
+          "No, and you should never use one that asks. The right tool works on public data only and keeps you anonymous.",
+      },
+      {
+        question: "How often should a tracker re-scan?",
+        answer:
+          "Roughly every 24 to 48 hours is enough to catch new follows and unfollows without missing the moment.",
+      },
+    ],
+    relatedSlugs: ["why-instagram-scrambles-following-list", "how-to-see-who-unfollowed-you"],
     sections: [
       {
         paragraphs: [

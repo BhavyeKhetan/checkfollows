@@ -1,0 +1,11 @@
+{
+  "pullDate": "2026-08-15",
+  "siteUrl": "https://checkfollows.com/",
+  "source": "google_search_console_url_inspection",
+  "totalAvailableSlugs": 3,
+  "totalInspected": 0,
+  "totalFailed": 0,
+  "coverageCounts": {},
+  "pages": {},
+  "note": "GSC not configured; empty fallback."
+}
