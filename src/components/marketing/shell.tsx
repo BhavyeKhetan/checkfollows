@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Zap } from "lucide-react";
 import { NavBar } from "@/components/marketing/nav-bar";
+import { Logo } from "@/design-system";
 
 const TOOL_LINKS = [
   { href: "/see-who-someone-follows", label: "See who someone follows" },
@@ -37,12 +37,7 @@ export function MarketingShell({ children }: { children: React.ReactNode }) {
         <div className="max-w-6xl mx-auto">
           <div className="grid gap-10 md:grid-cols-4">
             <div className="md:col-span-1">
-              <Link href="/" className="flex items-center gap-2.5 font-bold text-lg text-[#121212]">
-                <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-                  <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-                </div>
-                <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-              </Link>
+              <Logo />
               <p className="mt-3 text-xs text-[#777777] leading-relaxed max-w-xs">
                 See who any public Instagram account recently followed — anonymously,
                 with no login required.

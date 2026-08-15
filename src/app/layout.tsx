@@ -19,7 +19,11 @@ export const metadata: Metadata = {
   description:
     "Search any public Instagram account to see who they recently followed and their newest followers. 100% anonymous — no Instagram login needed.",
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png" },
+    ],
     apple: "/apple-icon.png",
   },
   openGraph: {

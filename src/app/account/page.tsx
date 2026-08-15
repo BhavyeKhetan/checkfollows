@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Zap,
   CheckCircle2,
   AlertCircle,
   LogOut,
@@ -19,7 +18,7 @@ import {
   RefreshCw,
   Users,
 } from "lucide-react";
-import { Button, Badge, Card, Avatar } from "@/design-system";
+import { Button, Badge, Card, Avatar, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 
 interface TrackedTarget {
@@ -166,15 +165,7 @@ export default function AccountPage() {
       {/* Header */}
       <nav className="sticky top-0 z-50 ramp-glass">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-            </div>
-            <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-          </Link>
+          <Logo />
           <button
             onClick={handleSignOut}
             className="flex items-center gap-1.5 text-xs font-bold text-[#555555] hover:text-[#121212] transition-colors"

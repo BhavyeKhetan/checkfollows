@@ -13,3 +13,4 @@ export * from "./components/Tabs";
 export * from "./components/StatCard";
 export * from "./components/Avatar";
 export * from "./components/Accordion";
+export * from "./components/Logo";

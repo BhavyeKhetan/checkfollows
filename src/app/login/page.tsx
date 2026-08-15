@@ -3,8 +3,8 @@
 import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Zap, ArrowRight, Eye, EyeOff } from "lucide-react";
-import { Button, Input, Badge } from "@/design-system";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Button, Input, Badge, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 
 function isValidEmail(val: string): boolean {
@@ -64,15 +64,7 @@ function LoginContent() {
       {/* Header */}
       <nav className="sticky top-0 z-50 ramp-glass">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-            </div>
-            <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-          </Link>
+          <Logo />
           <Link
             href="/signup"
             className="text-xs font-bold text-[#555555] hover:text-[#121212] transition-colors"

@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { Logo } from "@/design-system";
 import {
   ArrowLeft,
-  Zap,
   UserPlus,
   UserMinus,
   TrendingUp,
@@ -570,12 +570,7 @@ export default function TrackPage() {
             <Link href="/" className="flex items-center gap-2 text-[#555555] hover:text-[#121212] transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <Link href="/" className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity">
-              <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-                <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-              </div>
-              <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-            </Link>
+            <Logo />
           </div>
           <div className="flex items-center gap-3">
             <a
@@ -941,12 +936,7 @@ export default function TrackPage() {
       {/* ── Footer ── */}
       <footer className="py-8 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="flex items-center justify-center gap-2 text-sm font-bold text-[#121212] mb-2">
-            <div className="w-5 h-5 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-3 h-3 fill-current text-[#E7F256]" />
-            </div>
-            <span>CheckFollows</span>
-          </div>
+          <Logo size="xs" className="mb-2" />
           <div className="flex items-center justify-center gap-4 text-[10px] text-[#777777] font-medium">
             <Link href="/" className="hover:text-[#121212] transition-colors">Home</Link>
             <span>·</span>

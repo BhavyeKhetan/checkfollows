@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Zap, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Logo } from "@/design-system";
 
 const NAV_LINKS = [
   { href: "/#truth-section", label: "The Instagram Trap" },
@@ -18,15 +19,7 @@ export function NavBar() {
   return (
     <nav className="sticky top-0 z-50 ramp-glass">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-        >
-          <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-            <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-          </div>
-          <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-        </Link>
+        <Logo />
 
         <div className="hidden md:flex items-center gap-8">
           {NAV_LINKS.map((link) => (

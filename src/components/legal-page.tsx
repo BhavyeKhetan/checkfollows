@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Zap } from "lucide-react";
+import { Logo } from "@/design-system";
 
 export function LegalSection({
   title,
@@ -34,17 +34,7 @@ export default function LegalPage({
       {/* Header */}
       <nav className="sticky top-0 z-50 ramp-glass">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-            </div>
-            <span className="tracking-tight text-xl font-extrabold">
-              CheckFollows
-            </span>
-          </Link>
+          <Logo />
           <Link
             href="/"
             className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
@@ -71,12 +61,7 @@ export default function LegalPage({
       {/* Footer */}
       <footer className="py-10 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC]">
         <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5 text-sm font-bold text-[#121212]">
-            <div className="w-6 h-6 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-3.5 h-3.5 fill-current text-[#E7F256]" />
-            </div>
-            <span>CheckFollows</span>
-          </div>
+          <Logo size="sm" />
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs font-medium text-[#777777]">
             <span>© 2026 CheckFollows</span>
             <span className="hidden sm:inline">·</span>

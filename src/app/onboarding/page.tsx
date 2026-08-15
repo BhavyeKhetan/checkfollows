@@ -18,7 +18,7 @@ import {
   Clock,
   Search,
 } from "lucide-react";
-import { Button, Input, Card, Badge } from "@/design-system";
+import { Button, Input, Card, Badge, Logo } from "@/design-system";
 import EmbeddedCheckout from "@/components/checkout/embedded-checkout";
 import { createClient } from "@/lib/supabase/client";
 
@@ -199,15 +199,7 @@ function OnboardingContent() {
       {/* Header */}
       <nav className="sticky top-0 z-50 ramp-glass">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg text-[#121212] hover:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#121212] flex items-center justify-center text-[#E7F256]">
-              <Zap className="w-4 h-4 fill-current text-[#E7F256]" />
-            </div>
-            <span className="tracking-tight text-xl font-extrabold">CheckFollows</span>
-          </Link>
+          <Logo />
           <div className="flex items-center gap-2 text-xs font-bold text-[#777777]">
             <Lock className="w-3.5 h-3.5" />
             Secure setup
