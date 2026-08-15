@@ -21,9 +21,11 @@ function client(): typeof mixpanel | null {
   if (!TOKEN) return null;
   if (!initialized) {
     mixpanel.init(TOKEN, {
-      // We instrument the events we care about explicitly; avoid auto page
-      // views polluting the event stream with marketing-page noise.
-      track_pageview: false,
+      // Auto page views give Mixpanel an immediate signal that the SDK is
+      // live (otherwise a fresh project shows "No connection found" until an
+      // explicit event fires) and provide a baseline view stream. Specific
+      // events are still instrumented explicitly on top.
+      track_pageview: true,
       persistence: "localStorage",
     });
     initialized = true;
