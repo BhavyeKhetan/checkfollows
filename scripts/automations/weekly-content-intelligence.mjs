@@ -72,27 +72,24 @@ function isValidBlogSlug(slug) {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug);
 }
 
-// PostHog and GSC are optional at this stage: the loop degrades to the
+// Mixpanel and GSC are optional at this stage: the loop degrades to the
 // deterministic seed topic pool until those providers are wired up.
-async function posthogSmoke() {
-  const apiKey = optionalEnv("POSTHOG_PERSONAL_API_KEY");
-  const projectId = optionalEnv("POSTHOG_PROJECT_ID");
-  const host = optionalEnv("POSTHOG_HOST").replace(/\/$/, "");
-  if (!apiKey || !projectId || !host) {
-    console.log("PostHog not configured; skipping smoke (falling back to seed topic pool).");
+async function mixpanelSmoke() {
+  const username = optionalEnv("MIXPANEL_SERVICE_ACCOUNT_USERNAME");
+  const secret = optionalEnv("MIXPANEL_SERVICE_ACCOUNT_SECRET");
+  if (!username || !secret) {
+    console.log("Mixpanel not configured; skipping smoke (falling back to seed topic pool).");
     return;
   }
-  const response = await fetch(`${host}/api/projects/${projectId}/query/`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query: { kind: "HogQLQuery", query: "SELECT 1" }, refresh: "blocking" }),
+  const auth = Buffer.from(`${username}:${secret}`).toString("base64");
+  const today = new Date().toISOString().slice(0, 10);
+  const params = new URLSearchParams({ from_date: today, to_date: today, event: JSON.stringify(["blog_post_viewed"]) });
+  const response = await fetch(`https://data.mixpanel.com/api/2.0/export?${params.toString()}`, {
+    headers: { Authorization: `Basic ${auth}` },
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`PostHog preflight failed (${response.status}): ${text}`);
+    throw new Error(`Mixpanel preflight failed (${response.status}): ${text.slice(0, 200)}`);
   }
 }
 
@@ -101,7 +98,7 @@ async function preflight() {
     requireEnv("OPENCLAW_API_URL");
     requireEnv("OPENCLAW_API_KEY");
   }
-  await posthogSmoke();
+  await mixpanelSmoke();
   if (hasEnv("GSC_SERVICE_ACCOUNT_JSON") || hasEnv("GOOGLE_SERVICE_ACCOUNT_PATH")) {
     run("npx tsx scripts/content-intelligence/pull-gsc.ts --test");
     run("npx tsx scripts/content-intelligence/pull-gsc-indexing.ts --test");
@@ -112,7 +109,7 @@ async function preflight() {
 }
 
 function collect() {
-  run("npx tsx scripts/content-intelligence/pull-posthog-blog.ts");
+  run("npx tsx scripts/content-intelligence/pull-mixpanel-blog.ts");
   run("npx tsx scripts/content-intelligence/pull-gsc.ts");
   run(`npx tsx scripts/content-intelligence/pull-gsc-indexing.ts${isDryRun() ? " --limit 5" : ""}`);
 }

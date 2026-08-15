@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
+import { track } from "@/lib/mixpanel";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -125,6 +126,7 @@ export default function TrackPage() {
   const params = useParams();
   const router = useRouter();
   const username = (params.username as string || "").replace(/^@/, "");
+  const pageViewedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [target, setTarget] = useState<TargetProfile | null>(null);
   const [events, setEvents] = useState<TrackedEvent[]>([]);
@@ -247,6 +249,15 @@ export default function TrackPage() {
         monitoring_interval_hours: targetData.target?.monitoring_interval_hours ?? 24,
       });
 
+      if (!pageViewedRef.current) {
+        pageViewedRef.current = true;
+        track("tracking_page_viewed", {
+          username,
+          monitoring_enabled: targetData.target?.monitoring_enabled ?? false,
+          events_count: eventsData.success ? (eventsData.events || []).length : 0,
+        });
+      }
+
       if (eventsData.success && eventsData.events) {
         setEvents(eventsData.events);
       }
@@ -272,6 +283,10 @@ export default function TrackPage() {
 
   const handleToggleMonitoring = async () => {
     if (!target) return;
+    track("monitoring_toggled", {
+      action: target.monitoring_enabled ? "stop" : "start",
+      username: target.username,
+    });
     setTogglingMonitoring(true);
     try {
       if (target.monitoring_enabled) {
@@ -320,6 +335,7 @@ export default function TrackPage() {
     targetId?: string
   ) => {
     try {
+      track("upsell_checkout_started", { kind, username });
       const res = await fetch("/api/stripe/one-time", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -342,6 +358,10 @@ export default function TrackPage() {
 
   const handleRescan = async () => {
     if (!target || rescanning) return;
+    track("rescan_clicked", {
+      username: target.username,
+      has_credit: credits.rescan_credits > 0,
+    });
     if (credits.rescan_credits <= 0) {
       purchaseOneTime("rescan_credits", target.id);
       return;
@@ -366,6 +386,7 @@ export default function TrackPage() {
         ...c,
         rescan_credits: Math.max(0, c.rescan_credits - 1),
       }));
+      track("rescan_completed", { username: target.username });
       await loadData();
     } catch {
       window.alert("Network error");
@@ -376,6 +397,10 @@ export default function TrackPage() {
 
   const handleExport = async () => {
     if (!target || exporting) return;
+    track("export_clicked", {
+      username: target.username,
+      has_credit: credits.export > 0,
+    });
     if (credits.export <= 0) {
       purchaseOneTime("export", target.id);
       return;
@@ -407,6 +432,7 @@ export default function TrackPage() {
       a.remove();
       URL.revokeObjectURL(url);
       setCredits((c) => ({ ...c, export: Math.max(0, c.export - 1) }));
+      track("export_completed", { username: target.username });
     } catch {
       window.alert("Network error");
     } finally {
@@ -417,6 +443,11 @@ export default function TrackPage() {
   const handleMutuals = async () => {
     const other = mutualUsername.replace(/^@/, "").trim();
     if (!target || !other || mutualLoading) return;
+    track("mutuals_clicked", {
+      username: target.username,
+      other,
+      has_credit: credits.mutuals > 0,
+    });
     if (credits.mutuals <= 0) {
       purchaseOneTime("mutuals", target.id);
       return;
@@ -441,6 +472,10 @@ export default function TrackPage() {
       }
       setMutualResult(data);
       setCredits((c) => ({ ...c, mutuals: Math.max(0, c.mutuals - 1) }));
+      track("mutuals_completed", {
+        username: target.username,
+        mutual_count: data?.mutualCount ?? 0,
+      });
     } catch {
       setMutualError("Network error");
     } finally {
@@ -577,6 +612,9 @@ export default function TrackPage() {
               href={`https://instagram.com/${target.username}`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                track("instagram_link_clicked", { username: target.username })
+              }
               className="flex items-center gap-1.5 text-xs font-semibold text-[#555555] hover:text-[#121212] transition-colors"
             >
               <ExternalLink className="w-3.5 h-3.5" />
@@ -800,7 +838,10 @@ export default function TrackPage() {
         <div className="mb-6">
           <Tabs
             activeTab={activeTab}
-            onChange={setActiveTab}
+            onChange={(id) => {
+              setActiveTab(id);
+              track("timeline_filter_changed", { tab: id, username });
+            }}
             tabs={[
               { id: "all", label: "All", badge: events.length },
               {

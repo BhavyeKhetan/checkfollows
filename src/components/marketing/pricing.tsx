@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, Zap, Shield, Lock, Eye, Bell, History, TrendingUp, Clock } from "lucide-react";
 import { Badge, Card } from "@/design-system";
+import { track } from "@/lib/mixpanel";
 import { CheckoutButton } from "@/components/marketing/checkout-button";
 import { FaqList } from "@/components/marketing/faq-list";
 
@@ -66,6 +67,10 @@ export function Pricing() {
   const [tier, setTier] = useState<Tier>("base");
   const [emailAlerts, setEmailAlerts] = useState(false);
 
+  useEffect(() => {
+    track("pricing_viewed");
+  }, []);
+
   return (
     <div>
       {/* Hero */}
@@ -97,12 +102,18 @@ export function Pricing() {
             <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
               <ToggleBtn
                 active={tier === "base"}
-                onClick={() => setTier("base")}
+                onClick={() => {
+                  setTier("base");
+                  track("plan_tier_selected", { tier: "base", source: "pricing" });
+                }}
                 label="Basic"
               />
               <ToggleBtn
                 active={tier === "premium"}
-                onClick={() => setTier("premium")}
+                onClick={() => {
+                  setTier("premium");
+                  track("plan_tier_selected", { tier: "premium", source: "pricing" });
+                }}
                 label="Premium"
                 badge="Unlimited"
               />
@@ -119,12 +130,18 @@ export function Pricing() {
             <div className="inline-flex items-center rounded-full border border-[#E2E2DC] bg-[#F9F9F7] p-1">
               <ToggleBtn
                 active={cadence === "weekly"}
-                onClick={() => setCadence("weekly")}
+                onClick={() => {
+                  setCadence("weekly");
+                  track("billing_cadence_selected", { cadence: "weekly", source: "pricing" });
+                }}
                 label="Weekly"
               />
               <ToggleBtn
                 active={cadence === "quarterly"}
-                onClick={() => setCadence("quarterly")}
+                onClick={() => {
+                  setCadence("quarterly");
+                  track("billing_cadence_selected", { cadence: "quarterly", source: "pricing" });
+                }}
                 label="Quarterly"
                 badge="Save 60%"
               />
@@ -135,7 +152,17 @@ export function Pricing() {
           <div className="flex items-center justify-center mb-10">
             <button
               type="button"
-              onClick={() => setEmailAlerts((v) => !v)}
+              onClick={() =>
+                setEmailAlerts((v) => {
+                  const next = !v;
+                  track("email_alerts_toggled", {
+                    state: next ? "on" : "off",
+                    cadence,
+                    source: "pricing",
+                  });
+                  return next;
+                })
+              }
               className="inline-flex items-center gap-3 rounded-full border border-[#E2E2DC] bg-[#F9F9F7] px-5 py-2.5 hover:border-[#C9C9C0] transition-colors"
             >
               <Bell className="w-4 h-4 text-[#121212]" />
@@ -269,7 +296,7 @@ export function Pricing() {
           <h2 className="text-2xl sm:text-3xl font-extrabold text-[#121212] tracking-tight text-center mb-10">
             Pricing questions
           </h2>
-          <FaqList faqs={PRICING_FAQS} />
+          <FaqList faqs={PRICING_FAQS} context="pricing" />
         </div>
       </section>
 

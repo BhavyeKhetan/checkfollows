@@ -1,6 +1,6 @@
 ---
 name: content-intelligence-loop
-description: Weekly autonomous content intelligence loop. GitHub Actions runs deterministic PostHog + GSC provider reads, scoring, topic planning, validation, commit, and push. OpenClaw is used only for staged per-post drafting after deterministic inputs exist. State lives in growth/content-intelligence/.
+description: Weekly autonomous content intelligence loop. GitHub Actions runs deterministic Mixpanel + GSC provider reads, scoring, topic planning, validation, commit, and push. OpenClaw is used only for staged per-post drafting after deterministic inputs exist. State lives in growth/content-intelligence/.
 ---
 
 # Content Intelligence Loop
@@ -27,7 +27,7 @@ raw article quota.
 ## Modes
 
 ### `collect` — Pull performance data
-Deterministic provider scripts (PostHog, GSC) run with GitHub secrets. Raw outputs land
+Deterministic provider scripts (Mixpanel, GSC) run with GitHub secrets. Raw outputs land
 in `growth/content-intelligence/raw/`. When a provider is not yet configured, the script
 writes an empty fallback and the planner falls back to the seed topic pool
 (`growth/content-intelligence/topic-pool.json`).
@@ -61,7 +61,7 @@ and validated.
 | `state/cumulative-performance.json` | Rolling per-slug scores over time |
 | `state/topic-registry.json` | All written + rejected topics for dedup |
 | `state/learning-insights.json` | Weekly winning patterns + recommendations |
-| `raw/posthog-YYYY-MM-DD.json` | Raw PostHog pull |
+| `raw/mixpanel-YYYY-MM-DD.json` | Raw Mixpanel pull |
 | `raw/gsc-YYYY-MM-DD.json` | Raw GSC pull |
 | `raw/gsc-indexing-YYYY-MM-DD.json` | Raw URL Inspection coverage states |
 | `analysis/YYYY-MM-DD.json` | Scored posts, underperformers, top performers |

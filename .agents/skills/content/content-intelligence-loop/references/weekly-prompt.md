@@ -6,8 +6,8 @@ drafting after deterministic inputs exist.
 
 ## Pipeline
 
-1. `preflight` — verify OpenClaw; PostHog/GSC are optional and degrade to the seed pool.
-2. `collect` — run `pull-posthog-blog.ts`, `pull-gsc.ts`, `pull-gsc-indexing.ts`.
+1. `preflight` — verify OpenClaw; Mixpanel/GSC are optional and degrade to the seed pool.
+2. `collect` — run `pull-mixpanel-blog.ts`, `pull-gsc.ts`, `pull-gsc-indexing.ts`.
 3. `score` — run `compute-scores.ts`.
 4. `plan` — run `plan-topics.ts --date YYYY-MM-DD`. Falls back to `topic-pool.json` when
    no GSC data exists. Fails if no publishable topics survive hard filters.
@@ -29,7 +29,7 @@ Scheduler: `.github/workflows/weekly-content-intelligence-openclaw.yml`
 - `OPENCLAW_API_URL`
 - `OPENCLAW_API_KEY`
 
-Optional until wired up: `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_HOST`,
+Optional until wired up: `MIXPANEL_SERVICE_ACCOUNT_USERNAME`, `MIXPANEL_SERVICE_ACCOUNT_SECRET`,
 `GSC_SERVICE_ACCOUNT_JSON`, `GSC_SITE_URL`, `GSC_URL_INSPECTION_DELAY_MS`,
 `GSC_URL_INSPECTION_LIMIT`, `INDEXNOW_KEY`.
 

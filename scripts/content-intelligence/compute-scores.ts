@@ -179,16 +179,16 @@ function main() {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, "config.json"), "utf8"));
   const { compositeWeights, infantAgeDays, underperformerPercentile, minImpressionsForScoring } = config;
 
-  const posthogFile = findLatestFile(path.join(ROOT, "raw"), "posthog-");
+  const mixpanelFile = findLatestFile(path.join(ROOT, "raw"), "mixpanel-");
   const gscFile = findLatestFile(path.join(ROOT, "raw"), "gsc-");
   const indexingFile = findLatestFile(path.join(ROOT, "raw"), "gsc-indexing-");
 
-  if (!posthogFile) {
-    console.error("No PostHog data found in raw/");
+  if (!mixpanelFile) {
+    console.error("No Mixpanel data found in raw/");
     process.exit(1);
   }
 
-  const posthogData = JSON.parse(fs.readFileSync(posthogFile, "utf8"));
+  const mixpanelData = JSON.parse(fs.readFileSync(mixpanelFile, "utf8"));
   const gscData = gscFile ? JSON.parse(fs.readFileSync(gscFile, "utf8")) : { pages: {} };
   const indexingData = indexingFile ? JSON.parse(fs.readFileSync(indexingFile, "utf8")) : { pages: {}, coverageCounts: {} };
 
@@ -206,7 +206,7 @@ function main() {
   const allSlugs = new Set(
     [
       ...BLOG_POSTS.map((p) => p.slug),
-      ...Object.keys(posthogData.slugs || {}),
+      ...Object.keys(mixpanelData.slugs || {}),
       ...Object.keys(gscData.pages || {}),
       ...Object.keys(indexingData.pages || {}),
     ].filter(isValidBlogSlug),
@@ -220,12 +220,12 @@ function main() {
   const durationList: number[] = [];
 
   for (const slug of allSlugs) {
-    const ph = posthogData.slugs?.[slug];
+    const mp = mixpanelData.slugs?.[slug];
     const gsc = gscData.pages?.[slug];
-    if (ph) {
-      conversionRates.push(ph.conversionRate);
-      pageviewsList.push(ph.pageviews30d);
-      durationList.push(ph.avgSessionDuration);
+    if (mp) {
+      conversionRates.push(mp.conversionRate);
+      pageviewsList.push(mp.pageviews30d);
+      durationList.push(mp.avgSessionDuration);
     }
     if (gsc) {
       impressionsList.push(gsc.impressions);
@@ -234,7 +234,7 @@ function main() {
   }
 
   for (const slug of allSlugs) {
-    const ph = posthogData.slugs?.[slug] || {
+    const mp = mixpanelData.slugs?.[slug] || {
       pageviews7d: 0, pageviews30d: 0, uniqueVisitors30d: 0,
       avgSessionDuration: 0, funnelEntries: 0, funnelConversions: 0, conversionRate: 0,
     };
@@ -246,10 +246,10 @@ function main() {
     const ageDays = pubDate ? Math.floor((today.getTime() - new Date(pubDate).getTime()) / 86400000) : 999;
     const maturity: "infant" | "mature" = ageDays < infantAgeDays ? "infant" : "mature";
 
-    const funnelScore = percentileRank(ph.conversionRate, conversionRates);
+    const funnelScore = percentileRank(mp.conversionRate, conversionRates);
     const engagementScore =
-      percentileRank(ph.pageviews30d, pageviewsList) * 0.5 +
-      percentileRank(ph.avgSessionDuration, durationList) * 0.5;
+      percentileRank(mp.pageviews30d, pageviewsList) * 0.5 +
+      percentileRank(mp.avgSessionDuration, durationList) * 0.5;
 
     let gscScore = 0;
     let compositeScore: number;
@@ -272,7 +272,7 @@ function main() {
       publishDate: pubDate,
       ageDays,
       category: categories[slug] || "uncategorized",
-      pageviews30d: ph.pageviews30d,
+      pageviews30d: mp.pageviews30d,
       impressions: gsc?.impressions || 0,
       indexCoverageState: indexing?.coverageState || null,
       indexVerdict: indexing?.verdict || null,

@@ -10,6 +10,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { Lock } from "lucide-react";
+import { track } from "@/lib/mixpanel";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
@@ -44,7 +45,8 @@ const stripeAppearance = {
 type ConfirmPayment = (
   stripe: Stripe,
   elements: StripeElements,
-  requireEmail: boolean
+  requireEmail: boolean,
+  method: "express" | "card"
 ) => Promise<void>;
 
 function UnifiedWalletButtons({
@@ -93,7 +95,7 @@ function UnifiedWalletButtonsInner({
       }}
       onConfirm={() => {
         if (stripe && elements) {
-          void onConfirm(stripe, elements, !isValidEmail(payerEmail));
+          void onConfirm(stripe, elements, !isValidEmail(payerEmail), "express");
         }
       }}
     />
@@ -133,7 +135,7 @@ function CardPaymentFormInner({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (stripe && elements) void onConfirm(stripe, elements, true);
+        if (stripe && elements) void onConfirm(stripe, elements, true, "card");
       }}
       className="space-y-3"
     >
@@ -167,6 +169,8 @@ function isValidEmail(email?: string): boolean {
 function CheckoutFormInner({
   clientSecret,
   cadence,
+  tier = "base",
+  emailAlerts = false,
   subscriptionId,
   defaultEmail,
   username,
@@ -176,6 +180,8 @@ function CheckoutFormInner({
 }: {
   clientSecret: string;
   cadence: string;
+  tier?: "base" | "premium";
+  emailAlerts?: boolean;
   subscriptionId: string;
   defaultEmail?: string;
   username?: string;
@@ -212,12 +218,30 @@ function CheckoutFormInner({
     }
   };
 
-  const confirmPayment: ConfirmPayment = async (stripe, elements, requireEmail) => {
+  const confirmPayment: ConfirmPayment = async (
+    stripe,
+    elements,
+    requireEmail,
+    method
+  ) => {
     if (requireEmail && !payerEmail.includes("@")) {
       setError("Please enter a valid email");
+      track("payment_failed", {
+        error: "missing_email",
+        method,
+        cadence,
+        tier,
+        email_alerts: emailAlerts,
+      });
       return;
     }
 
+    track("payment_submitted", {
+      method,
+      cadence,
+      tier,
+      email_alerts: emailAlerts,
+    });
     setLoading(true);
     setError("");
 
@@ -251,6 +275,13 @@ function CheckoutFormInner({
 
     if (submitError) {
       setError(submitError.message || "Payment failed");
+      track("payment_failed", {
+        error: submitError.code || submitError.type || "unknown",
+        method,
+        cadence,
+        tier,
+        email_alerts: emailAlerts,
+      });
       setLoading(false);
       return;
     }
@@ -259,12 +290,24 @@ function CheckoutFormInner({
       // Either a redirect is underway (3DS) or still processing.
       if (paymentIntent && paymentIntent.status === "processing") {
         setError("Payment is still processing. Please wait and try again.");
+        track("payment_processing", {
+          method,
+          cadence,
+          tier,
+          email_alerts: emailAlerts,
+        });
       }
       setLoading(false);
       return;
     }
 
     // Payment succeeded in-place → activate + advance.
+    track("payment_succeeded", {
+      method,
+      cadence,
+      tier,
+      email_alerts: emailAlerts,
+    });
     await finalizeActivation();
     onSuccess?.();
   };
@@ -378,13 +421,20 @@ export default function EmbeddedCheckout({
           });
           setClientSecret(data.clientSecret);
           setSubscriptionId(data.subscriptionId);
+          track("checkout_loaded", {
+            cadence,
+            tier,
+            email_alerts: emailAlerts,
+          });
         } else {
           setError(data.error || "Failed to initialize checkout");
+          track("checkout_init_failed", { cadence, tier, email_alerts: emailAlerts });
         }
       })
       .catch(() => {
         fetchingRef.current = null;
         setError("Failed to connect to payment server");
+        track("checkout_init_failed", { cadence, tier, email_alerts: emailAlerts });
       });
   }, [cadence, tier, emailAlerts, email, username, targetId, relationship]);
 
@@ -432,6 +482,8 @@ export default function EmbeddedCheckout({
     <CheckoutFormInner
       clientSecret={clientSecret}
       cadence={cadence}
+      tier={tier}
+      emailAlerts={emailAlerts}
       subscriptionId={subscriptionId}
       defaultEmail={email}
       username={username}

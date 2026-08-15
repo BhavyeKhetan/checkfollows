@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
+import { track, identify, reset } from "@/lib/mixpanel";
 
 interface TrackedTarget {
   id: string;
@@ -87,6 +88,8 @@ export default function AccountPage() {
         return;
       }
 
+      identify(user.id, { $email: user.email ?? undefined });
+
       try {
         const res = await fetch("/api/account");
         if (res.status === 401) {
@@ -100,6 +103,9 @@ export default function AccountPage() {
           } else {
             setData(json);
             setSpikeThreshold(json.spikeThreshold ?? 5);
+            track("account_viewed", {
+              has_active_subscription: json.hasActiveSubscription,
+            });
           }
         }
       } catch {
@@ -115,7 +121,9 @@ export default function AccountPage() {
 
   const handleSignOut = async () => {
     const supabase = createClient();
+    track("signed_out", { platform: "web" });
     await supabase.auth.signOut();
+    reset();
     router.replace("/");
   };
 
@@ -134,6 +142,9 @@ export default function AccountPage() {
       } else {
         setSpikeThreshold(json.spike_threshold ?? spikeThreshold);
         setSpikeSaved(true);
+        track("spike_threshold_saved", {
+          threshold: json.spike_threshold ?? spikeThreshold,
+        });
         setTimeout(() => setSpikeSaved(false), 2000);
       }
     } catch {
@@ -233,6 +244,9 @@ export default function AccountPage() {
                   variant="primary"
                   size="md"
                   rightIcon={<ArrowRight className="w-4 h-4" />}
+                  onClick={() =>
+                    track("subscribe_cta_clicked", { location: "account" })
+                  }
                 >
                   Subscribe
                 </Button>
@@ -321,7 +335,11 @@ export default function AccountPage() {
               Tracked accounts ({trackedTargets.length})
             </h2>
             {data?.hasActiveSubscription && (
-              <Link href="/" className="text-xs font-bold text-[#121212] underline underline-offset-2">
+              <Link
+                href="/"
+                className="text-xs font-bold text-[#121212] underline underline-offset-2"
+                onClick={() => track("add_account_clicked")}
+              >
                 + Add account
               </Link>
             )}
@@ -374,7 +392,14 @@ export default function AccountPage() {
                       <Badge variant="mono" size="sm">Paused</Badge>
                     )}
                     <Link href={`/track/${encodeURIComponent(t.username)}`}>
-                      <Button variant="secondary" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        rightIcon={<ArrowRight className="w-4 h-4" />}
+                        onClick={() =>
+                          track("tracked_account_opened", { username: t.username })
+                        }
+                      >
                         View
                       </Button>
                     </Link>

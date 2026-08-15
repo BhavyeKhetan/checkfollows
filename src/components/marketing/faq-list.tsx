@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { AccordionItem, Card } from "@/design-system";
+import { track } from "@/lib/mixpanel";
 
-export function FaqList({ faqs }: { faqs: { q: string; a: string }[] }) {
+export function FaqList({
+  faqs,
+  context = "generic",
+}: {
+  faqs: { q: string; a: string }[];
+  context?: string;
+}) {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
@@ -13,7 +20,13 @@ export function FaqList({ faqs }: { faqs: { q: string; a: string }[] }) {
           key={i}
           title={faq.q}
           isOpen={open === i}
-          onToggle={() => setOpen(open === i ? null : i)}
+          onToggle={() => {
+            const next = open === i ? null : i;
+            setOpen(next);
+            if (next !== null) {
+              track("faq_opened", { context, question: faq.q });
+            }
+          }}
         >
           {faq.a}
         </AccordionItem>

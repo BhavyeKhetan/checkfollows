@@ -21,6 +21,7 @@ import {
 import { Button, Input, Card, Badge, Logo } from "@/design-system";
 import EmbeddedCheckout from "@/components/checkout/embedded-checkout";
 import { createClient } from "@/lib/supabase/client";
+import { track } from "@/lib/mixpanel";
 
 type Step = "email" | "relationship" | "scanning" | "paywall";
 type Cadence = "weekly" | "quarterly";
@@ -104,6 +105,24 @@ function OnboardingContent() {
     searchParams.get("finalize") === "1"
   );
 
+  // One-time funnel entry + paywall view signals.
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (!startedRef.current) {
+      startedRef.current = true;
+      track("onboarding_started", {
+        username: username || undefined,
+        has_username: !!username,
+      });
+    }
+  }, [username]);
+
+  useEffect(() => {
+    if (step === "paywall") {
+      track("paywall_viewed", { username: username || undefined });
+    }
+  }, [step, username]);
+
   // After payment: signed-in users go straight to their account; everyone
   // else completes a quick signup so we can tie the subscription to them.
   const redirectAfterPayment = async (params: URLSearchParams) => {
@@ -113,12 +132,14 @@ function OnboardingContent() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
+        track("post_purchase_redirect", { destination: "account" });
         router.replace("/account");
         return;
       }
     } catch {
       /* ignore */
     }
+    track("post_purchase_redirect", { destination: "signup" });
     router.replace(`/signup?${params.toString()}`);
   };
 
@@ -143,6 +164,7 @@ function OnboardingContent() {
               target_id: ctx.target_id,
             }),
           });
+          track("subscription_activated", { via_3ds_redirect: true });
           const params = new URLSearchParams();
           if (ctx.email) params.set("email", ctx.email);
           if (ctx.username) params.set("username", ctx.username);
@@ -166,6 +188,12 @@ function OnboardingContent() {
     (emailAlerts ? ALERTS_ADDON[cadence] : 0);
 
   const handlePaymentSuccess = () => {
+    track("subscription_activated", {
+      cadence,
+      tier,
+      email_alerts: emailAlerts,
+      ...(username ? { username } : {}),
+    });
     const params = new URLSearchParams();
     if (email) params.set("email", email.trim());
     if (username) params.set("username", username);
@@ -237,6 +265,7 @@ function OnboardingContent() {
               setEmail={setEmail}
               onContinue={() => {
                 saveLead();
+                track("lead_captured", { has_username: !!username });
                 setStep("relationship");
               }}
             />
@@ -251,6 +280,7 @@ function OnboardingContent() {
               onSelect={(value) => {
                 setRelationship(value);
                 saveLead({ relationship: value });
+                track("relationship_selected", { relationship: value });
                 setStep("scanning");
               }}
             />
@@ -271,15 +301,43 @@ function OnboardingContent() {
               key="paywall"
               username={displayName}
               cadence={cadence}
-              setCadence={setCadence}
+              setCadence={(c) => {
+                setCadence(c);
+                track("billing_cadence_selected", {
+                  cadence: c,
+                  source: "onboarding",
+                });
+              }}
               tier={tier}
-              setTier={setTier}
+              setTier={(t) => {
+                setTier(t);
+                track("plan_tier_selected", { tier: t, source: "onboarding" });
+              }}
               emailAlerts={emailAlerts}
-              setEmailAlerts={setEmailAlerts}
+              setEmailAlerts={(v) => {
+                setEmailAlerts(v);
+                track("email_alerts_toggled", {
+                  state: v ? "on" : "off",
+                  cadence,
+                  source: "onboarding",
+                });
+              }}
               total={total}
               openFaq={openFaq}
-              setOpenFaq={setOpenFaq}
-              onOpenCheckout={() => setShowCheckout(true)}
+              setOpenFaq={(i) => {
+                setOpenFaq(i);
+                if (i !== null) {
+                  track("paywall_faq_opened", { question: PAYWALL_FAQS[i].q });
+                }
+              }}
+              onOpenCheckout={() => {
+                track("checkout_started", {
+                  cadence,
+                  tier,
+                  email_alerts: emailAlerts,
+                });
+                setShowCheckout(true);
+              }}
             />
           )}
         </AnimatePresence>
@@ -295,7 +353,14 @@ function OnboardingContent() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-              onClick={() => setShowCheckout(false)}
+              onClick={() => {
+                setShowCheckout(false);
+                track("checkout_sheet_closed", {
+                  cadence,
+                  tier,
+                  email_alerts: emailAlerts,
+                });
+              }}
             />
             <motion.div
               initial={{ y: "100%" }}
@@ -326,7 +391,14 @@ function OnboardingContent() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowCheckout(false)}
+                  onClick={() => {
+                    setShowCheckout(false);
+                    track("checkout_sheet_closed", {
+                      cadence,
+                      tier,
+                      email_alerts: emailAlerts,
+                    });
+                  }}
                   className="w-8 h-8 rounded-full bg-[#F3F3EF] hover:bg-[#EDEDE8] text-[#555555] flex items-center justify-center text-sm font-bold transition-colors"
                   aria-label="Close checkout"
                 >
@@ -504,6 +576,7 @@ function ScanningStep({
   const [msgIdx, setMsgIdx] = useState(0);
 
   useEffect(() => {
+    track("scanning_started", { username: username || undefined });
     const total = 10000; // ~10 seconds
     const tick = 100;
     let elapsed = 0;
@@ -513,11 +586,12 @@ function ScanningStep({
       setMsgIdx(Math.min(SCAN_MESSAGES.length - 1, Math.floor((elapsed / total) * SCAN_MESSAGES.length)));
       if (elapsed >= total) {
         clearInterval(interval);
+        track("scanning_completed", { username: username || undefined });
         onDone();
       }
     }, tick);
     return () => clearInterval(interval);
-  }, [onDone]);
+  }, [onDone, username]);
 
   const message = SCAN_MESSAGES[msgIdx].replace("{u}", `@${username}` || "…");
 

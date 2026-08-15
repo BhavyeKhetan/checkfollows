@@ -37,6 +37,7 @@ import {
   AccordionItem,
 } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
+import { track } from "@/lib/mixpanel";
 
 // ─── Client-side profile cache (avoid re-hitting the API) ──────────
 const PROFILE_CACHE_KEY = "cf_profile_cache_v1";
@@ -268,7 +269,8 @@ export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const triggerFocusAndHighlight = () => {
+  const triggerFocusAndHighlight = (source = "hero") => {
+    track("cta_clicked", { location: source });
     setIsHighlighted(true);
     inputRef.current?.focus();
     inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -281,11 +283,13 @@ export default function Home() {
   // straight to the (gated) tracking page.
   const handleStartSignup = async (
     targetUsername?: string,
-    targetId?: string
+    targetId?: string,
+    source = "locked_preview"
   ) => {
     const username = (
       targetUsername || searchInput.replace(/^@/, "").trim() || ""
     ).replace(/^@/, "");
+    track("funnel_cta_clicked", { username: username || undefined, source });
     const params = new URLSearchParams();
     if (username) params.set("username", username);
     if (targetId) params.set("targetId", targetId);
@@ -314,6 +318,7 @@ export default function Home() {
     const username = searchInput.replace(/^@/, "").trim();
     if (!username) return;
 
+    track("search_submitted", { username });
     setSearchState({ status: "loading", profile: null, recentFollowing: null, recentFollowers: null, error: null });
     setLoadingStep(1);
 
@@ -321,6 +326,7 @@ export default function Home() {
       // Client-side cache hit — skip the network call entirely
       const cachedProfile = readCachedProfile(username);
       if (cachedProfile) {
+        track("profile_searched", { username, found: true, cached: true });
         setLoadingStep(3);
         setTimeout(() => {
           setSearchState((prev) => ({
@@ -344,6 +350,7 @@ export default function Home() {
 
       if (!profileRes.ok || !profileData.success) {
         if (profileData.isPrivate) {
+          track("profile_searched", { username, found: false, is_private: true });
           setSearchState((prev) => ({
             ...prev,
             status: "private",
@@ -351,6 +358,7 @@ export default function Home() {
             error: null,
           }));
         } else if (profileData.notFound) {
+          track("profile_searched", { username, found: false, not_found: true });
           setSearchState((prev) => ({ ...prev, status: "not_found", error: null }));
         } else {
           setSearchState((prev) => ({
@@ -364,6 +372,7 @@ export default function Home() {
 
       // Save the lightweight result so repeat searches never re-hit the API
       writeCachedProfile(username, profileData.profile);
+      track("profile_searched", { username, found: true, cached: false });
 
       // Step 2 -> 3
       setLoadingStep(3);
@@ -388,6 +397,35 @@ export default function Home() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
   };
+
+  // Landing page view + section scroll-depth (fired once per section).
+  useEffect(() => {
+    track("landing_viewed");
+    const sections = [
+      "truth-section",
+      "comparison",
+      "use-cases",
+      "testimonials",
+      "faq",
+    ];
+    const seen = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !seen.has(entry.target.id)) {
+            seen.add(entry.target.id);
+            track("section_viewed", { section: entry.target.id });
+          }
+        }
+      },
+      { threshold: 0.25 }
+    );
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowDemo(true), 2000);
@@ -589,7 +627,9 @@ export default function Home() {
                 variant="dark"
                 size="sm"
                 className="shrink-0"
-                onClick={() => handleStartSignup(targetUser, profile?.id)}
+                onClick={() =>
+                  handleStartSignup(targetUser, profile?.id, "profile_card")
+                }
               >
                 Reveal Full Profile
               </Button>
@@ -600,11 +640,13 @@ export default function Home() {
         {/* Locked follower / following area */}
         <div className="relative overflow-hidden rounded-2xl min-h-[320px]">
           {/* Blurred (fake) content behind the lock */}
-          <div className="pointer-events-none select-none blur-[7px] opacity-90" aria-hidden="true">
-            <Tabs
-              fullWidth
-              activeTab={activeTab}
-              onChange={(id) => setActiveTab(id as "followers" | "following")}
+          <div className="pointer-events-none select-none blur-[7px] opacity-90" aria-hidden="true">              <Tabs
+                fullWidth
+                activeTab={activeTab}
+                onChange={(id) => {
+                  setActiveTab(id as "followers" | "following");
+                  track("preview_tab_changed", { tab: id, source: "locked" });
+                }}
               tabs={[
                 { id: "followers", label: "Recent Followers", badge: DEMO_FOLLOWERS.length },
                 { id: "following", label: "Recent Following", badge: DEMO_FOLLOWING.length },
@@ -652,7 +694,9 @@ export default function Home() {
                 fullWidth
                 size="md"
                 leftIcon={<Sparkles className="w-4 h-4 text-[#121212]" />}
-                onClick={() => handleStartSignup(targetUser, profile?.id)}
+                onClick={() =>
+                  handleStartSignup(targetUser, profile?.id, "lock_overlay")
+                }
                 className="font-extrabold"
               >
                 Sign up and view all of @{targetUser}&apos;s accounts
@@ -782,7 +826,7 @@ export default function Home() {
             <Button
               variant="primary"
               size="sm"
-              onClick={triggerFocusAndHighlight}
+              onClick={() => triggerFocusAndHighlight("nav")}
             >
               Check followers anonymously
             </Button>
@@ -841,7 +885,7 @@ export default function Home() {
                     fullWidth
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      triggerFocusAndHighlight();
+                      triggerFocusAndHighlight("nav_mobile");
                     }}
                   >
                     Check followers anonymously
@@ -899,7 +943,7 @@ export default function Home() {
               animate={{ y: [0, 8, 0] }}
               transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
               className="flex flex-col items-center gap-1 cursor-pointer"
-              onClick={triggerFocusAndHighlight}
+              onClick={() => triggerFocusAndHighlight("hero_pointer")}
             >
               <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E7F256] text-[#121212] font-black text-xs uppercase tracking-wider border border-black/15 shadow-md">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#121212] animate-ping shrink-0" />
@@ -1150,7 +1194,9 @@ export default function Home() {
                     variant="dark"
                     size="sm"
                     className="shrink-0"
-                        onClick={() => handleStartSignup("alex.rivera")}
+                        onClick={() =>
+                          handleStartSignup("alex.rivera", undefined, "demo_profile")
+                        }
                   >
                     Reveal Full Profile
                   </Button>
@@ -1162,7 +1208,10 @@ export default function Home() {
                 <Tabs
                   fullWidth
                   activeTab={demoTab}
-                  onChange={(id) => setDemoTab(id as "followers" | "following")}
+                  onChange={(id) => {
+                    setDemoTab(id as "followers" | "following");
+                    track("preview_tab_changed", { tab: id, source: "demo" });
+                  }}
                   tabs={[
                     { id: "followers", label: "Recent Followers", badge: DEMO_FOLLOWERS.length },
                     { id: "following", label: "Recent Following", badge: DEMO_FOLLOWING.length },
@@ -1207,7 +1256,9 @@ export default function Home() {
                   variant="primary"
                   size="lg"
                     leftIcon={<Sparkles className="w-5 h-5 text-[#121212]" />}
-                  onClick={() => handleStartSignup("alex.rivera")}
+                  onClick={() =>
+                    handleStartSignup("alex.rivera", undefined, "demo_paywall")
+                  }
                   className="font-extrabold text-base px-8 py-4 shadow-lg"
                 >
                   Get Started &amp; Sign Up
@@ -1438,7 +1489,13 @@ export default function Home() {
                 key={i}
                 title={faq.q}
                 isOpen={openFaq === i}
-                onToggle={() => setOpenFaq(openFaq === i ? null : i)}
+                onToggle={() => {
+                  const next = openFaq === i ? null : i;
+                  setOpenFaq(next);
+                  if (next !== null) {
+                    track("faq_opened", { context: "landing", question: faq.q });
+                  }
+                }}
               >
                 {faq.a}
               </AccordionItem>
@@ -1461,7 +1518,7 @@ export default function Home() {
               variant="primary"
               size="lg"
               leftIcon={<Search className="w-5 h-5" />}
-              onClick={triggerFocusAndHighlight}
+              onClick={() => triggerFocusAndHighlight("bottom")}
             >
               Inspect an Account Anonymously
             </Button>
@@ -1487,7 +1544,7 @@ export default function Home() {
                 fullWidth
                 size="md"
                 leftIcon={<Search className="w-4 h-4" />}
-                onClick={triggerFocusAndHighlight}
+                onClick={() => triggerFocusAndHighlight("sticky")}
               >
                 Check followers anonymously
               </Button>

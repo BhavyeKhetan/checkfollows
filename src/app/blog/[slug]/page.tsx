@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
 import { MarketingShell } from "@/components/marketing/shell";
+import { BlogViewTracker } from "@/components/analytics/blog-view-tracker";
 import { getPost, BLOG_POSTS, formatCategory } from "@/lib/blog-posts";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://checkfollows.vercel.app";
@@ -53,6 +54,7 @@ export default async function BlogPostPage({
 
   return (
     <MarketingShell>
+      <BlogViewTracker slug={post.slug} title={post.title} category={post.category} />
       <article className="py-14 sm:py-20 px-4 sm:px-6">
         <div className="max-w-2xl mx-auto">
           <Link

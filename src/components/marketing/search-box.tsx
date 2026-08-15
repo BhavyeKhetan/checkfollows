@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Input, Button } from "@/design-system";
+import { track } from "@/lib/mixpanel";
 
 export function SearchBox({
   placeholder = "Enter Instagram handle... (e.g. alex)",
@@ -15,6 +16,7 @@ export function SearchBox({
   const submit = () => {
     const username = value.replace(/^@/, "").trim();
     if (!username || loading) return;
+    track("search_submitted", { username, source: "seo_page" });
     setLoading(true);
     window.location.href = `/?q=${encodeURIComponent(username)}`;
   };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/design-system";
+import { track } from "@/lib/mixpanel";
 
 export function CheckoutButton({
   cadence,
@@ -28,6 +29,11 @@ export function CheckoutButton({
 
   const handleCheckout = async () => {
     if (loading) return;
+    track("checkout_button_clicked", {
+      cadence,
+      tier,
+      email_alerts: emailAlerts,
+    });
     setLoading(true);
     setError(null);
     try {
@@ -38,13 +44,30 @@ export function CheckoutButton({
       });
       const data = await res.json();
       if (data.url) {
+        track("checkout_redirected", {
+          cadence,
+          tier,
+          email_alerts: emailAlerts,
+        });
         window.location.href = data.url;
       } else {
         setError("Checkout couldn't be started. Please try again.");
+        track("checkout_error", {
+          error: "no_url",
+          cadence,
+          tier,
+          email_alerts: emailAlerts,
+        });
         setLoading(false);
       }
     } catch {
       setError("Network error. Please try again.");
+      track("checkout_error", {
+        error: "network",
+        cadence,
+        tier,
+        email_alerts: emailAlerts,
+      });
       setLoading(false);
     }
   };

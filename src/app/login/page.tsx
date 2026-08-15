@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button, Input, Badge, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
+import { track, identify } from "@/lib/mixpanel";
 
 function isValidEmail(val: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val.trim());
@@ -24,6 +25,10 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    track("login_viewed");
+  }, []);
+
   const ready = isValidEmail(email) && password.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,10 +46,11 @@ function LoginContent() {
 
     setLoading(true);
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
     if (signInError) {
       setError(
@@ -52,8 +58,15 @@ function LoginContent() {
           ? "Incorrect email or password."
           : signInError.message
       );
+      track("login_error", { error: signInError.message });
       setLoading(false);
       return;
+    }
+
+    const userId = signInData.user?.id;
+    if (userId) {
+      identify(userId, { $email: signInData.user?.email ?? undefined });
+      track("signed_in", { platform: "web" });
     }
 
     router.replace(next.startsWith("/") ? next : "/account");

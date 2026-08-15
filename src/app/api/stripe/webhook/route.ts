@@ -2,7 +2,48 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
 import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
+import { trackServer } from "@/lib/mixpanel-server";
 import type Stripe from "stripe";
+
+/**
+ * Fire a server-side Mixpanel lifecycle event for a subscription, resolving
+ * identity (user UUID → email) and plan/tier/cadence best-effort. Never
+ * throws — analytics must not break webhook handling.
+ */
+async function fireLifecycle(
+  subscriptionId: string,
+  eventName: string,
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  try {
+    const supabase = createServerClient();
+    const { data } = await supabase
+      .from("subscriptions")
+      .select("email, user_id, plan, tier")
+      .eq("stripe_subscription_id", subscriptionId)
+      .maybeSingle();
+
+    let cadence: string | undefined;
+    try {
+      const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+      cadence = sub.metadata?.cadence || undefined;
+    } catch {
+      /* ignore */
+    }
+
+    trackServer(eventName, {
+      ...(data?.user_id ? { user_id: data.user_id as string } : {}),
+      ...(data?.email ? { email: data.email as string } : {}),
+      ...(data?.plan ? { plan: data.plan as string } : {}),
+      ...(data?.tier ? { tier: data.tier as string } : {}),
+      ...(cadence ? { cadence } : {}),
+      subscription_id: subscriptionId,
+      ...extra,
+    });
+  } catch (err) {
+    console.error("[mixpanel] lifecycle tracking failed:", err);
+  }
+}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -47,6 +88,12 @@ export async function POST(request: Request) {
             });
             console.log("One-time purchase credited:", {
               userId: otpUserId,
+              kind: metadata.kind,
+              quantity,
+            });
+            trackServer("one_time_purchase_completed", {
+              user_id: otpUserId,
+              ...(customerEmail ? { email: customerEmail } : {}),
               kind: metadata.kind,
               quantity,
             });
@@ -174,6 +221,20 @@ export async function POST(request: Request) {
         const targetId = metadata.target_id || null;
         const userId = metadata.user_id || null;
 
+        // Churn signal: the user scheduled cancellation at period end.
+        const prev = (event.data.previous_attributes || {}) as Record<
+          string,
+          unknown
+        >;
+        if (
+          subscription.cancel_at_period_end === true &&
+          prev.cancel_at_period_end !== true
+        ) {
+          await fireLifecycle(subscription.id, "subscription_cancel_scheduled", {
+            cancel_at_period_end: true,
+          });
+        }
+
         const supabase = createServerClient();
 
         // Upsert the subscription row. Embedded (Payment Element) checkouts
@@ -279,6 +340,28 @@ export async function POST(request: Request) {
         for (const row of linked || []) {
           if (row.target_id) await disableMonitoring(row.target_id);
         }
+
+        await fireLifecycle(subscription.id, "subscription_canceled", {});
+        break;
+      }
+
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const paidSubId = (invoice as unknown as Record<string, unknown>)
+          .subscription as string | undefined;
+        if (paidSubId) {
+          if (invoice.billing_reason === "subscription_cycle") {
+            await fireLifecycle(paidSubId, "subscription_renewed", {
+              amount_paid: invoice.amount_paid,
+              billing_reason: invoice.billing_reason,
+            });
+          } else if (invoice.billing_reason === "subscription_create") {
+            await fireLifecycle(paidSubId, "subscription_created", {
+              amount_paid: invoice.amount_paid,
+              billing_reason: invoice.billing_reason,
+            });
+          }
+        }
         break;
       }
 
@@ -299,6 +382,7 @@ export async function POST(request: Request) {
             .from("subscriptions")
             .update({ active: false, updated_at: new Date().toISOString() })
             .eq("stripe_subscription_id", subId);
+          await fireLifecycle(subId, "payment_failed", {});
         }
         break;
       }
@@ -313,6 +397,10 @@ export async function POST(request: Request) {
           } catch (err) {
             console.error("[Webhook] EFW refund failed:", err);
           }
+          trackServer("fraud_warning_created", {
+            charge_id: chargeId,
+            actionable: true,
+          });
         }
         break;
       }
@@ -327,6 +415,7 @@ export async function POST(request: Request) {
           } catch (err) {
             console.error("[Webhook] Dispute refund failed:", err);
           }
+          trackServer("dispute_created", { charge_id: chargeId });
         }
         break;
       }

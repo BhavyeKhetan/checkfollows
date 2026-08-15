@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button, Input, Badge, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
+import { track, identify } from "@/lib/mixpanel";
 
 function isValidEmail(val: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val.trim());
@@ -25,11 +26,19 @@ function SignupContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    track("signup_viewed", {
+      has_username: !!username,
+      has_prefill_email: !!prefillEmail,
+    });
+  }, [username, prefillEmail]);
+
   const ready = isValidEmail(email) && password.length >= 8;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    track("signup_submitted", { has_username: !!username });
 
     if (!isValidEmail(email)) {
       setError("Please enter a valid email.");
@@ -57,14 +66,16 @@ function SignupContent() {
 
       if (!res.ok || !data.success) {
         setError(data.error || "Failed to create account.");
+        track("signup_error", { error: data.error || "failed" });
         setLoading(false);
         return;
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
 
       if (signInError) {
         if (data.exists) {
@@ -74,13 +85,26 @@ function SignupContent() {
         } else {
           setError(signInError.message || "Failed to sign in.");
         }
+        track("signup_error", { error: signInError.message || "signin_failed" });
         setLoading(false);
         return;
+      }
+
+      const userId = signInData.user?.id;
+      if (userId) {
+        identify(userId, { $email: signInData.user?.email ?? undefined });
+        track("sign_up_completed", {
+          sign_up_method: "email",
+          platform: "web",
+          is_first_time: true,
+          has_username: !!username,
+        });
       }
 
       router.replace("/account");
     } catch {
       setError("Something went wrong. Please try again.");
+      track("signup_error", { error: "network" });
       setLoading(false);
     }
   };

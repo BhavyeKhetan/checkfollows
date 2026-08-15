@@ -36,7 +36,7 @@ Quota is subordinate to fit. If only 7 candidates survive, generate 7 posts, not
 
 ## GSC lag handling
 
-- Posts < 21 days: `maturity: "infant"`, PostHog-only scoring, never refreshed
+- Posts < 21 days: `maturity: "infant"`, Mixpanel-only scoring, never refreshed
 - `URL is unknown to Google`: not learning evidence yet
 - `Discovered - currently not indexed`: weak crawl-priority signal
 - `Crawled - currently not indexed`: strongest negative example for topic/format selection
