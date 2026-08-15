@@ -822,7 +822,13 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-4">
+            <Link
+              href="/login"
+              className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
+            >
+              Sign in
+            </Link>
             <Button
               variant="primary"
               size="sm"
@@ -879,6 +885,13 @@ export default function Home() {
                 >
                   Reviews
                 </a>
+                <Link
+                  href="/login"
+                  className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Sign in
+                </Link>
                 <div className="pt-2 flex flex-col gap-2">
                   <Button
                     variant="primary"
@@ -1560,13 +1573,17 @@ export default function Home() {
           <div className="flex items-center gap-6 text-xs font-medium text-[#777777]">
             <span>© 2026 CheckFollows</span>
             <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">
-              Privacy Policy
-            </a>
+            <Link href="/login" className="hover:text-[#121212] transition-colors">
+              Sign in
+            </Link>
             <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">
+            <Link href="/privacy" className="hover:text-[#121212] transition-colors">
+              Privacy Policy
+            </Link>
+            <span>·</span>
+            <Link href="/terms" className="hover:text-[#121212] transition-colors">
               Terms of Service
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

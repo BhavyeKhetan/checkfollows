@@ -33,7 +33,13 @@ export function NavBar() {
           ))}
         </div>
 
-        <div className="hidden sm:flex items-center">
+        <div className="hidden sm:flex items-center gap-4">
+          <Link
+            href="/login"
+            className="text-sm font-semibold text-[#555555] hover:text-[#121212] transition-colors"
+          >
+            Sign in
+          </Link>
           <Link
             href="/"
             className="inline-flex items-center justify-center font-semibold transition-all duration-200 rounded-full text-xs px-3.5 py-2 gap-1.5 bg-[#E7F256] text-[#121212] hover:bg-[#DAE64A] active:bg-[#C7D337] border border-transparent shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
@@ -70,6 +76,13 @@ export function NavBar() {
                   {link.label}
                 </Link>
               ))}
+              <Link
+                href="/login"
+                className="block text-sm font-semibold text-[#555555] hover:text-[#121212]"
+                onClick={() => setOpen(false)}
+              >
+                Sign in
+              </Link>
               <div className="pt-2">
                 <Link
                   href="/"
