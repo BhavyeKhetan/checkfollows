@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 const ROOT = path.join(process.cwd(), "growth", "content-intelligence");
-const SITE_URL = process.env.GSC_SITE_URL || "https://checkfollows.com/";
+const SITE_URL = process.env.GSC_SITE_URL || "sc-domain:checkfollows.com";
 const BLOG_BASE_URL = "https://checkfollows.com/blog";
 const DEFAULT_DELAY_MS = Number(process.env.GSC_URL_INSPECTION_DELAY_MS || 650);
 

@@ -3,7 +3,7 @@ import * as path from "path";
 
 const SITE = "https://checkfollows.com";
 const SITEMAP_URL = `${SITE}/sitemap.xml`;
-const GSC_SITE_URL = process.env.GSC_SITE_URL || "https://checkfollows.com/";
+const GSC_SITE_URL = process.env.GSC_SITE_URL || "sc-domain:checkfollows.com";
 const PUBLIC_DIR = path.join(process.cwd(), "public");
 
 function hasGscCredentials(): boolean {
