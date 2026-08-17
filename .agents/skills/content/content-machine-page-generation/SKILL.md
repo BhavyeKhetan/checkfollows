@@ -64,6 +64,7 @@ Emotional context is allowed only after the factual answer is established.
 ## Drafting checklist
 
 - Does the post answer the query fast?
+- **Does it hit 800-2500 words of body copy (target 900+ so it clears the 800-word validation floor), with at least 3 H2 sections and a first paragraph under 100 words?**
 - Does it stay in the repo's voice?
 - Does it avoid banned AI phrases and rhythm?
 - Does it offer specific next actions (not vague advice)?
