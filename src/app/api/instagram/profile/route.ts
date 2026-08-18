@@ -3,6 +3,25 @@ import { getPreviewProvider } from "@/lib/instagram/provider";
 import { createServerClient } from "@/lib/supabase/server";
 import { upsertInstagramTarget } from "@/lib/monitoring";
 
+function isInstagramUrlExpired(url: string | null | undefined): boolean {
+  if (!url) return true;
+  try {
+    const urlObj = new URL(url);
+    const oe = urlObj.searchParams.get("oe");
+    if (oe) {
+      const expirySecs = parseInt(oe, 16);
+      if (!isNaN(expirySecs)) {
+        // Expired if current timestamp exceeds expiry time (with 5 min safety buffer)
+        return expirySecs * 1000 <= Date.now() + 5 * 60 * 1000;
+      }
+    }
+  } catch {
+    // Non-URL or local relative path is not expired
+    return false;
+  }
+  return false;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const username = searchParams.get("username");
@@ -23,23 +42,28 @@ export async function GET(request: Request) {
     );
   }
 
-  try {
-    const supabase = createServerClient();
+  const supabase = createServerClient();
+  let cachedTarget: Record<string, any> | null = null;
 
+  try {
     // ─── CACHING LAYER: Check DB first ───
-    const { data: cachedTarget } = await supabase
+    const { data } = await supabase
       .from("instagram_targets")
       .select("*")
       .eq("username", cleanUsername)
       .maybeSingle();
 
-    if (cachedTarget) {
-      const lastScanned = cachedTarget.last_scanned_at
-        ? new Date(cachedTarget.last_scanned_at).getTime()
-        : 0;
-      const isFresh = Date.now() - lastScanned < 24 * 60 * 60 * 1000;
+    cachedTarget = data;
 
-      if (isFresh || cachedTarget.follower_count > 0) {
+    if (cachedTarget) {
+      const lastUpdated = cachedTarget.updated_at
+        ? new Date(cachedTarget.updated_at).getTime()
+        : (cachedTarget.last_scanned_at ? new Date(cachedTarget.last_scanned_at).getTime() : 0);
+
+      const isFresh = Date.now() - lastUpdated < 12 * 60 * 60 * 1000; // 12 hours
+      const avatarExpired = isInstagramUrlExpired(cachedTarget.avatar_url);
+
+      if (isFresh && !avatarExpired && cachedTarget.avatar_url) {
         return NextResponse.json({
           success: true,
           cached: true,
@@ -53,8 +77,8 @@ export async function GET(request: Request) {
             followingCount: cachedTarget.following_count || 603,
             isPrivate: cachedTarget.is_private || false,
             isVerified: cachedTarget.is_verified || false,
-            biography: (cachedTarget as { biography?: string }).biography || "Don't be shy with it :) 📍 SF",
-            postsCount: (cachedTarget as { posts_count?: number }).posts_count || 12,
+            biography: cachedTarget.biography || "Don't be shy with it :) 📍 SF",
+            postsCount: cachedTarget.posts_count || 12,
           },
         });
       }
@@ -99,21 +123,49 @@ export async function GET(request: Request) {
         isPrivate: profile.isPrivate,
         isVerified: profile.isVerified,
         biography: profile.biography || "Don't be shy with it :) 📍 SF",
-        postsCount: 1,
+        postsCount: profile.postsCount ?? 1,
       },
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch profile";
 
-    if (message.includes("not found")) {
+    if (message.includes("not found") || message.includes("Account not found")) {
       return NextResponse.json(
         { success: false, notFound: true, error: "not_found" },
         { status: 404 }
       );
     }
 
+    if (message.includes("private") || message.includes("This account is private")) {
+      return NextResponse.json(
+        { success: false, isPrivate: true, error: "private_account" },
+        { status: 200 }
+      );
+    }
+
     console.error("Profile fetch error:", message);
+
+    if (cachedTarget) {
+      return NextResponse.json({
+        success: true,
+        cached: true,
+        fallback: true,
+        profile: {
+          id: cachedTarget.id,
+          instagramId: cachedTarget.instagram_id,
+          username: cachedTarget.username,
+          fullName: cachedTarget.full_name || cachedTarget.username,
+          avatarUrl: cachedTarget.avatar_url,
+          followerCount: cachedTarget.follower_count || 1080,
+          followingCount: cachedTarget.following_count || 603,
+          isPrivate: cachedTarget.is_private || false,
+          isVerified: cachedTarget.is_verified || false,
+          biography: cachedTarget.biography || "Don't be shy with it :) 📍 SF",
+          postsCount: cachedTarget.posts_count || 12,
+        },
+      });
+    }
 
     // Dynamic fallback profile if live scraper is rate-limited
     return NextResponse.json({

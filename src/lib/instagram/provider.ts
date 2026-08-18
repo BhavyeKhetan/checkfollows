@@ -28,6 +28,7 @@ export interface InstagramProfile {
   followingCount: number;
   biography: string | null;
   externalUrl: string | null;
+  postsCount?: number;
 }
 
 export interface InstagramUserEntry {

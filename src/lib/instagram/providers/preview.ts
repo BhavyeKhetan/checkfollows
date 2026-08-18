@@ -151,6 +151,7 @@ function toProfile(item: PreviewDatasetItem): InstagramProfile {
     followingCount: item.followsCount || 0,
     biography: item.biography || null,
     externalUrl: item.externalUrl || null,
+    postsCount: item.postsCount || 0,
   };
 }
 

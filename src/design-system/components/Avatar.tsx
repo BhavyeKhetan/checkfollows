@@ -31,8 +31,10 @@ export function Avatar({
   const proxiedSrc = src
     ? src.startsWith("/") || src.startsWith("data:")
       ? src
-      : `/api/proxy-image?url=${encodeURIComponent(src)}`
-    : null;
+      : `/api/proxy-image?url=${encodeURIComponent(src)}${username ? `&username=${encodeURIComponent(username)}` : ""}`
+    : username
+      ? `/api/proxy-image?username=${encodeURIComponent(username)}`
+      : null;
 
   return (
     <div className={`relative inline-block shrink-0 ${className}`}>
