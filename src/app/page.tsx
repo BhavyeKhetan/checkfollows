@@ -39,27 +39,54 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { track } from "@/lib/mixpanel";
 
+function isInstagramUrlExpired(url: string | null | undefined): boolean {
+  if (!url) return true;
+  try {
+    const urlObj = new URL(url);
+    const oe = urlObj.searchParams.get("oe");
+    if (oe) {
+      const expirySecs = parseInt(oe, 16);
+      if (!isNaN(expirySecs)) {
+        return expirySecs * 1000 <= Date.now() + 5 * 60 * 1000;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 // ─── Client-side profile cache (avoid re-hitting the API) ──────────
-const PROFILE_CACHE_KEY = "cf_profile_cache_v1";
-const PROFILE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const PROFILE_CACHE_KEY = "cf_profile_cache_v3";
+const PROFILE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const profileMemoryCache = new Map<string, { t: number; v: unknown }>();
 
 function readCachedProfile(username: string) {
   const key = username.toLowerCase();
   const memoryHit = profileMemoryCache.get(key);
   if (memoryHit) {
-    if (Date.now() - memoryHit.t < PROFILE_CACHE_TTL) return memoryHit.v;
+    const p = memoryHit.v as { avatarUrl?: string | null } | undefined;
+    if (Date.now() - memoryHit.t < PROFILE_CACHE_TTL && p?.avatarUrl && !isInstagramUrlExpired(p.avatarUrl)) {
+      return memoryHit.v;
+    }
     profileMemoryCache.delete(key);
   }
   try {
     if (typeof window === "undefined") return null;
+    // Clear legacy v1/v2 caches if present
+    sessionStorage.removeItem("cf_profile_cache_v1");
+    sessionStorage.removeItem("cf_profile_cache_v2");
+
     const raw = sessionStorage.getItem(PROFILE_CACHE_KEY);
     if (!raw) return null;
     const store = JSON.parse(raw) as Record<string, { t: number; v: unknown }>;
     const hit = store[key];
     if (hit && Date.now() - hit.t < PROFILE_CACHE_TTL) {
-      profileMemoryCache.set(key, hit);
-      return hit.v;
+      const p = hit.v as { avatarUrl?: string | null } | undefined;
+      if (p?.avatarUrl && !isInstagramUrlExpired(p.avatarUrl)) {
+        profileMemoryCache.set(key, hit);
+        return hit.v;
+      }
     }
   } catch {
     /* ignore corrupt cache */

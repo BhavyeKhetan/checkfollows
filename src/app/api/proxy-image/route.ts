@@ -87,7 +87,7 @@ export async function GET(request: Request) {
   return new NextResponse(fallbackSvg, {
     headers: {
       "Content-Type": "image/svg+xml",
-      "Cache-Control": "public, max-age=60",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }
