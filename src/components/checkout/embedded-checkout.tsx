@@ -264,14 +264,56 @@ function CheckoutFormInner({
 
     const returnUrl = `${window.location.origin}/onboarding?finalize=1`;
 
-    const { error: submitError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: returnUrl,
-        ...(payerEmail.includes("@") ? { receipt_email: payerEmail } : {}),
-      },
-      redirect: "if_required",
-    });
+    // Safety net: confirmPayment can hang indefinitely (dropped connection) or
+    // reject, which would leave the button stuck on "Processing..." forever.
+    // After 45s, surface an error and re-enable the button. If the confirm
+    // resolves later anyway, its real result simply replaces this message.
+    const timer = setTimeout(() => {
+      setError(
+        "Payment is taking longer than expected — check your connection and try again."
+      );
+      setLoading(false);
+      track("payment_timeout", {
+        method,
+        cadence,
+        tier,
+        email_alerts: emailAlerts,
+      });
+    }, 45000);
+
+    let result: {
+      paymentIntent?: { status: string } | null;
+      error?: { message?: string; code?: string; type?: string } | null;
+    };
+    try {
+      result = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: returnUrl,
+          ...(payerEmail.includes("@") ? { receipt_email: payerEmail } : {}),
+        },
+        redirect: "if_required",
+      });
+    } catch (err) {
+      // confirmPayment can also reject outright on network failure.
+      clearTimeout(timer);
+      console.error("confirmPayment failed:", err);
+      setError(
+        "Payment could not be completed — check your connection and try again."
+      );
+      track("payment_failed", {
+        error: "exception",
+        method,
+        cadence,
+        tier,
+        email_alerts: emailAlerts,
+      });
+      setLoading(false);
+      return;
+    }
+    clearTimeout(timer);
+
+    const { error: submitError, paymentIntent } = result;
 
     if (submitError) {
       setError(submitError.message || "Payment failed");
