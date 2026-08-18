@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { BLOG_POSTS } from "@/lib/blog-posts";
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://checkfollows.vercel.app";
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://www.checkfollows.com";
 
 const STATIC_ROUTES = [
   { path: "", priority: 1.0 },

@@ -19,13 +19,19 @@ export const metadata: Metadata = {
   title: "CheckFollows — See who they recently followed on Instagram",
   description:
     "Search any public Instagram account to see who they recently followed and their newest followers. 100% anonymous — no Instagram login needed.",
+  manifest: "/site.webmanifest",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon.png", type: "image/png" },
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/icon-48.png", sizes: "48x48", type: "image/png" },
+      { url: "/icon-96.png", sizes: "96x96", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/apple-icon.png",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180" },
+    ],
   },
   openGraph: {
     type: "website",
@@ -75,6 +81,14 @@ export default function RootLayout({
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
+        <link rel="icon" href="/favicon.ico" sizes="48x48" />
+        <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/icon-48.png" />
+        <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+        <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="min-h-full flex flex-col bg-[#F9F9F7] text-[#121212]">
         <MixpanelProvider>
