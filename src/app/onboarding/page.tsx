@@ -924,7 +924,7 @@ function PaywallStep({
         <div className="max-w-md mx-auto space-y-2">
           <div className="flex items-center justify-between text-xs px-1">
             <span className="text-[#555555] font-semibold">
-              {cadence === "weekly" ? "Weekly" : "Quarterly"}
+              {cadence === "weekly" ? "Weekly" : `Quarterly ($${total.toFixed(2)})`}
               {emailAlerts ? " + alerts" : ""}
             </span>
             <span className="flex items-center gap-2">
@@ -932,7 +932,7 @@ function PaywallStep({
                 {anchorPrice(cadence, emailAlerts, tier)}
               </span>
               <span className="text-[#121212] font-extrabold text-sm">
-                ${total.toFixed(2)}{PERIOD[cadence]}
+                {cadence === "quarterly" ? `$${displayWeekly.toFixed(2)}/wk` : `$${total.toFixed(2)}/week`}
               </span>
             </span>
           </div>

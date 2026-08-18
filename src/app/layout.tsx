@@ -70,6 +70,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased light`}
     >
+      <head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-[#F9F9F7] text-[#121212]">
         <MixpanelProvider>
           <Suspense fallback={null}>
