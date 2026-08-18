@@ -813,57 +813,65 @@ function PaywallStep({
           )}
         </p>
 
-        {/* Email alerts upsell — big, prominent toggle (default OFF) */}
-        <button
-          type="button"
-          role="switch"
+        {/* Email alerts upsell — clean, spacious card with full-width readable text */}
+        <div
+          role="button"
+          tabIndex={0}
           aria-checked={emailAlerts}
           onClick={() => setEmailAlerts(!emailAlerts)}
-          className={`mt-5 w-full inline-flex items-center justify-between gap-4 rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 ${
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEmailAlerts(!emailAlerts);
+            }
+          }}
+          className={`mt-5 w-full rounded-2xl border-2 p-4 text-left transition-all duration-200 cursor-pointer ${
             emailAlerts
-              ? "border-[#121212] bg-[#E7F256]/15"
+              ? "border-[#121212] bg-[#E7F256]/15 shadow-sm"
               : "border-[#E2E2DC] bg-[#F9F9F7] hover:border-[#C9C9C0]"
           }`}
         >
-          <span className="flex items-center gap-3 min-w-0">
-            <span
-              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                emailAlerts ? "bg-[#121212] text-[#E7F256]" : "bg-[#EDEDE8] text-[#555555]"
-              }`}
-            >
-              <Bell className="w-5 h-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm sm:text-base font-extrabold text-[#121212] leading-tight">
-                Email change alerts
-              </span>
-              <span className="block text-xs text-[#555555] font-medium mt-0.5">
-                Get notified the moment they follow or unfollow someone
-              </span>
-            </span>
-          </span>
-          <span className="flex items-center gap-2 shrink-0">
-            <span className="text-right">
-              <span className="block text-xs font-extrabold text-[#047857]">
-                +${alertsWeekly.toFixed(2)}/wk
-              </span>
-              <span className="block text-[10px] text-[#777777] font-medium">
-                {cadence === "weekly" ? "billed weekly" : "<$1/wk · $10/qtr"}
-              </span>
-            </span>
-            <span
-              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+          {/* Header Row: Icon, Title, Price Tag, and Toggle */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  emailAlerts ? "bg-[#121212] text-[#E7F256]" : "bg-[#EDEDE8] text-[#555555]"
+                }`}
+              >
+                <Bell className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm sm:text-base font-extrabold text-[#121212] leading-tight">
+                  Email Change Alerts
+                </h4>
+                <p className="text-xs font-bold text-[#047857] mt-0.5">
+                  +${alertsWeekly.toFixed(2)}/wk{" "}
+                  <span className="text-[#777777] font-normal">
+                    ({cadence === "weekly" ? "billed weekly" : "<$1/wk · $10 billed quarterly"})
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div
+              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
                 emailAlerts ? "bg-[#121212]" : "bg-[#D9D9D2]"
               }`}
             >
               <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                   emailAlerts ? "translate-x-6" : "translate-x-1"
                 }`}
               />
-            </span>
-          </span>
-        </button>
+            </div>
+          </div>
+
+          {/* Full-width 2-sentence readable description */}
+          <p className="text-xs text-[#555555] font-medium leading-relaxed mt-3 pt-3 border-t border-[#E2E2DC]/80">
+            Get instant notifications the moment they follow or unfollow someone. We check their account every 48 hours and send detailed change alerts straight to your inbox.
+          </p>
+        </div>
 
         {/* Features */}
         <ul className="mt-5 space-y-2.5 border-t border-[#E2E2DC] pt-5">
