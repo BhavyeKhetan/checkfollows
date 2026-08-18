@@ -234,3 +234,12 @@ body {
   animation-play-state: paused;
 }
 
+/* Prevent iOS Safari from auto-zooming on focus when font-size < 16px */
+@media screen and (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
