@@ -367,7 +367,7 @@ function CheckoutFormInner({
           onChange={(e) => setPayerEmail(e.target.value)}
           placeholder="your@email.com"
           required
-          className="w-full p-3 rounded-xl bg-[#FFFFFF] border border-[#E2E2DC] text-[#121212] placeholder-[#B9B9B2] text-sm font-medium focus:outline-none focus:border-[#121212] transition-colors"
+          className="w-full p-3 rounded-xl bg-[#FFFFFF] border border-[#E2E2DC] text-[#121212] placeholder-[#B9B9B2] text-base font-medium focus:outline-none focus:border-[#121212] transition-colors"
         />
       </div>
 

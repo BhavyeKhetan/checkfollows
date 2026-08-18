@@ -274,7 +274,7 @@ export default function AccountPage() {
                   max={50}
                   value={spikeThreshold}
                   onChange={(e) => setSpikeThreshold(parseInt(e.target.value, 10) || 1)}
-                  className="w-20 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-sm font-bold text-[#121212] outline-none focus:border-[#121212]"
+                  className="w-20 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-base font-bold text-[#121212] outline-none focus:border-[#121212]"
                 />
                 <span className="text-sm text-[#555555] font-medium">new follows in one day</span>
                 <Button

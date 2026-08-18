@@ -776,7 +776,7 @@ export default function TrackPage() {
                   value={mutualUsername}
                   onChange={(e) => setMutualUsername(e.target.value)}
                   placeholder="@username"
-                  className="min-w-0 flex-1 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-sm font-medium text-[#121212] placeholder:text-[#999999] outline-none focus:border-[#121212]"
+                  className="min-w-0 flex-1 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-base font-medium text-[#121212] placeholder:text-[#999999] outline-none focus:border-[#121212]"
                 />
                 <Button
                   variant={credits.mutuals > 0 ? "primary" : "secondary"}
