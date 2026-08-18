@@ -74,7 +74,7 @@ const PRICING_FAQS = [
 
 export function Pricing() {
   const [cadence, setCadence] = useState<Cadence>("quarterly");
-  const [tier, setTier] = useState<Tier>("base");
+  const [tier, setTier] = useState<Tier>("premium");
   const [emailAlerts, setEmailAlerts] = useState(false);
 
   useEffect(() => {

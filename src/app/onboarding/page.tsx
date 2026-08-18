@@ -108,7 +108,7 @@ function OnboardingContent() {
   const [email, setEmail] = useState("");
   const [relationship, setRelationship] = useState("");
   const [cadence, setCadence] = useState<Cadence>("quarterly");
-  const [tier, setTier] = useState<Tier>("base");
+  const [tier, setTier] = useState<Tier>("premium");
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);

@@ -169,7 +169,7 @@ function isValidEmail(email?: string): boolean {
 function CheckoutFormInner({
   clientSecret,
   cadence,
-  tier = "base",
+  tier = "premium",
   emailAlerts = false,
   subscriptionId,
   defaultEmail,
@@ -413,7 +413,7 @@ function cacheKeyFor(
 
 export default function EmbeddedCheckout({
   cadence,
-  tier = "base",
+  tier = "premium",
   emailAlerts,
   email,
   username,

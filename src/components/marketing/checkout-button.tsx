@@ -7,7 +7,7 @@ import { track } from "@/lib/mixpanel";
 
 export function CheckoutButton({
   cadence,
-  tier = "base",
+  tier = "premium",
   emailAlerts = false,
   label = "Get started",
   variant = "primary",
