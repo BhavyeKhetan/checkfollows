@@ -24,19 +24,29 @@ const FEATURES = [
 ];
 
 // Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
-// Display-only — the actual Stripe charge stays at the discounted price.
+// For quarterly, compare directly against paying weekly ($12.99/wk or $9.99/wk).
 function anchorPrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): string {
-  if (tier === "premium") {
-    if (cadence === "weekly") return emailAlerts ? "$37.49" : "$32.49";
-    return emailAlerts ? "$187.49" : "$162.49";
+  if (cadence === "quarterly") {
+    const weeklyPrice = tier === "premium" ? (emailAlerts ? 14.99 : 12.99) : (emailAlerts ? 11.99 : 9.99);
+    return `$${weeklyPrice.toFixed(2)}`;
   }
-  if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
-  return emailAlerts ? "$149.99" : "$124.99";
+  if (tier === "premium") {
+    return emailAlerts ? "$37.49" : "$32.49";
+  }
+  return emailAlerts ? "$29.99" : "$24.99";
 }
 
 function livePrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): number {
   const base = tier === "premium" ? PREMIUM_PRICE[cadence] : BASE_PRICE[cadence];
   return base + (emailAlerts ? ALERTS_ADDON[cadence] : 0);
+}
+
+function weeklyRate(amount: number, cadence: Cadence): number {
+  return cadence === "quarterly" ? amount / 13 : amount;
+}
+
+function alertsWeeklyRate(cadence: Cadence): number {
+  return cadence === "quarterly" ? ALERTS_ADDON.quarterly / 13 : ALERTS_ADDON.weekly;
 }
 
 const PRICING_FAQS = [
@@ -143,7 +153,7 @@ export function Pricing() {
                   track("billing_cadence_selected", { cadence: "quarterly", source: "pricing" });
                 }}
                 label="Quarterly"
-                badge="Save 60%"
+                badge="Save 62%"
               />
             </div>
           </div>
@@ -179,7 +189,7 @@ export function Pricing() {
                 />
               </span>
               <span className="text-[11px] font-bold text-[#047857]">
-                {cadence === "weekly" ? "+$2/wk" : "+$10/qtr"}
+                {cadence === "weekly" ? "+$2.00/wk" : "+$0.77/wk (<$1/wk)"}
               </span>
             </button>
           </div>
@@ -232,7 +242,7 @@ export function Pricing() {
               }`}
             >
               <Badge variant="lime" size="sm" className="absolute -top-3 left-6">
-                <Zap className="w-3 h-3" /> Best value · 60% OFF
+                <Zap className="w-3 h-3" /> Best value · Save 62%
               </Badge>
               <h3 className="text-lg font-bold text-[#121212]">Quarterly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For ongoing monitoring</p>
@@ -241,14 +251,14 @@ export function Pricing() {
                   {anchorPrice("quarterly", emailAlerts, tier)}
                 </span>
                 <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
-                  {"$" + livePrice("quarterly", emailAlerts, tier).toFixed(2)}
+                  {"$" + (livePrice("quarterly", emailAlerts, tier) / 13).toFixed(2)}
                 </span>
-                <span className="text-sm font-semibold text-[#777777]">/quarter</span>
+                <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                ≈ {"$" + (livePrice("quarterly", emailAlerts, tier) / 3).toFixed(2)}/mo · Billed every 3 months
+                <strong className="text-[#121212] font-bold">${livePrice("quarterly", emailAlerts, tier).toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly
                 {emailAlerts && (
-                  <span className="text-[#047857] font-semibold"> · +$10.00/qtr email alerts</span>
+                  <span className="text-[#047857] font-semibold"> · includes +${(ALERTS_ADDON.quarterly / 13).toFixed(2)}/wk email alerts</span>
                 )}
               </p>
               <div className="mt-6 flex-1">

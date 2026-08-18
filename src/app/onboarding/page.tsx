@@ -62,17 +62,28 @@ const PAYWALL_FAQS = [
 const BASE_PRICES: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
 const PREMIUM_PRICES: Record<Cadence, number> = { weekly: 12.99, quarterly: 64.99 };
 const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
-const PERIOD: Record<Cadence, string> = { weekly: "/week", quarterly: "/quarter" };
+const PERIOD: Record<Cadence, string> = { weekly: "/week", quarterly: "/week" };
 
-// Fake-anchor "original" price shown struck-through so the live price reads as 60% off.
-// Display-only — the actual Stripe charge stays at the discounted price.
+// Weekly equivalent calculation (1 quarter = 13 weeks)
+function weeklyRate(amount: number, cadence: Cadence): number {
+  return cadence === "quarterly" ? amount / 13 : amount;
+}
+
+// Alerts weekly add-on cost
+function alertsWeeklyRate(cadence: Cadence): number {
+  return cadence === "quarterly" ? ALERTS_ADDON.quarterly / 13 : ALERTS_ADDON.weekly;
+}
+
+// Anchor comparison: For quarterly, compare directly against paying weekly ($12.99/wk or $9.99/wk)
 function anchorPrice(cadence: Cadence, emailAlerts: boolean, tier: Tier): string {
-  if (tier === "premium") {
-    if (cadence === "weekly") return emailAlerts ? "$37.49" : "$32.49";
-    return emailAlerts ? "$187.49" : "$162.49";
+  if (cadence === "quarterly") {
+    const weeklyPrice = tier === "premium" ? (emailAlerts ? 14.99 : 12.99) : (emailAlerts ? 11.99 : 9.99);
+    return `$${weeklyPrice.toFixed(2)}`;
   }
-  if (cadence === "weekly") return emailAlerts ? "$29.99" : "$24.99";
-  return emailAlerts ? "$149.99" : "$124.99";
+  if (tier === "premium") {
+    return emailAlerts ? "$37.49" : "$32.49";
+  }
+  return emailAlerts ? "$29.99" : "$24.99";
 }
 
 const SCAN_MESSAGES = [
@@ -386,7 +397,9 @@ function OnboardingContent() {
                     </Badge>
                   </div>
                   <p className="text-[#555555] text-xs font-semibold mt-0.5">
-                    {"$" + total.toFixed(2)} {PERIOD[cadence]}
+                    {cadence === "weekly"
+                      ? `$${total.toFixed(2)}/week`
+                      : `$${weeklyRate(total, "quarterly").toFixed(2)}/wk · $${total.toFixed(2)} billed quarterly`}
                     {emailAlerts && " · with email alerts"}
                   </p>
                 </div>
@@ -418,8 +431,9 @@ function OnboardingContent() {
                 />
               </div>
               <div className="px-5 pb-6 pt-1 text-center">
-                <p className="text-[11px] text-[#777777] font-semibold flex items-center justify-center gap-1.5">
-                  <Lock className="w-3 h-3" /> Secure payment powered by Stripe
+                <p className="text-[#777777] text-xs font-medium flex items-center justify-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#047857]" />
+                  256-bit encrypted · Cancel anytime in 1-click
                 </p>
               </div>
             </motion.div>
@@ -430,7 +444,7 @@ function OnboardingContent() {
   );
 }
 
-// ── Step components ─────────────────────────────────────────────
+// ─── STEP COMPONENTS ───────────────────────────────────────────────
 
 function EmailStep({
   username,
@@ -445,8 +459,7 @@ function EmailStep({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const t = setTimeout(() => inputRef.current?.focus(), 50);
-    return () => clearTimeout(t);
+    inputRef.current?.focus();
   }, []);
 
   const ready = isValidEmail(email);
@@ -455,7 +468,7 @@ function EmailStep({
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
       className="flex-1 flex flex-col justify-between max-w-md mx-auto w-full px-6 pt-10 sm:pt-16 pb-8"
     >
@@ -512,52 +525,51 @@ function RelationshipStep({
 }: {
   username: string;
   selected: string;
-  onSelect: (value: string) => void;
+  onSelect: (v: string) => void;
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.4 }}
-      className="flex-1 flex flex-col justify-center max-w-md mx-auto w-full px-6 py-10"
+      className="flex-1 flex flex-col max-w-md mx-auto w-full px-6 pt-10 sm:pt-16 pb-8"
     >
       <div className="text-center mb-8">
         <Badge variant="mono" size="sm" className="mb-4">
-          STEP 2 OF 3 · QUICK QUESTION
+          STEP 2 OF 3 · CONTEXT
         </Badge>
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#121212] leading-tight">
           Who is {username} to you?
         </h1>
-        <p className="text-[#555555] text-sm font-medium max-w-xs mx-auto mt-3">
-          This helps us tailor your alerts. Your answer stays private.
+        <p className="text-[#555555] text-sm font-medium mt-3">
+          Helps tailor your monitoring alerts and report formatting.
         </p>
       </div>
 
       <div className="space-y-3">
-        {RELATIONSHIP_OPTIONS.map((option, idx) => {
-          const isSelected = selected === option.value;
+        {RELATIONSHIP_OPTIONS.map((opt) => {
+          const active = selected === opt.value;
           return (
-            <motion.button
-              key={option.value}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.06 }}
-              onClick={() => onSelect(option.value)}
-              className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 flex items-center gap-3 ${
-                isSelected
-                  ? "border-[#121212] bg-[#E7F256]/20"
-                  : "border-[#E2E2DC] bg-[#FFFFFF] hover:border-[#C9C9C0] hover:bg-[#FBFBF9]"
+            <button
+              key={opt.value}
+              onClick={() => onSelect(opt.value)}
+              className={`w-full text-left p-4 rounded-2xl border-2 transition-all duration-200 flex items-center justify-between ${
+                active
+                  ? "border-[#121212] bg-[#E7F256]/20 shadow-sm"
+                  : "border-[#E2E2DC] bg-[#FFFFFF] hover:border-[#121212] hover:bg-[#F9F9F7]"
               }`}
             >
-              <span className="text-2xl shrink-0">{option.emoji}</span>
-              <span className="font-bold text-[#121212] text-base">{option.label}</span>
-              {isSelected && (
-                <span className="ml-auto w-5 h-5 rounded-full bg-[#121212] flex items-center justify-center shrink-0">
-                  <Check className="w-3.5 h-3.5 text-[#E7F256] stroke-[3]" />
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">{opt.emoji}</span>
+                <p className="font-extrabold text-sm text-[#121212]">{opt.label}</p>
+              </div>
+              {active && (
+                <span className="w-5 h-5 rounded-full bg-[#121212] text-[#E7F256] flex items-center justify-center text-xs font-bold shrink-0">
+                  ✓
                 </span>
               )}
-            </motion.button>
+            </button>
           );
         })}
       </div>
@@ -661,6 +673,9 @@ function PaywallStep({
   setOpenFaq: (i: number | null) => void;
   onOpenCheckout: () => void;
 }) {
+  const displayWeekly = weeklyRate(total, cadence);
+  const alertsWeekly = alertsWeeklyRate(cadence);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -739,7 +754,7 @@ function PaywallStep({
           >
             Quarterly
             <span className="text-[10px] font-bold bg-[#E7F256] text-[#121212] px-1.5 py-0.5 rounded-full">
-              Save 60%
+              Save 62%
             </span>
           </button>
         </div>
@@ -764,7 +779,7 @@ function PaywallStep({
           </div>
           <div className="flex items-center gap-1.5">
             <Badge variant="lime" size="sm">
-              <Zap className="w-3 h-3" /> 60% OFF
+              <Zap className="w-3 h-3" /> {cadence === "quarterly" ? "SAVE 62%" : "60% OFF"}
             </Badge>
             {cadence === "quarterly" && (
               <Badge variant="lime" size="sm">
@@ -779,17 +794,21 @@ function PaywallStep({
             {anchorPrice(cadence, emailAlerts, tier)}
           </span>
           <span className="text-5xl font-extrabold tracking-tight text-[#121212]">
-            ${total.toFixed(2)}
+            ${displayWeekly.toFixed(2)}
           </span>
-          <span className="text-sm font-semibold text-[#777777]">{PERIOD[cadence]}</span>
+          <span className="text-sm font-semibold text-[#777777]">/week</span>
         </div>
         <p className="text-xs text-[#888888] mt-2">
-          {cadence === "weekly"
-            ? "Billed weekly"
-            : `≈ $${(total / 3).toFixed(2)}/mo · Billed every 3 months`}
+          {cadence === "weekly" ? (
+            "Billed weekly · Cancel anytime"
+          ) : (
+            <>
+              <strong className="text-[#121212] font-extrabold">${total.toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly
+            </>
+          )}
           {emailAlerts && (
             <span className="text-[#047857] font-semibold text-[11px]">
-              {" "}· +${ALERTS_ADDON[cadence].toFixed(2)}/email alerts
+              {" "}· includes +${alertsWeekly.toFixed(2)}/wk email alerts
             </span>
           )}
         </p>
@@ -824,8 +843,13 @@ function PaywallStep({
             </span>
           </span>
           <span className="flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold text-[#047857]">
-              +${ALERTS_ADDON[cadence].toFixed(2)}{cadence === "weekly" ? "/wk" : "/qtr"}
+            <span className="text-right">
+              <span className="block text-xs font-extrabold text-[#047857]">
+                +${alertsWeekly.toFixed(2)}/wk
+              </span>
+              <span className="block text-[10px] text-[#777777] font-medium">
+                {cadence === "weekly" ? "billed weekly" : "<$1/wk · $10/qtr"}
+              </span>
             </span>
             <span
               className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
