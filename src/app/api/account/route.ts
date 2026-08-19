@@ -17,17 +17,6 @@ export async function GET() {
   const supabase = createServerClient();
   const active = await hasActiveSubscription(user.id);
 
-  const [spikeRow, credits] = await Promise.all([
-    supabase
-      .from("subscriptions")
-      .select("spike_threshold")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    getCreditsSummary(user.id),
-  ]);
-
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
     .select(
@@ -44,9 +33,42 @@ export async function GET() {
     );
   }
 
-  const targetIds = (subs || [])
-    .map((s) => s.target_id)
-    .filter((id): id is string => !!id);
+  const paidSubs = (subs || []).filter((s) => !!s.stripe_subscription_id);
+  const latestPaid = paidSubs[0];
+  const targetIds = [...new Set(
+    (subs || [])
+      .map((s) => s.target_id)
+      .filter((id): id is string => !!id)
+  )];
+
+  if (!active) {
+    return NextResponse.json({
+      success: true,
+      user: { id: user.id, email: user.email },
+      hasActiveSubscription: false,
+      subscriptions: [],
+      credits: { export: 0, rescan_credits: 0, mutuals: 0 },
+      spikeThreshold: 5,
+      lockedTrackedAccountCount: targetIds.length,
+      canRenew: paidSubs.length > 0,
+      renewalDefaults: {
+        tier: latestPaid?.tier === "premium" ? "premium" : "base",
+        emailAlerts: latestPaid?.plan === "pro",
+        cadence: "weekly",
+      },
+    });
+  }
+
+  const [spikeRow, credits] = await Promise.all([
+    supabase
+      .from("subscriptions")
+      .select("spike_threshold")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    getCreditsSummary(user.id),
+  ]);
 
   let targets: Record<string, unknown>[] = [];
   if (targetIds.length > 0) {

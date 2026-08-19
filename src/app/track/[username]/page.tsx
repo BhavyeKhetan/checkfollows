@@ -30,7 +30,9 @@ export default async function TrackPage({
 
   const active = await hasActiveSubscription(user.id);
   if (!active) {
-    redirect(`/onboarding?username=${encodeURIComponent(username)}`);
+    redirect(
+      `/account?renew=1&returnTo=${encodeURIComponent(`/track/${username}`)}`
+    );
   }
 
   const [timeline, credits] = await Promise.all([

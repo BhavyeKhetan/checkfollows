@@ -206,6 +206,33 @@ export async function POST(request: Request) {
           if (targetId) {
             await enableMonitoring(targetId);
           }
+
+          // Renewal checkouts are generic subscriptions. Reattach the new
+          // Stripe subscription to every historical target owned by this user
+          // and resume monitoring only after Stripe confirms checkout.
+          if (metadata.reactivation === "true" && userId) {
+            const { data: historicalRows } = await supabase
+              .from("subscriptions")
+              .select("id, target_id")
+              .eq("user_id", userId)
+              .not("target_id", "is", null);
+
+            for (const row of historicalRows || []) {
+              await supabase
+                .from("subscriptions")
+                .update({
+                  plan,
+                  tier,
+                  stripe_customer_id: customerId,
+                  stripe_subscription_id: subscriptionId,
+                  active: true,
+                  user_paused: false,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", row.id);
+              if (row.target_id) await enableMonitoring(row.target_id);
+            }
+          }
         }
         break;
       }
