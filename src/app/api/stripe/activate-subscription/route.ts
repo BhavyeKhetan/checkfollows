@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
-import {
-  enableMonitoring,
-  fullBaselineScan,
-  getLatestSnapshot,
-  getEventsForTarget,
-} from "@/lib/monitoring";
+import { enableMonitoring } from "@/lib/monitoring";
 
 /**
  * POST /api/stripe/activate-subscription
@@ -119,33 +114,31 @@ export async function POST(request: Request) {
       await enableMonitoring(targetId);
     }
 
-    // Establish baseline only if none exists and no scan is running.
-    let baseline: Awaited<ReturnType<typeof fullBaselineScan>> | null = null;
-    if (targetId && username) {
-      const existingSnapshot = await getLatestSnapshot(targetId, "following");
-      const { data: runningScan } = await supabase
-        .from("scans")
-        .select("id")
-        .eq("target_id", targetId)
-        .eq("status", "running")
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingSnapshot && !runningScan) {
-        try {
-          baseline = await fullBaselineScan(username);
-        } catch (err) {
-          console.error("activate-subscription: baseline scan failed:", err);
-        }
+    // Establish the baseline in the BACKGROUND. The full-following Apify scan
+    // can take minutes; awaiting it here leaves the buyer stuck on
+    // "Processing..." after their card already succeeded. The hourly monitor
+    // cron is the authoritative path: it atomically claims this target
+    // (next_scan_at is already "now" via enableMonitoring above) and
+    // establishes the baseline + diffs on its next run. We also nudge that
+    // same cron to run immediately, best-effort, so the first scan starts
+    // right away without blocking this response.
+    try {
+      if (targetId && process.env.CRON_SECRET) {
+        const baseUrl =
+          process.env.NEXT_PUBLIC_SITE_URL ||
+          request.headers.get("origin") ||
+          "https://www.checkfollows.com";
+        fetch(
+          `${baseUrl}/api/cron/monitor?secret=${encodeURIComponent(
+            process.env.CRON_SECRET
+          )}`,
+          { method: "POST" }
+        ).catch(() => {
+          /* best-effort */
+        });
       }
-    }
-
-    let events: unknown[] = [];
-    if (targetId) {
-      events = await getEventsForTarget(targetId, {
-        limit: 50,
-        confirmedOnly: true,
-      });
+    } catch {
+      /* best-effort */
     }
 
     return NextResponse.json({
@@ -153,9 +146,8 @@ export async function POST(request: Request) {
       activated: true,
       targetId,
       username,
-      baselineEstablished: !!baseline,
-      followingCount: baseline?.following.length ?? null,
-      events,
+      baselineEstablished: false,
+      followingCount: null,
     });
   } catch (error) {
     console.error("Stripe activate-subscription error:", error);
