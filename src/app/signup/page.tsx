@@ -33,7 +33,7 @@ function SignupContent() {
     });
   }, [username, prefillEmail]);
 
-  const ready = isValidEmail(email) && password.length >= 8;
+  const passwordCharactersRemaining = Math.max(0, 8 - password.length);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,7 +198,6 @@ function SignupContent() {
             variant="primary"
             size="lg"
             fullWidth
-            disabled={!ready}
             isLoading={loading}
             rightIcon={<ArrowRight className="w-4 h-4" />}
             className="font-extrabold"
@@ -206,11 +205,11 @@ function SignupContent() {
             Create account
           </Button>
 
-          {!ready && (
+          {passwordCharactersRemaining > 0 && (
             <p className="text-xs text-[#777777] text-center font-medium -mt-2">
-              {!isValidEmail(email)
-                ? "Enter a valid email to continue."
-                : "Use a password with at least 8 characters."}
+              {password.length === 0
+                ? "Use a password with at least 8 characters."
+                : `Add ${passwordCharactersRemaining} more ${passwordCharactersRemaining === 1 ? "character" : "characters"} to your password.`}
             </p>
           )}
 
