@@ -1,31 +1,18 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase/server";
-import { getAuthUser } from "@/lib/supabase/auth";
-import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
-import { INCLUDED_ACCOUNTS } from "@/lib/account-capacity-rules";
 import { getAccountCapacity } from "@/lib/account-capacity";
-import {
-  getStripe,
-  getStripePriceId,
-  getEmailAlertsPriceId,
-  type PlanTier,
-} from "@/lib/stripe";
+import { disableMonitoringIfUnused, enableMonitoring } from "@/lib/monitoring";
+import { getAuthUser, ownsTarget } from "@/lib/supabase/auth";
+import { createServerClient } from "@/lib/supabase/server";
+import type { PlanTier } from "@/lib/stripe";
 
 /**
- * Track Changes endpoint.
- *
- * GATES monitoring behind a Stripe subscription:
- *   - Already has an ACTIVE paid subscription for this target+email  → enable monitoring (idempotent).
- *   - Email has an ACTIVE paid subscription for a different target   → attach this target (no new charge, up to cap).
- *   - No paid subscription at all                                    → create a Stripe Checkout session, return { url }.
- *
- * action=stop disables monitoring for the target (user-initiated stop).
+ * Starts or stops monitoring for an authenticated subscriber. Stripe-backed
+ * concurrent capacity is enforced for both Basic and Premium subscriptions.
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetId, action = "start", email_alerts } = body;
-    const emailAlerts = email_alerts === true || email_alerts === "true";
+    const { targetId, action = "start" } = body;
 
     if (!targetId) {
       return NextResponse.json(
@@ -34,10 +21,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServerClient();
-
-    // Tracking is a paid, authenticated action. Use the signed-in user's
-    // email so subscriptions are tied to the account, not a free-form string.
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
@@ -45,54 +28,44 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-    const email =
-      authUser.email || (typeof body.email === "string" ? body.email : "");
-    const tier: PlanTier = body.tier === "premium" ? "premium" : "base";
 
-    // Both plans now use concurrent capacity: stopping one target frees a slot.
-    const countTracked = async () => {
-      const { count, error } = await supabase
-        .from("subscriptions")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", authUser.id)
-        .eq("active", true)
-        .eq("user_paused", false)
-        .not("target_id", "is", null);
-      if (error) throw new Error(`Failed to count tracked accounts: ${error.message}`);
-      return count ?? 0;
-    };
+    // Stripe, not a client-supplied tier or a stale database flag, is the
+    // entitlement and additional-slot source of truth.
+    const capacity = await getAccountCapacity(authUser.id);
+    if (!capacity) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "An active subscription is required",
+          paywall: "/app/pricing",
+        },
+        { status: 402 }
+      );
+    }
+
+    const supabase = createServerClient();
+    const email = authUser.email || "";
 
     const capacityError = (
       currentCount: number,
       maxAllowed: number,
-      paidTier: PlanTier
+      tier: PlanTier
     ) =>
       NextResponse.json(
         {
           success: false,
-          error: `You're using all ${maxAllowed} concurrent account slots. Add another slot for ${paidTier === "premium" ? "this Premium" : "this Basic"} subscription, or pause an account first.`,
+          error: `You're using all ${maxAllowed} concurrent account slots. Add another slot for this ${tier === "premium" ? "Premium" : "Basic"} subscription, or pause an account first.`,
           atLimit: true,
           canAddCapacity: true,
           currentCount,
           maxAllowed,
-          tier: paidTier,
+          tier,
         },
         { status: 402 }
       );
 
-    // ─── STOP: disable monitoring + mark user-paused ──
-    // user_paused = true prevents Stripe lifecycle events from silently
-    // re-enabling this account later (see webhook handler).
     if (action === "stop") {
-      const { data: ownedRow } = await supabase
-        .from("subscriptions")
-        .select("id, active")
-        .eq("target_id", targetId)
-        .eq("user_id", authUser.id)
-        .not("stripe_subscription_id", "is", null)
-        .maybeSingle();
-
-      if (!ownedRow) {
+      if (!(await ownsTarget(authUser.id, targetId, authUser.email))) {
         return NextResponse.json(
           { success: false, error: "Tracked account not found" },
           { status: 404 }
@@ -103,23 +76,14 @@ export async function POST(request: Request) {
         .from("subscriptions")
         .update({
           user_paused: true,
-          // `active` represents the Stripe entitlement. Pausing monitoring
-          // frees concurrent capacity without making the subscription inactive.
-          active: ownedRow.active,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", ownedRow.id);
-
-      // Targets are shared records. Keep the underlying monitor running if a
-      // different paying customer still has this same target active.
-      const { count: remainingSubscribers } = await supabase
-        .from("subscriptions")
-        .select("*", { count: "exact", head: true })
         .eq("target_id", targetId)
-        .eq("active", true)
-        .eq("user_paused", false)
-        .not("stripe_subscription_id", "is", null);
-      if (!remainingSubscribers) await disableMonitoring(targetId);
+        .eq("user_id", authUser.id);
+
+      // Instagram targets are shared records. Stop the underlying scan only
+      // when no other paying subscriber still monitors this target.
+      await disableMonitoringIfUnused(targetId);
 
       return NextResponse.json({
         success: true,
@@ -127,10 +91,9 @@ export async function POST(request: Request) {
       });
     }
 
-    // ─── START ────────────────────────────────────────────────
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
-        { success: false, error: "A valid email is required to start tracking" },
+        { success: false, error: "A valid account email is required" },
         { status: 400 }
       );
     }
@@ -148,46 +111,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1) Already tracking this exact target on this email (paid)?
-    //    Include paused rows: a user who stopped then restarts still holds a
-    //    paid entitlement and must not be sent back through checkout.
     const { data: existingPaid } = await supabase
       .from("subscriptions")
-      .select("id, plan, active, user_paused, stripe_subscription_id")
+      .select("id, user_paused")
       .eq("target_id", targetId)
       .eq("user_id", authUser.id)
-      .or("active.eq.true,user_paused.eq.true")
+      .eq("active", true)
       .not("stripe_subscription_id", "is", null)
       .maybeSingle();
 
     if (existingPaid) {
-      if (!existingPaid.active || existingPaid.user_paused) {
-        const capacity = await getAccountCapacity(authUser.id);
-        if (!capacity) {
-          return NextResponse.json(
-            { success: false, error: "Your subscription is not active" },
-            { status: 402 }
-          );
-        }
-        if (capacity.activeAccounts >= capacity.totalAccounts) {
-          return capacityError(
-            capacity.activeAccounts,
-            capacity.totalAccounts,
-            capacity.tier
-          );
-        }
+      if (
+        existingPaid.user_paused &&
+        capacity.activeAccounts >= capacity.totalAccounts
+      ) {
+        return capacityError(
+          capacity.activeAccounts,
+          capacity.totalAccounts,
+          capacity.tier
+        );
       }
 
-      // Clear the user-pause flag so webhook events can manage it again.
       await supabase
         .from("subscriptions")
         .update({
-          user_id: authUser.id,
           user_paused: false,
-          active: true,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingPaid.id);
+
       if (!target.monitoring_enabled) await enableMonitoring(targetId);
       return NextResponse.json({
         success: true,
@@ -196,166 +148,73 @@ export async function POST(request: Request) {
       });
     }
 
-    // 2) Email has a Stripe-backed paid sub for a DIFFERENT target (or generic)?
-    //    Attach this target to their existing subscription — no new charge.
-    //    user_paused rows still represent a paid entitlement (the user paused
-    //    monitoring but the Stripe subscription is still active), so include
-    //    them and clear the pause flag on restart.
+    if (capacity.activeAccounts >= capacity.totalAccounts) {
+      return capacityError(
+        capacity.activeAccounts,
+        capacity.totalAccounts,
+        capacity.tier
+      );
+    }
+
     const { data: paidSub } = await supabase
       .from("subscriptions")
-      .select("stripe_customer_id, stripe_subscription_id, plan, tier")
+      .select("stripe_customer_id, stripe_subscription_id, plan")
       .eq("user_id", authUser.id)
-      .or("active.eq.true,user_paused.eq.true")
-      .not("stripe_subscription_id", "is", null)
+      .eq("active", true)
+      .eq("stripe_subscription_id", capacity.stripeSubscriptionId)
       .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (paidSub) {
-      const paidTier: PlanTier =
-        paidSub.tier === "premium" ? "premium" : "base";
-      const capacity = await getAccountCapacity(authUser.id);
-      if (!capacity) {
-        return NextResponse.json(
-          { success: false, error: "Your subscription is not active" },
-          { status: 402 }
-        );
-      }
-      const count = capacity.activeAccounts;
-      const cap = capacity.totalAccounts;
-
-      if (count >= cap) {
-        return capacityError(count, cap, paidTier);
-      }
-
-      // Reuse the existing row if one exists (UNIQUE target_id+email), else insert.
-      const { data: existingRow } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("target_id", targetId)
-        .eq("email", email)
-        .maybeSingle();
-
-      if (existingRow) {
-        await supabase
-          .from("subscriptions")
-          .update({
-            user_id: authUser.id,
-            plan: paidSub.plan || "basic",
-            tier: paidTier,
-            stripe_customer_id: paidSub.stripe_customer_id,
-            stripe_subscription_id: paidSub.stripe_subscription_id,
-            active: true,
-            user_paused: false,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingRow.id);
-      } else {
-        const { error: insertErr } = await supabase
-          .from("subscriptions")
-          .insert({
-            target_id: targetId,
-            user_id: authUser.id,
-            email,
-            plan: paidSub.plan || "basic",
-            tier: paidTier,
-            stripe_customer_id: paidSub.stripe_customer_id,
-            stripe_subscription_id: paidSub.stripe_subscription_id,
-            active: true,
-            user_paused: false,
-          });
-        if (insertErr) {
-          console.error("Attach subscription insert error:", insertErr);
-          return NextResponse.json(
-            { success: false, error: "Failed to attach account to subscription" },
-            { status: 500 }
-          );
-        }
-      }
-
-      await enableMonitoring(targetId);
-
-      return NextResponse.json({
-        success: true,
-        attachedToExistingSubscription: true,
-        message: `@${target.username} added to your subscription — monitoring is active`,
-      });
-    }
-
-    // 3) No paid sub → cap check + route through Stripe Checkout
-    const count = await countTracked();
-    const cap = INCLUDED_ACCOUNTS[tier];
-
-    if (count >= cap) {
+    if (!paidSub) {
       return NextResponse.json(
         {
           success: false,
-          error: `You're using all ${cap} included concurrent account slots. Subscribe first, then add more slots whenever you need them.`,
-          atLimit: true,
-          canAddCapacity: false,
-          currentCount: count,
-          maxAllowed: cap,
-          tier,
+          error:
+            "Your active subscription could not be resolved. Refresh your account and try again.",
         },
-        { status: 402 }
+        { status: 409 }
       );
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const stripe = getStripe();
-    const priceId = getStripePriceId("weekly", tier);
+    const { data: existingRow } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("target_id", targetId)
+      .eq("email", email)
+      .maybeSingle();
 
-    const lineItems: Array<{ price: string; quantity: number }> = [
-      { price: priceId, quantity: 1 },
-    ];
-    if (emailAlerts) {
-      lineItems.push({ price: getEmailAlertsPriceId("weekly"), quantity: 1 });
+    const entitlementRow = {
+      user_id: authUser.id,
+      plan: paidSub.plan || "basic",
+      tier: capacity.tier,
+      stripe_customer_id: paidSub.stripe_customer_id,
+      stripe_subscription_id: capacity.stripeSubscriptionId,
+      active: true,
+      user_paused: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingRow) {
+      const { error } = await supabase
+        .from("subscriptions")
+        .update(entitlementRow)
+        .eq("id", existingRow.id);
+      if (error) throw new Error(`Failed to attach account: ${error.message}`);
+    } else {
+      const { error } = await supabase.from("subscriptions").insert({
+        target_id: targetId,
+        email,
+        ...entitlementRow,
+      });
+      if (error) throw new Error(`Failed to attach account: ${error.message}`);
     }
 
-    // "pro" plan = email alerts enabled (add-on). "basic" = monitoring only.
-    const plan = emailAlerts ? "pro" : "basic";
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: lineItems,
-      customer_email: email,
-      success_url: `${baseUrl}/track/${encodeURIComponent(
-        target.username
-      )}?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${baseUrl}/track/${encodeURIComponent(
-        target.username
-      )}?canceled=true`,
-      subscription_data: {
-        metadata: {
-          product: "checkfollows",
-          cadence: "weekly",
-          tier,
-          plan,
-          email_alerts: String(emailAlerts),
-          target_id: targetId,
-          username: target.username,
-          email,
-          user_id: authUser.id,
-        },
-      },
-      metadata: {
-        product: "checkfollows",
-        cadence: "weekly",
-        tier,
-        plan,
-        email_alerts: String(emailAlerts),
-        target_id: targetId,
-        username: target.username,
-        email,
-        user_id: authUser.id,
-      },
-    });
-
+    await enableMonitoring(targetId);
     return NextResponse.json({
       success: true,
-      checkout: true,
-      url: session.url,
-      message: "Complete payment to start tracking",
+      attachedToExistingSubscription: true,
+      message: `@${target.username} added to your subscription — monitoring is active`,
     });
   } catch (error) {
     console.error("Track API error:", error);

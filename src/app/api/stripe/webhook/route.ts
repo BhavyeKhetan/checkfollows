@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
-import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
+import {
+  disableMonitoringIfUnused,
+  enableMonitoring,
+} from "@/lib/monitoring";
 import { trackServer } from "@/lib/mixpanel-server";
 import type Stripe from "stripe";
 
@@ -343,7 +346,7 @@ export async function POST(request: Request) {
           } else if (!isActive) {
             // Only disable when entitlement actually lapses.
             if (subscription.status === "canceled" || subscription.status === "unpaid") {
-              await disableMonitoring(row.target_id);
+              await disableMonitoringIfUnused(row.target_id);
             }
           }
         }
@@ -365,7 +368,7 @@ export async function POST(request: Request) {
           .eq("stripe_subscription_id", subscription.id);
 
         for (const row of linked || []) {
-          if (row.target_id) await disableMonitoring(row.target_id);
+          if (row.target_id) await disableMonitoringIfUnused(row.target_id);
         }
 
         await fireLifecycle(subscription.id, "subscription_canceled", {});

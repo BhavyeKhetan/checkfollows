@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import {
+  getAuthUser,
+  hasActiveSubscription,
+  ownsTarget,
+} from "@/lib/supabase/auth";
 import { getTrackingTimeline } from "@/lib/tracking-data";
+import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   // Paid data: require an authenticated user with an active subscription.
@@ -35,10 +40,26 @@ export async function GET(request: Request) {
     if (!timeline) {
       return NextResponse.json({ success: false, error: "Target not found" }, { status: 404 });
     }
+    if (!(await ownsTarget(user.id, timeline.target.id, user.email))) {
+      return NextResponse.json(
+        { success: false, error: "Target not found" },
+        { status: 404 }
+      );
+    }
+    const { data: ownership } = await createServerClient()
+      .from("subscriptions")
+      .select("user_paused")
+      .eq("user_id", user.id)
+      .eq("target_id", timeline.target.id)
+      .maybeSingle();
 
     return NextResponse.json({
       success: true,
-      target: timeline.target,
+      target: {
+        ...timeline.target,
+        monitoring_enabled:
+          timeline.target.monitoring_enabled && ownership?.user_paused !== true,
+      },
       events: timeline.events,
     });
   } catch (error) {

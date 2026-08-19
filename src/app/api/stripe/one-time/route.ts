@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe, getOneTimePriceId } from "@/lib/stripe";
-import { getAuthUser } from "@/lib/supabase/auth";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 
 const KINDS = ["export", "rescan_credits", "mutuals"] as const;
 type OneTimeKind = (typeof KINDS)[number];
@@ -19,6 +19,12 @@ export async function POST(request: Request) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    }
+    if (!(await hasActiveSubscription(user.id))) {
+      return NextResponse.json(
+        { error: "An active subscription is required", paywall: "/app/pricing" },
+        { status: 402 }
+      );
     }
 
     const body = await request.json().catch(() => ({}));

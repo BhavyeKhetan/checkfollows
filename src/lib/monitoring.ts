@@ -1193,3 +1193,17 @@ export async function disableMonitoring(targetId: string): Promise<void> {
     })
     .eq("id", targetId);
 }
+
+/** Keep a shared Instagram target running while any paid subscriber uses it. */
+export async function disableMonitoringIfUnused(targetId: string): Promise<void> {
+  const supabase = createServerClient();
+  const { count } = await supabase
+    .from("subscriptions")
+    .select("id", { count: "exact", head: true })
+    .eq("target_id", targetId)
+    .eq("active", true)
+    .eq("user_paused", false)
+    .not("stripe_subscription_id", "is", null);
+
+  if ((count || 0) === 0) await disableMonitoring(targetId);
+}

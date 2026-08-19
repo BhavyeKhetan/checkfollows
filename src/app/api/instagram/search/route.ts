@@ -10,7 +10,12 @@
  */
 
 import { NextResponse } from "next/server";
-import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import {
+  getAuthUser,
+  hasActiveSubscription,
+  ownsTarget,
+} from "@/lib/supabase/auth";
+import { createServerClient } from "@/lib/supabase/server";
 import { previewLookup, fullBaselineScan, getEventsForTarget } from "@/lib/monitoring";
 
 export async function POST(request: Request) {
@@ -78,6 +83,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, error: "An active subscription is required to run a full scan" },
         { status: 402 }
+      );
+    }
+
+    const { data: ownedTarget } = await createServerClient()
+      .from("instagram_targets")
+      .select("id")
+      .eq("username", cleanUsername.toLowerCase())
+      .maybeSingle();
+    if (
+      !ownedTarget ||
+      !(await ownsTarget(user.id, ownedTarget.id, user.email))
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Add this account to your subscription first" },
+        { status: 403 }
       );
     }
 

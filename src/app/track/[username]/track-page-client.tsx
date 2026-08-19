@@ -178,7 +178,7 @@ export default function TrackPageClient({
         return;
       }
       if (eventsRes.status === 402) {
-        router.replace(`/onboarding?username=${encodeURIComponent(username)}`);
+        router.replace("/app/pricing");
         return;
       }
       if (!eventsRes.ok || !eventsData.success) {
@@ -211,6 +211,14 @@ export default function TrackPageClient({
           body: JSON.stringify({ targetId: target.id, action: "stop" }),
         });
         const data = await res.json();
+        if (res.status === 402) {
+          router.replace("/app/pricing");
+          return;
+        }
+        if (!res.ok) {
+          window.alert(data?.error || "Could not pause monitoring. Please try again.");
+          return;
+        }
         setTarget((prev) => prev ? { ...prev, monitoring_enabled: false } : null);
         if (data?.message) window.alert(data.message);
         return;
@@ -226,9 +234,8 @@ export default function TrackPageClient({
       });
       const data = await res.json();
 
-      if (data?.url) {
-        // No paid subscription yet → Stripe Checkout.
-        window.location.assign(data.url);
+      if (res.status === 402) {
+        router.replace("/app/pricing");
         return;
       }
 

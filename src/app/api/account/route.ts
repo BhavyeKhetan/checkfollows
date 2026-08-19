@@ -95,7 +95,18 @@ export async function GET() {
     user_paused: s.user_paused,
     created_at: s.created_at,
     updated_at: s.updated_at,
-    target: s.target_id ? targetsById.get(s.target_id) || null : null,
+    target: s.target_id
+      ? (() => {
+          const target = targetsById.get(s.target_id);
+          return target
+            ? {
+                ...target,
+                monitoring_enabled:
+                  target.monitoring_enabled === true && !s.user_paused,
+              }
+            : null;
+        })()
+      : null,
   }));
 
   return NextResponse.json({

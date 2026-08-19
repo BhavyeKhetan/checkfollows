@@ -19,10 +19,13 @@ import {
   Users,
   CreditCard,
   Sparkles,
+  Pause,
+  Play,
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { track, identify, reset } from "@/lib/mixpanel";
+import { BillingManagement } from "@/components/account/billing-management";
 
 interface TrackedTarget {
   id: string;
@@ -107,6 +110,7 @@ export default function AccountPage() {
   const [accountsToAdd, setAccountsToAdd] = useState(1);
   const [addingCapacity, setAddingCapacity] = useState(false);
   const [capacityError, setCapacityError] = useState("");
+  const [targetAction, setTargetAction] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,9 +128,11 @@ export default function AccountPage() {
       identify(user.id, { $email: user.email ?? undefined });
 
       try {
-        const returningFromRenewal =
-          new URLSearchParams(window.location.search).get("renewed") === "1";
-        const attempts = returningFromRenewal ? 6 : 1;
+        const urlParams = new URLSearchParams(window.location.search);
+        const returningFromRenewal = urlParams.get("renewed") === "1";
+        const returningFromPurchase = urlParams.get("subscribed") === "1";
+        const returningFromCheckout = returningFromRenewal || returningFromPurchase;
+        const attempts = returningFromCheckout ? 6 : 1;
         for (let attempt = 0; attempt < attempts; attempt++) {
           const res = await fetch("/api/account", { cache: "no-store" });
           if (res.status === 401) {
@@ -147,9 +153,11 @@ export default function AccountPage() {
               setRenewalTier(json.renewalDefaults.tier || "base");
               setRenewalEmailAlerts(json.renewalDefaults.emailAlerts === true);
             }
-            if (returningFromRenewal && json.hasActiveSubscription) {
+            if (returningFromCheckout && json.hasActiveSubscription) {
               setRenewalSuccess(true);
-              track("renewal_completed", { source: "account" });
+              track(returningFromRenewal ? "renewal_completed" : "subscription_activated", {
+                source: "app",
+              });
               window.history.replaceState({}, "", "/account");
             }
             track("account_viewed", {
@@ -277,6 +285,66 @@ export default function AccountPage() {
     }
   };
 
+  const toggleTrackedAccount = async (target: TrackedTarget) => {
+    if (targetAction) return;
+    setTargetAction(target.id);
+    setError("");
+    const action = target.monitoring_enabled ? "stop" : "start";
+    try {
+      const response = await fetch("/api/instagram/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: target.id, action }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(json.error || "The tracked account could not be updated.");
+        return;
+      }
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              capacity: current.capacity
+                ? (() => {
+                    const activeAccounts = Math.max(
+                      0,
+                      current.capacity.activeAccounts +
+                        (action === "start" ? 1 : -1)
+                    );
+                    return {
+                      ...current.capacity,
+                      activeAccounts,
+                      availableAccounts: Math.max(
+                        0,
+                        current.capacity.totalAccounts - activeAccounts
+                      ),
+                    };
+                  })()
+                : current.capacity,
+              subscriptions: current.subscriptions.map((subscription) =>
+                subscription.target?.id === target.id
+                  ? {
+                      ...subscription,
+                      user_paused: action === "stop",
+                      target: {
+                        ...subscription.target,
+                        monitoring_enabled: action === "start",
+                      },
+                    }
+                  : subscription
+              ),
+            }
+          : current
+      );
+      track("monitoring_toggled", { action, username: target.username });
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setTargetAction(null);
+    }
+  };
+
   const trackedTargets = (data?.subscriptions || [])
     .map((s) => s.target)
     .filter((t): t is TrackedTarget => !!t);
@@ -332,7 +400,7 @@ export default function AccountPage() {
         {renewalSuccess && (
           <Card variant="highlight" className="border-[#86EFAC]">
             <p className="text-sm font-bold text-[#047857]">
-              Subscription renewed. Your dashboard and monitoring are active again.
+              Subscription active. Your dashboard and monitoring are ready.
             </p>
           </Card>
         )}
@@ -387,7 +455,7 @@ export default function AccountPage() {
                   </Button>
                 </a>
               ) : (
-                <Link href="/pricing">
+                <Link href="/app/pricing">
                   <Button
                     variant="primary"
                     size="md"
@@ -402,6 +470,41 @@ export default function AccountPage() {
               ))}
           </div>
         </Card>
+
+        {(data?.hasActiveSubscription || data?.canRenew) && (
+          <BillingManagement
+            onPlanChanged={({
+              cadence: nextCadence,
+              tier: nextTier,
+              emailAlerts: nextEmailAlerts,
+            }) =>
+              setData((current) =>
+                current
+                  ? {
+                      ...current,
+                      capacity: current.capacity
+                        ? {
+                            ...current.capacity,
+                            cadence: nextCadence,
+                            tier: nextTier,
+                            includedAccounts: nextTier === "premium" ? 5 : 3,
+                            totalAccounts:
+                              (nextTier === "premium" ? 5 : 3) +
+                              current.capacity.additionalAccounts,
+                            unitAmount: nextCadence === "weekly" ? 100 : 1400,
+                          }
+                        : current.capacity,
+                      subscriptions: current.subscriptions.map((subscription) => ({
+                        ...subscription,
+                        tier: nextTier,
+                        plan: nextEmailAlerts ? "pro" : "basic",
+                      })),
+                    }
+                  : current
+              )
+            }
+          />
+        )}
 
         {data?.hasActiveSubscription ? (
           <>
@@ -553,7 +656,7 @@ export default function AccountPage() {
             </h2>
             {data?.hasActiveSubscription && (
               <Link
-                href="/"
+                href="/app/add-account"
                 className="text-xs font-bold text-[#121212] underline underline-offset-2"
                 onClick={() => track("add_account_clicked")}
               >
@@ -569,7 +672,7 @@ export default function AccountPage() {
                 You&apos;re not tracking anyone yet. Search a profile to start
                 watching who they follow.
               </p>
-              <Link href="/" className="inline-block mt-4">
+              <Link href="/app/add-account" className="inline-block mt-4">
                 <Button variant="secondary" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
                   Search a profile
                 </Button>
@@ -608,6 +711,21 @@ export default function AccountPage() {
                     ) : (
                       <Badge variant="mono" size="sm">Paused</Badge>
                     )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      isLoading={targetAction === t.id}
+                      leftIcon={
+                        t.monitoring_enabled ? (
+                          <Pause className="w-3.5 h-3.5" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5" />
+                        )
+                      }
+                      onClick={() => toggleTrackedAccount(t)}
+                    >
+                      {t.monitoring_enabled ? "Pause" : "Resume"}
+                    </Button>
                     <Link href={`/track/${encodeURIComponent(t.username)}`}>
                       <Button
                         variant="secondary"
@@ -725,18 +843,22 @@ function LockedAccount({
 
   if (!canRenew) {
     return (
-      <Card variant="subtle" padding="lg" className="text-center py-12">
-        <Lock className="w-8 h-8 mx-auto text-[#555555] mb-3" />
-        <h2 className="text-lg font-extrabold">Your dashboard is locked</h2>
-        <p className="text-sm text-[#555555] mt-1 mb-5">
-          Start a subscription to reveal tracked accounts and monitoring history.
-        </p>
-        <Link href="/pricing">
-          <Button variant="primary" rightIcon={<ArrowRight className="w-4 h-4" />}>
-            View subscription options
-          </Button>
-        </Link>
-      </Card>
+      <section className="space-y-5">
+        <Card variant="highlight" padding="lg" className="text-center py-10">
+          <Lock className="w-8 h-8 mx-auto text-[#121212] mb-3" />
+          <Badge variant="lime" size="sm" className="mb-3">SUBSCRIPTION REQUIRED</Badge>
+          <h2 className="text-xl font-extrabold">Unlock your CheckFollows account</h2>
+          <p className="text-sm text-[#555555] mt-2 mb-5 max-w-md mx-auto">
+            Choose a subscription to reveal tracked accounts, monitoring history, alerts, exports, and rescans.
+          </p>
+          <Link href="/app/pricing">
+            <Button variant="primary" size="lg" rightIcon={<ArrowRight className="w-4 h-4" />}>
+              View subscription options
+            </Button>
+          </Link>
+        </Card>
+        <LockedPreview trackedCount={trackedCount} mode="subscribe" />
+      </section>
     );
   }
 
@@ -835,6 +957,19 @@ function LockedAccount({
         </Card>
       )}
 
+      <LockedPreview trackedCount={trackedCount} />
+    </section>
+  );
+}
+
+function LockedPreview({
+  trackedCount,
+  mode = "renew",
+}: {
+  trackedCount: number;
+  mode?: "renew" | "subscribe";
+}) {
+  return (
       <div className="relative overflow-hidden rounded-2xl border border-[#E2E2DC] bg-white min-h-[360px]">
         <div className="p-6 space-y-4 blur-[7px] opacity-55 pointer-events-none select-none" aria-hidden="true">
           <div className="h-6 w-48 rounded bg-[#D9D9D2]" />
@@ -857,7 +992,9 @@ function LockedAccount({
         <div className="absolute inset-0 flex items-center justify-center bg-white/25">
           <div className="rounded-2xl bg-white/95 border border-[#E2E2DC] shadow-lg px-7 py-6 text-center max-w-sm mx-4">
             <Lock className="w-7 h-7 mx-auto mb-2" />
-            <p className="font-extrabold">Renew to reveal your dashboard</p>
+            <p className="font-extrabold">
+              {mode === "renew" ? "Renew" : "Subscribe"} to reveal your dashboard
+            </p>
             <p className="text-xs text-[#555555] mt-1">
               {trackedCount > 0
                 ? `${trackedCount} tracked ${trackedCount === 1 ? "account is" : "accounts are"} safely preserved.`
@@ -866,7 +1003,6 @@ function LockedAccount({
           </div>
         </div>
       </div>
-    </section>
   );
 }
 

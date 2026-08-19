@@ -7,6 +7,10 @@ import {
   getStripePriceId,
   type PlanTier,
 } from "@/lib/stripe";
+import {
+  getOwnedStripeSubscription,
+  isManageableSubscription,
+} from "@/lib/subscription-management";
 
 const ALLOWED_RETURN_ORIGINS = new Set([
   "https://www.checkfollows.com",
@@ -31,6 +35,13 @@ export async function POST(request: Request) {
     if (await hasActiveSubscription(user.id)) {
       return NextResponse.json(
         { error: "Your subscription is already active" },
+        { status: 409 }
+      );
+    }
+    const existing = await getOwnedStripeSubscription(user);
+    if (existing && isManageableSubscription(existing.subscription)) {
+      return NextResponse.json(
+        { error: "Your existing subscription must be managed from your account." },
         { status: 409 }
       );
     }
