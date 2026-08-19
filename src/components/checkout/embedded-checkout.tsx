@@ -9,7 +9,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { Lock } from "lucide-react";
+import { Lock, Check } from "lucide-react";
 import { track } from "@/lib/mixpanel";
 
 const stripePromise = loadStripe(
@@ -190,6 +190,7 @@ function CheckoutFormInner({
   onSuccess?: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [payerEmail, setPayerEmail] = useState(
     isValidEmail(defaultEmail) ? defaultEmail!.trim() : ""
@@ -351,8 +352,25 @@ function CheckoutFormInner({
       email_alerts: emailAlerts,
     });
     await finalizeActivation();
-    onSuccess?.();
+    setSuccess(true);
+    // Brief "Payment successful → Redirecting…" confirmation before advancing
+    // to the signup/account funnel.
+    setTimeout(() => onSuccess?.(), 1800);
   };
+
+  if (success) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center text-center gap-3 min-h-[260px]">
+        <div className="w-14 h-14 rounded-full bg-[#E7F256] flex items-center justify-center">
+          <Check className="w-7 h-7 text-[#121212]" strokeWidth={3} />
+        </div>
+        <p className="text-lg font-bold text-[#121212]">Payment successful</p>
+        <p className="text-sm text-[#555555] font-medium">
+          Redirecting you to create your account…
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 space-y-3">

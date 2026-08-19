@@ -115,6 +115,9 @@ function OnboardingContent() {
   const [finalizing, setFinalizing] = useState(
     searchParams.get("finalize") === "1"
   );
+  const [finalizePhase, setFinalizePhase] = useState<"confirming" | "success">(
+    "confirming"
+  );
 
   // One-time funnel entry + paywall view signals.
   const startedRef = useRef(false);
@@ -180,7 +183,10 @@ function OnboardingContent() {
           if (ctx.email) params.set("email", ctx.email);
           if (ctx.username) params.set("username", ctx.username);
           if (ctx.target_id) params.set("targetId", ctx.target_id);
-          await redirectAfterPayment(params);
+          setFinalizePhase("success");
+          setTimeout(() => {
+            void redirectAfterPayment(params);
+          }, 1800);
           return;
         }
       } catch (err) {
@@ -260,10 +266,26 @@ function OnboardingContent() {
       <main className="flex-1 flex flex-col">
         {finalizing ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
-            <div className="w-10 h-10 rounded-full border-4 border-[#121212] border-t-[#E7F256] animate-spin" />
-            <p className="text-[#555555] text-sm font-semibold">
-              Confirming your payment…
-            </p>
+            {finalizePhase === "success" ? (
+              <>
+                <div className="w-14 h-14 rounded-full bg-[#E7F256] flex items-center justify-center">
+                  <Check className="w-7 h-7 text-[#121212]" strokeWidth={3} />
+                </div>
+                <p className="text-lg font-bold text-[#121212]">
+                  Payment successful
+                </p>
+                <p className="text-[#555555] text-sm font-semibold">
+                  Redirecting you to create your account…
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-full border-4 border-[#121212] border-t-[#E7F256] animate-spin" />
+                <p className="text-[#555555] text-sm font-semibold">
+                  Confirming your payment…
+                </p>
+              </>
+            )}
           </div>
         ) : (
         <AnimatePresence mode="wait">
