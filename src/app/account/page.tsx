@@ -62,6 +62,17 @@ interface AccountData {
     tier: "base" | "premium";
     emailAlerts: boolean;
   };
+  capacity?: {
+    tier: "base" | "premium";
+    cadence: "weekly" | "quarterly";
+    includedAccounts: number;
+    additionalAccounts: number;
+    totalAccounts: number;
+    activeAccounts: number;
+    availableAccounts: number;
+    unitAmount: number;
+    currency: "usd";
+  } | null;
 }
 
 type RenewalCadence = "weekly" | "quarterly";
@@ -93,6 +104,9 @@ export default function AccountPage() {
   const [renewalLoading, setRenewalLoading] = useState<"standard" | "winback_50" | null>(null);
   const [renewalError, setRenewalError] = useState("");
   const [renewalSuccess, setRenewalSuccess] = useState(false);
+  const [accountsToAdd, setAccountsToAdd] = useState(1);
+  const [addingCapacity, setAddingCapacity] = useState(false);
+  const [capacityError, setCapacityError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -225,6 +239,44 @@ export default function AccountPage() {
     }
   };
 
+  const addAccountCapacity = async () => {
+    if (!data?.capacity || addingCapacity) return;
+    setAddingCapacity(true);
+    setCapacityError("");
+
+    const previous = data.capacity;
+    const desiredAdditionalAccounts =
+      previous.additionalAccounts + accountsToAdd;
+
+    try {
+      const res = await fetch("/api/stripe/account-capacity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          additionalAccounts: desiredAdditionalAccounts,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (json.paymentUrl) {
+          window.location.assign(json.paymentUrl);
+          return;
+        }
+        setCapacityError(json.error || "Could not add account slots");
+        return;
+      }
+
+      setData((current) =>
+        current ? { ...current, capacity: json.capacity } : current
+      );
+      setAccountsToAdd(1);
+    } catch {
+      setCapacityError("Network error. Please try again.");
+    } finally {
+      setAddingCapacity(false);
+    }
+  };
+
   const trackedTargets = (data?.subscriptions || [])
     .map((s) => s.target)
     .filter((t): t is TrackedTarget => !!t);
@@ -353,6 +405,73 @@ export default function AccountPage() {
 
         {data?.hasActiveSubscription ? (
           <>
+        {/* Concurrent account capacity */}
+        {data.capacity && (
+          <Card variant="subtle" padding="lg">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 rounded-xl bg-[#121212] text-[#E7F256] flex items-center justify-center shrink-0">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold text-[#121212]">
+                    Concurrent account capacity
+                  </h2>
+                  <p className="text-sm text-[#555555] mt-0.5">
+                    <strong className="text-[#121212]">
+                      {data.capacity.activeAccounts} of {data.capacity.totalAccounts}
+                    </strong>{" "}
+                    slots in use · {data.capacity.includedAccounts} included with {data.capacity.tier === "premium" ? "Premium" : "Basic"}
+                  </p>
+                  <p className="text-xs text-[#777777] mt-1">
+                    Pause any tracked account to free its slot. Add as many concurrent slots as you need.
+                  </p>
+                </div>
+              </div>
+
+              <div className="sm:min-w-[250px] rounded-xl border border-[#D9D9D2] bg-white p-4">
+                <label className="text-xs font-bold uppercase tracking-wide text-[#555555]">
+                  Add account slots
+                </label>
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={accountsToAdd}
+                    onChange={(event) =>
+                      setAccountsToAdd(
+                        Math.min(50, Math.max(1, Number(event.target.value) || 1))
+                      )
+                    }
+                    className="w-20 rounded-lg border border-[#D9D9D2] bg-white px-3 py-2 text-base font-extrabold text-[#121212] outline-none focus:border-[#121212]"
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={addAccountCapacity}
+                    isLoading={addingCapacity}
+                    className="flex-1"
+                  >
+                    Add {accountsToAdd}
+                  </Button>
+                </div>
+                <p className="text-xs font-semibold text-[#047857] mt-2">
+                  +${((data.capacity.unitAmount * accountsToAdd) / 100).toFixed(2)}{data.capacity.cadence === "weekly" ? "/week" : "/quarter"}
+                </p>
+                <p className="text-[11px] text-[#777777] mt-0.5">
+                  New capacity: {data.capacity.totalAccounts + accountsToAdd} concurrent accounts. Prorated today.
+                </p>
+                {capacityError && (
+                  <p className="text-xs font-semibold text-[#B91C1C] mt-2">
+                    {capacityError}
+                  </p>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* Spike alerts */}
         <Card variant="subtle" padding="lg">
           <div className="flex items-start gap-4">

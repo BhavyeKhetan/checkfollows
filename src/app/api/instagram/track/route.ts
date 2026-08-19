@@ -2,31 +2,14 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
+import { INCLUDED_ACCOUNTS } from "@/lib/account-capacity-rules";
+import { getAccountCapacity } from "@/lib/account-capacity";
 import {
   getStripe,
   getStripePriceId,
   getEmailAlertsPriceId,
   type PlanTier,
 } from "@/lib/stripe";
-
-// Plan tier account limits.
-//   base    → 3 accounts total, ever (lifetime).
-//   premium → unlimited accounts, but only 5 monitored at a time.
-const BASE_LIFETIME_CAP = parseInt(process.env.BASE_LIFETIME_CAP || "3", 10);
-const PREMIUM_CONCURRENT_CAP = parseInt(
-  process.env.PREMIUM_CONCURRENT_CAP || "5",
-  10
-);
-
-function capForTier(tier: PlanTier): number {
-  return tier === "premium" ? PREMIUM_CONCURRENT_CAP : BASE_LIFETIME_CAP;
-}
-
-function capLabelForTier(tier: PlanTier): string {
-  return tier === "premium"
-    ? `${PREMIUM_CONCURRENT_CAP} at a time`
-    : `${BASE_LIFETIME_CAP} total accounts`;
-}
 
 /**
  * Track Changes endpoint.
@@ -66,35 +49,77 @@ export async function POST(request: Request) {
       authUser.email || (typeof body.email === "string" ? body.email : "");
     const tier: PlanTier = body.tier === "premium" ? "premium" : "base";
 
-    // Count tracked accounts for a tier. Premium counts concurrent (active)
-    // accounts; base counts lifetime (all rows, ever).
-    const countTracked = async (t: PlanTier) => {
-      let q = supabase
+    // Both plans now use concurrent capacity: stopping one target frees a slot.
+    const countTracked = async () => {
+      const { count, error } = await supabase
         .from("subscriptions")
         .select("*", { count: "exact", head: true })
-        .eq("email", email)
+        .eq("user_id", authUser.id)
+        .eq("active", true)
+        .eq("user_paused", false)
         .not("target_id", "is", null);
-      if (t === "premium") q = q.eq("active", true);
-      const { count } = await q;
+      if (error) throw new Error(`Failed to count tracked accounts: ${error.message}`);
       return count ?? 0;
     };
+
+    const capacityError = (
+      currentCount: number,
+      maxAllowed: number,
+      paidTier: PlanTier
+    ) =>
+      NextResponse.json(
+        {
+          success: false,
+          error: `You're using all ${maxAllowed} concurrent account slots. Add another slot for ${paidTier === "premium" ? "this Premium" : "this Basic"} subscription, or pause an account first.`,
+          atLimit: true,
+          canAddCapacity: true,
+          currentCount,
+          maxAllowed,
+          tier: paidTier,
+        },
+        { status: 402 }
+      );
 
     // ─── STOP: disable monitoring + mark user-paused ──
     // user_paused = true prevents Stripe lifecycle events from silently
     // re-enabling this account later (see webhook handler).
     if (action === "stop") {
-      await disableMonitoring(targetId);
+      const { data: ownedRow } = await supabase
+        .from("subscriptions")
+        .select("id, active")
+        .eq("target_id", targetId)
+        .eq("user_id", authUser.id)
+        .not("stripe_subscription_id", "is", null)
+        .maybeSingle();
 
-      let q = supabase
+      if (!ownedRow) {
+        return NextResponse.json(
+          { success: false, error: "Tracked account not found" },
+          { status: 404 }
+        );
+      }
+
+      await supabase
         .from("subscriptions")
         .update({
           user_paused: true,
-          active: false,
+          // `active` represents the Stripe entitlement. Pausing monitoring
+          // frees concurrent capacity without making the subscription inactive.
+          active: ownedRow.active,
           updated_at: new Date().toISOString(),
         })
-        .eq("target_id", targetId);
-      if (email) q = q.eq("email", email);
-      await q;
+        .eq("id", ownedRow.id);
+
+      // Targets are shared records. Keep the underlying monitor running if a
+      // different paying customer still has this same target active.
+      const { count: remainingSubscribers } = await supabase
+        .from("subscriptions")
+        .select("*", { count: "exact", head: true })
+        .eq("target_id", targetId)
+        .eq("active", true)
+        .eq("user_paused", false)
+        .not("stripe_subscription_id", "is", null);
+      if (!remainingSubscribers) await disableMonitoring(targetId);
 
       return NextResponse.json({
         success: true,
@@ -128,14 +153,31 @@ export async function POST(request: Request) {
     //    paid entitlement and must not be sent back through checkout.
     const { data: existingPaid } = await supabase
       .from("subscriptions")
-      .select("id, plan")
+      .select("id, plan, active, user_paused, stripe_subscription_id")
       .eq("target_id", targetId)
-      .eq("email", email)
+      .eq("user_id", authUser.id)
       .or("active.eq.true,user_paused.eq.true")
       .not("stripe_subscription_id", "is", null)
       .maybeSingle();
 
     if (existingPaid) {
+      if (!existingPaid.active || existingPaid.user_paused) {
+        const capacity = await getAccountCapacity(authUser.id);
+        if (!capacity) {
+          return NextResponse.json(
+            { success: false, error: "Your subscription is not active" },
+            { status: 402 }
+          );
+        }
+        if (capacity.activeAccounts >= capacity.totalAccounts) {
+          return capacityError(
+            capacity.activeAccounts,
+            capacity.totalAccounts,
+            capacity.tier
+          );
+        }
+      }
+
       // Clear the user-pause flag so webhook events can manage it again.
       await supabase
         .from("subscriptions")
@@ -162,30 +204,28 @@ export async function POST(request: Request) {
     const { data: paidSub } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id, stripe_subscription_id, plan, tier")
-      .eq("email", email)
+      .eq("user_id", authUser.id)
       .or("active.eq.true,user_paused.eq.true")
       .not("stripe_subscription_id", "is", null)
+      .order("updated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (paidSub) {
       const paidTier: PlanTier =
         paidSub.tier === "premium" ? "premium" : "base";
-      const count = await countTracked(paidTier);
-      const cap = capForTier(paidTier);
-
-      if (count >= cap) {
+      const capacity = await getAccountCapacity(authUser.id);
+      if (!capacity) {
         return NextResponse.json(
-          {
-            success: false,
-            error: `You're tracking ${count} accounts already — the ${paidTier} plan allows ${capLabelForTier(paidTier)}. Upgrade to Premium to track more.`,
-            atLimit: true,
-            currentCount: count,
-            maxAllowed: cap,
-            tier: paidTier,
-          },
+          { success: false, error: "Your subscription is not active" },
           { status: 402 }
         );
+      }
+      const count = capacity.activeAccounts;
+      const cap = capacity.totalAccounts;
+
+      if (count >= cap) {
+        return capacityError(count, cap, paidTier);
       }
 
       // Reuse the existing row if one exists (UNIQUE target_id+email), else insert.
@@ -243,15 +283,16 @@ export async function POST(request: Request) {
     }
 
     // 3) No paid sub → cap check + route through Stripe Checkout
-    const count = await countTracked(tier);
-    const cap = capForTier(tier);
+    const count = await countTracked();
+    const cap = INCLUDED_ACCOUNTS[tier];
 
     if (count >= cap) {
       return NextResponse.json(
         {
           success: false,
-          error: `You've tracked ${count} accounts already — the ${tier} plan allows ${capLabelForTier(tier)}. Upgrade to Premium to track more.`,
+          error: `You're using all ${cap} included concurrent account slots. Subscribe first, then add more slots whenever you need them.`,
           atLimit: true,
+          canAddCapacity: false,
           currentCount: count,
           maxAllowed: cap,
           tier,

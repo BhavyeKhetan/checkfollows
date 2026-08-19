@@ -60,7 +60,7 @@ const PRICING_FAQS = [
   },
   {
     q: "How many accounts can I track?",
-    a: "Basic includes 3 tracked accounts total. Premium lets you track unlimited accounts — up to 5 monitored at a time — so you can watch an ex, a crush, a competitor, or an influencer all in one dashboard.",
+    a: "Basic includes 3 concurrent tracked accounts and Premium includes 5. Need more? Add as many concurrent slots as you want for $1 each per week or $14 each per quarter. Pausing an account frees its slot.",
   },
   {
     q: "Can I cancel anytime?",
@@ -131,8 +131,8 @@ export function Pricing() {
           </div>
           <p className="text-center text-xs text-[#777777] font-semibold mb-8">
             {tier === "base"
-              ? "3 accounts total · monitoring every 48 hours"
-              : "Unlimited accounts · 5 at a time · monitoring every 48 hours"}
+              ? "3 concurrent accounts included · add more anytime"
+              : "5 concurrent accounts included · add more anytime"}
           </p>
 
           {/* Billing toggle */}
@@ -217,7 +217,7 @@ export function Pricing() {
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                Billed weekly · {tier === "premium" ? "unlimited (5 at a time)" : "3 accounts total"}
+                Billed weekly · {tier === "premium" ? "5 concurrent accounts included" : "3 concurrent accounts included"} · extras $1/week each
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · +$2.00/wk email alerts</span>
                 )}
@@ -256,7 +256,7 @@ export function Pricing() {
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                <strong className="text-[#121212] font-bold">${livePrice("quarterly", emailAlerts, tier).toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly
+                <strong className="text-[#121212] font-bold">${livePrice("quarterly", emailAlerts, tier).toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly · extra slots $14/quarter each
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · includes +${(ALERTS_ADDON.quarterly / 13).toFixed(2)}/wk email alerts</span>
                 )}

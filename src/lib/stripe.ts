@@ -17,13 +17,14 @@ export const PRICE_IDS: Record<string, string> = {
   quarterly: process.env.STRIPE_PRICE_QUARTERLY_ID || "",
 };
 
-/** Premium plan price IDs (unlimited accounts, 5 at a time). */
+/** Premium plan price IDs (5 concurrent accounts included). */
 export const PREMIUM_PRICE_IDS: Record<string, string> = {
   weekly: process.env.STRIPE_PRICE_PREMIUM_WEEKLY_ID || "",
   quarterly: process.env.STRIPE_PRICE_PREMIUM_QUARTERLY_ID || "",
 };
 
 export type PlanTier = "base" | "premium";
+export type BillingCadence = "weekly" | "quarterly";
 
 export function getTierPriceIds(tier: PlanTier = "base"): Record<string, string> {
   return tier === "premium" ? PREMIUM_PRICE_IDS : PRICE_IDS;
@@ -50,6 +51,30 @@ export function getStripePriceId(
 export function getEmailAlertsPriceId(cadence: "weekly" | "quarterly"): string {
   const id = EMAIL_ALERTS_PRICE_IDS[cadence];
   if (!id) throw new Error(`STRIPE_EMAIL_ALERTS_${cadence.toUpperCase()}_ID is not configured`);
+  return id;
+}
+
+/**
+ * Recurring per-account capacity add-ons. These are separate Stripe Prices so
+ * their quantity can be increased without replacing the customer's base plan.
+ */
+export const ADDITIONAL_ACCOUNT_PRICE_IDS: Record<BillingCadence, string> = {
+  weekly: process.env.STRIPE_ADDITIONAL_ACCOUNT_WEEKLY_ID || "",
+  quarterly: process.env.STRIPE_ADDITIONAL_ACCOUNT_QUARTERLY_ID || "",
+};
+
+export const ADDITIONAL_ACCOUNT_UNIT_AMOUNTS: Record<BillingCadence, number> = {
+  weekly: 100,
+  quarterly: 1400,
+};
+
+export function getAdditionalAccountPriceId(cadence: BillingCadence): string {
+  const id = ADDITIONAL_ACCOUNT_PRICE_IDS[cadence];
+  if (!id) {
+    throw new Error(
+      `STRIPE_ADDITIONAL_ACCOUNT_${cadence.toUpperCase()}_ID is not configured`
+    );
+  }
   return id;
 }
 

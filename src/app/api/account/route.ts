@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import { getAuthUser } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCreditsSummary } from "@/lib/purchases";
+import { getAccountCapacity, publicCapacity } from "@/lib/account-capacity";
 
 /**
  * GET /api/account
@@ -15,7 +16,10 @@ export async function GET() {
   }
 
   const supabase = createServerClient();
-  const active = await hasActiveSubscription(user.id);
+  // Stripe is the entitlement source of truth. This also repairs legacy rows
+  // where pausing the last target incorrectly set `active=false` in Supabase.
+  const capacity = await getAccountCapacity(user.id);
+  const active = !!capacity;
 
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
@@ -100,6 +104,7 @@ export async function GET() {
     hasActiveSubscription: active,
     spikeThreshold: spikeRow.data?.spike_threshold ?? 5,
     credits,
+    capacity: capacity ? publicCapacity(capacity) : null,
     subscriptions,
   });
 }

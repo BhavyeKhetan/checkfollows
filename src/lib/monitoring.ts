@@ -184,7 +184,12 @@ async function getLatestValidSnapshot(
 async function storeBaselineSnapshot(
   targetId: string,
   entries: InstagramUserEntry[],
-  providerName: string
+  providerName: string,
+  runMetadata?: {
+    actorId?: string;
+    runId?: string;
+    costEstimate?: number;
+  }
 ): Promise<string> {
   const supabase = createServerClient();
 
@@ -196,9 +201,11 @@ async function storeBaselineSnapshot(
       status: "running",
       started_at: new Date().toISOString(),
       provider: providerName,
-      api_cost: 0,
+      api_cost: runMetadata?.costEstimate || 0,
       target_count: 1,
       profiles_returned: entries.length,
+      actor_id: runMetadata?.actorId || null,
+      run_id: runMetadata?.runId || null,
       suspect: false,
     })
     .select("id")
@@ -900,6 +907,10 @@ export async function processDueScans(): Promise<{
     // Process each target in the batch with its own entries
     for (const target of batch) {
       const entries = batchResult.entries.get(target.username.toLowerCase()) || [];
+      const allocatedCost = batchResult.totalProfilesReturned
+        ? ((batchResult.runMetadata.costEstimate || 0) * entries.length) /
+          batchResult.totalProfilesReturned
+        : 0;
 
       // Create a scan record for this specific target
       const { data: scan } = await supabase
@@ -909,7 +920,7 @@ export async function processDueScans(): Promise<{
           status: "running",
           started_at: new Date().toISOString(),
           provider: provider.name,
-          api_cost: 0,
+          api_cost: allocatedCost,
           target_count: batch.length,
           profiles_returned: entries.length,
           actor_id: batchResult.runMetadata.actorId || null,
@@ -1077,7 +1088,12 @@ export async function fullBaselineScan(username: string): Promise<{
 
   // Store the baseline snapshot directly — no need for a second Apify call.
   // We already have the entries from the batchScan above.
-  const scanId = await storeBaselineSnapshot(target.id, entries, provider.name);
+  const scanId = await storeBaselineSnapshot(
+    target.id,
+    entries,
+    provider.name,
+    result.runMetadata
+  );
 
   // Enable daily monitoring
   await enableMonitoring(target.id);

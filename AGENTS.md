@@ -86,6 +86,7 @@ Mixpanel is the **only** product-analytics tool for CheckFollows (no PostHog/GA/
 | `spike_threshold_saved` | account settings | `threshold` |
 | `subscribe_cta_clicked` | account subscribe | `location` |
 | `add_account_clicked` / `tracked_account_opened` | account tracked list | `username` |
+| `account_capacity_increased` | recurring account-slot purchase succeeds | `cadence`, `tier`, `additional_accounts`, `total_capacity` |
 | `tracking_page_viewed` | track page load | `username`, `monitoring_enabled`, `events_count` |
 | `monitoring_toggled` | track page toggle | `action` (start/stop), `username` |
 | `timeline_filter_changed` | track page tabs | `tab`, `username` |
@@ -115,4 +116,3 @@ Mixpanel is the **only** product-analytics tool for CheckFollows (no PostHog/GA/
 - Fire events only after the action succeeds (e.g. `subscription_activated` after activation, not on button click).
 - Analytics calls must never throw or block the page/webhook — keep them non-blocking (`void`/`try-catch`).
 - Dashboards: build in Mixpanel UI (Boards) — see `docs/mixpanel-dashboards.md` for the exact board + insight specs.
-

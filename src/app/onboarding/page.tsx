@@ -749,8 +749,8 @@ function PaywallStep({
       </div>
       <p className="text-center text-[11px] text-[#777777] font-semibold mt-2">
         {tier === "base"
-          ? "3 accounts total"
-          : "Unlimited accounts · 5 at a time"}
+          ? "3 concurrent accounts included"
+          : "5 concurrent accounts included"}
       </p>
 
       {/* Billing cadence toggle */}
@@ -795,8 +795,8 @@ function PaywallStep({
             </h3>
             <p className="text-sm text-[#555555]">
               {tier === "base"
-                ? "3 accounts total"
-                : "Unlimited accounts · 5 at a time"}
+                ? "3 concurrent accounts included"
+                : "5 concurrent accounts included"}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -822,10 +822,10 @@ function PaywallStep({
         </div>
         <p className="text-xs text-[#888888] mt-2">
           {cadence === "weekly" ? (
-            "Billed weekly · Cancel anytime"
+            "Billed weekly · extra slots $1/week each · Cancel anytime"
           ) : (
             <>
-              <strong className="text-[#121212] font-extrabold">${total.toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly
+              <strong className="text-[#121212] font-extrabold">${total.toFixed(2)} billed quarterly</strong> (every 3 months) · extra slots $14/quarter each
             </>
           )}
           {emailAlerts && (

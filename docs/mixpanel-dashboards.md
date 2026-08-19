@@ -111,6 +111,7 @@ whether Apple/Google Pay vs card matters for conversion.
 | 4.4 | Rescan usage | Funnel | `rescan_clicked` → `rescan_completed` |
 | 4.5 | Export usage | Funnel | `export_clicked` → `export_completed` |
 | 4.6 | Mutuals usage | Funnel | `mutuals_clicked` → `mutuals_completed` |
+| 4.7 | Account-capacity expansion | Breakdown | `account_capacity_increased` by `tier`, then `cadence`; sum `additional_accounts` |
 
 **Question it answers:** are the one-time add-ons and the email-alerts upsell
 actually getting bought, and at what attach rate.
