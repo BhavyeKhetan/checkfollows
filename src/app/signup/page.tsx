@@ -206,6 +206,14 @@ function SignupContent() {
             Create account
           </Button>
 
+          {!ready && (
+            <p className="text-xs text-[#777777] text-center font-medium -mt-2">
+              {!isValidEmail(email)
+                ? "Enter a valid email to continue."
+                : "Use a password with at least 8 characters."}
+            </p>
+          )}
+
           <p className="text-[11px] text-[#777777] font-medium flex items-center justify-center gap-1.5 pt-1">
             <Lock className="w-3 h-3 text-[#047857]" /> Your data stays private · no spam
           </p>
