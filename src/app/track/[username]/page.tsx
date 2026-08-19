@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import TrackPageClient from "./track-page-client";
-import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import {
+  getAuthUser,
+  hasActiveSubscription,
+  ownsTarget,
+} from "@/lib/supabase/auth";
 import { getCreditsSummary } from "@/lib/purchases";
 import { getTrackingTimeline } from "@/lib/tracking-data";
+import { createServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Private tracking dashboard | CheckFollows",
@@ -35,9 +40,23 @@ export default async function TrackPage({
     );
   }
 
-  const [timeline, credits] = await Promise.all([
+  const supabase = createServerClient();
+  const { data: target } = await supabase
+    .from("instagram_targets")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+  if (!target || !(await ownsTarget(user.id, target.id, user.email))) notFound();
+
+  const [timeline, credits, ownership] = await Promise.all([
     getTrackingTimeline(username),
     getCreditsSummary(user.id),
+    supabase
+      .from("subscriptions")
+      .select("user_paused")
+      .eq("user_id", user.id)
+      .eq("target_id", target.id)
+      .maybeSingle(),
   ]);
 
   if (!timeline) notFound();
@@ -46,7 +65,11 @@ export default async function TrackPage({
     <TrackPageClient
       username={username}
       userEmail={user.email || ""}
-      initialTarget={timeline.target}
+      initialTarget={{
+        ...timeline.target,
+        monitoring_enabled:
+          timeline.target.monitoring_enabled && ownership.data?.user_paused !== true,
+      }}
       initialEvents={timeline.events}
       initialCredits={credits}
     />

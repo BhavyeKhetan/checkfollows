@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { getAuthUser } from "@/lib/supabase/auth";
-import { enableMonitoring, disableMonitoring } from "@/lib/monitoring";
 import {
-  getStripe,
-  getStripePriceId,
-  getEmailAlertsPriceId,
-  type PlanTier,
-} from "@/lib/stripe";
+  getAuthUser,
+  hasActiveSubscription,
+  ownsTarget,
+} from "@/lib/supabase/auth";
+import {
+  disableMonitoringIfUnused,
+  enableMonitoring,
+} from "@/lib/monitoring";
+import type { PlanTier } from "@/lib/stripe";
 
 // Plan tier account limits.
 //   base    → 3 accounts total, ever (lifetime).
@@ -32,17 +34,16 @@ function capLabelForTier(tier: PlanTier): string {
  * Track Changes endpoint.
  *
  * GATES monitoring behind a Stripe subscription:
- *   - Already has an ACTIVE paid subscription for this target+email  → enable monitoring (idempotent).
- *   - Email has an ACTIVE paid subscription for a different target   → attach this target (no new charge, up to cap).
- *   - No paid subscription at all                                    → create a Stripe Checkout session, return { url }.
+ *   - Already owns this target → enable monitoring (idempotent).
+ *   - Has an active paid subscription → attach this target up to the plan cap.
+ *   - No active subscription → return the authenticated app paywall.
  *
  * action=stop disables monitoring for the target (user-initiated stop).
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetId, action = "start", email_alerts } = body;
-    const emailAlerts = email_alerts === true || email_alerts === "true";
+    const { targetId, action = "start" } = body;
 
     if (!targetId) {
       return NextResponse.json(
@@ -62,9 +63,18 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
+    if (!(await hasActiveSubscription(authUser.id))) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "An active subscription is required",
+          paywall: "/app/pricing",
+        },
+        { status: 402 }
+      );
+    }
     const email =
       authUser.email || (typeof body.email === "string" ? body.email : "");
-    const tier: PlanTier = body.tier === "premium" ? "premium" : "base";
 
     // Count tracked accounts for a tier. Premium counts concurrent (active)
     // accounts; base counts lifetime (all rows, ever).
@@ -72,9 +82,11 @@ export async function POST(request: Request) {
       let q = supabase
         .from("subscriptions")
         .select("*", { count: "exact", head: true })
-        .eq("email", email)
+        .eq("user_id", authUser.id)
         .not("target_id", "is", null);
-      if (t === "premium") q = q.eq("active", true);
+      if (t === "premium") {
+        q = q.eq("active", true).eq("user_paused", false);
+      }
       const { count } = await q;
       return count ?? 0;
     };
@@ -83,18 +95,22 @@ export async function POST(request: Request) {
     // user_paused = true prevents Stripe lifecycle events from silently
     // re-enabling this account later (see webhook handler).
     if (action === "stop") {
-      await disableMonitoring(targetId);
+      if (!(await ownsTarget(authUser.id, targetId, authUser.email))) {
+        return NextResponse.json(
+          { success: false, error: "Tracked account not found" },
+          { status: 404 }
+        );
+      }
 
-      let q = supabase
+      await supabase
         .from("subscriptions")
         .update({
           user_paused: true,
-          active: false,
           updated_at: new Date().toISOString(),
         })
-        .eq("target_id", targetId);
-      if (email) q = q.eq("email", email);
-      await q;
+        .eq("target_id", targetId)
+        .eq("user_id", authUser.id);
+      await disableMonitoringIfUnused(targetId);
 
       return NextResponse.json({
         success: true,
@@ -130,8 +146,8 @@ export async function POST(request: Request) {
       .from("subscriptions")
       .select("id, plan")
       .eq("target_id", targetId)
-      .eq("email", email)
-      .or("active.eq.true,user_paused.eq.true")
+      .eq("user_id", authUser.id)
+      .eq("active", true)
       .not("stripe_subscription_id", "is", null)
       .maybeSingle();
 
@@ -162,8 +178,8 @@ export async function POST(request: Request) {
     const { data: paidSub } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id, stripe_subscription_id, plan, tier")
-      .eq("email", email)
-      .or("active.eq.true,user_paused.eq.true")
+      .eq("user_id", authUser.id)
+      .eq("active", true)
       .not("stripe_subscription_id", "is", null)
       .limit(1)
       .maybeSingle();
@@ -242,80 +258,14 @@ export async function POST(request: Request) {
       });
     }
 
-    // 3) No paid sub → cap check + route through Stripe Checkout
-    const count = await countTracked(tier);
-    const cap = capForTier(tier);
-
-    if (count >= cap) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `You've tracked ${count} accounts already — the ${tier} plan allows ${capLabelForTier(tier)}. Upgrade to Premium to track more.`,
-          atLimit: true,
-          currentCount: count,
-          maxAllowed: cap,
-          tier,
-        },
-        { status: 402 }
-      );
-    }
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const stripe = getStripe();
-    const priceId = getStripePriceId("weekly", tier);
-
-    const lineItems: Array<{ price: string; quantity: number }> = [
-      { price: priceId, quantity: 1 },
-    ];
-    if (emailAlerts) {
-      lineItems.push({ price: getEmailAlertsPriceId("weekly"), quantity: 1 });
-    }
-
-    // "pro" plan = email alerts enabled (add-on). "basic" = monitoring only.
-    const plan = emailAlerts ? "pro" : "basic";
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: lineItems,
-      customer_email: email,
-      success_url: `${baseUrl}/track/${encodeURIComponent(
-        target.username
-      )}?session_id={CHECKOUT_SESSION_ID}&success=true`,
-      cancel_url: `${baseUrl}/track/${encodeURIComponent(
-        target.username
-      )}?canceled=true`,
-      subscription_data: {
-        metadata: {
-          product: "checkfollows",
-          cadence: "weekly",
-          tier,
-          plan,
-          email_alerts: String(emailAlerts),
-          target_id: targetId,
-          username: target.username,
-          email,
-          user_id: authUser.id,
-        },
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Your active subscription could not be resolved. Refresh your account and try again.",
       },
-      metadata: {
-        product: "checkfollows",
-        cadence: "weekly",
-        tier,
-        plan,
-        email_alerts: String(emailAlerts),
-        target_id: targetId,
-        username: target.username,
-        email,
-        user_id: authUser.id,
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      checkout: true,
-      url: session.url,
-      message: "Complete payment to start tracking",
-    });
+      { status: 409 }
+    );
   } catch (error) {
     console.error("Track API error:", error);
     return NextResponse.json(
