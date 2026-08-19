@@ -193,7 +193,7 @@ export function CancellationFlow({
                 onChange={(event) => setNote(event.target.value.slice(0, 500))}
                 placeholder="What could we have done better? (optional)"
                 rows={4}
-                className="mt-4 w-full resize-none rounded-xl border border-[#DADAD3] p-3 text-sm outline-none focus:border-[#121212]"
+                className="mt-4 w-full resize-none rounded-xl border border-[#DADAD3] p-3 text-base outline-none focus:border-[#121212]"
               />
               <Button
                 variant="primary"
