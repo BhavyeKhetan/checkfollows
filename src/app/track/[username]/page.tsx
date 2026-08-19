@@ -1,8 +1,19 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import TrackPageClient from "./track-page-client";
 import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 import { getCreditsSummary } from "@/lib/purchases";
 import { getTrackingTimeline } from "@/lib/tracking-data";
+
+export const metadata: Metadata = {
+  title: "Private tracking dashboard | CheckFollows",
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    nosnippet: true,
+  },
+};
 
 export default async function TrackPage({
   params,
