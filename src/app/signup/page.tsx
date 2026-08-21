@@ -232,15 +232,11 @@ function SignupContent() {
   );
 }
 
+import { BrandedLoading } from "@/components/ui/branded-loading";
+
 export default function SignupPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full border-3 border-[#121212] border-t-[#E7F256] animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<BrandedLoading />}>
       <SignupContent />
     </Suspense>
   );

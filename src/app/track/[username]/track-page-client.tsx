@@ -295,6 +295,10 @@ export default function TrackPageClient({
 
   const handleRescan = async () => {
     if (!target || rescanning) return;
+    if (!target.monitoring_enabled) {
+      window.alert("Tracking is paused for this account. Please resume tracking before running a rescan.");
+      return;
+    }
     track("rescan_clicked", {
       username: target.username,
       has_credit: credits.rescan_credits > 0,
@@ -670,38 +674,58 @@ export default function TrackPageClient({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <RefreshCw className="w-5 h-5 text-[#121212]" />
-                  {credits.rescan_credits > 0 && (
+                  {!target.monitoring_enabled ? (
+                    <Badge variant="mono" size="sm">
+                      Paused
+                    </Badge>
+                  ) : credits.rescan_credits > 0 ? (
                     <Badge variant="lime" size="sm">
                       {credits.rescan_credits} available
                     </Badge>
-                  )}
+                  ) : null}
                 </div>
                 <h3 className="text-sm font-extrabold text-[#121212]">Rescan now</h3>
                 <p className="text-xs text-[#555555] mt-1">
-                  Skip the 48h wait and check for changes immediately.
+                  {!target.monitoring_enabled
+                    ? "Tracking is currently paused. Resume to run on-demand rescans."
+                    : "Skip the 48h wait and check for changes immediately."}
                 </p>
               </div>
 
               <div className="mt-3 space-y-2">
-                <Button
-                  variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
-                  size="sm"
-                  onClick={credits.rescan_credits > 0 ? handleRescan : () => setShowRescanModal(true)}
-                  isLoading={rescanning}
-                  fullWidth
-                >
-                  {credits.rescan_credits > 0
-                    ? `Rescan now (${credits.rescan_credits} left)`
-                    : "Buy a rescan pack"}
-                </Button>
-                {credits.rescan_credits > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowRescanModal(true)}
-                    className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
+                {!target.monitoring_enabled ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleToggleMonitoring}
+                    isLoading={togglingMonitoring}
+                    fullWidth
                   >
-                    + Buy more rescans (from $0.67/ea)
-                  </button>
+                    Resume tracking
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
+                      size="sm"
+                      onClick={credits.rescan_credits > 0 ? handleRescan : () => setShowRescanModal(true)}
+                      isLoading={rescanning}
+                      fullWidth
+                    >
+                      {credits.rescan_credits > 0
+                        ? `Rescan now (${credits.rescan_credits} left)`
+                        : "Buy a rescan pack"}
+                    </Button>
+                    {credits.rescan_credits > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRescanModal(true)}
+                        className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
+                      >
+                        + Buy more rescans (from $0.67/ea)
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

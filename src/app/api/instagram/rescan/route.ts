@@ -40,6 +40,32 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if the user has paused tracking for this account
+    const { createServerClient } = await import("@/lib/supabase/server");
+    const supabase = createServerClient();
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("user_paused")
+      .eq("target_id", targetId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const { data: targetRow } = await supabase
+      .from("instagram_targets")
+      .select("monitoring_enabled")
+      .eq("id", targetId)
+      .maybeSingle();
+
+    if (sub?.user_paused === true || targetRow?.monitoring_enabled === false) {
+      return NextResponse.json(
+        {
+          error: "Tracking is paused for this account. Please resume tracking before rescanning.",
+          isPaused: true,
+        },
+        { status: 400 }
+      );
+    }
+
     // Consume the credit BEFORE the paid scan.
     if ((await getRemainingCredits(user.id, "rescan_credits")) <= 0) {
       return NextResponse.json(
