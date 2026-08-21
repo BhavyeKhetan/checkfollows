@@ -146,8 +146,8 @@ function OnboardingContent() {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        track("post_purchase_redirect", { destination: "account" });
-        router.replace("/account");
+        track("post_purchase_redirect", { destination: "dashboard" });
+        router.replace("/dashboard");
         return;
       }
     } catch {

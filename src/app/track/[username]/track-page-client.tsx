@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Logo } from "@/design-system";
+import { AppShell } from "@/components/app/app-shell";
 import {
   ArrowLeft,
   UserPlus,
@@ -505,9 +505,9 @@ export default function TrackPageClient({
       <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
         <Card variant="subtle" className="text-center max-w-sm border-[#FCA5A5]">
           <p className="text-[#B91C1C] text-sm font-medium mb-4">{error || "Account not found"}</p>
-          <Link href="/">
+          <Link href="/dashboard">
             <Button variant="secondary" leftIcon={<ArrowLeft className="w-4 h-4" />}>
-              Back to search
+              Back to dashboard
             </Button>
           </Link>
         </Card>
@@ -516,32 +516,23 @@ export default function TrackPageClient({
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
-      {/* ── Glass Header ── */}
-      <nav className="sticky top-0 z-50 ramp-glass">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-2 text-[#555555] hover:text-[#121212] transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <Logo />
-          </div>
-          <div className="flex items-center gap-3">
-            <a
-              href={`https://instagram.com/${target.username}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() =>
-                track("instagram_link_clicked", { username: target.username })
-              }
-              className="flex items-center gap-1.5 text-xs font-semibold text-[#555555] hover:text-[#121212] transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              View on Instagram
-            </a>
-          </div>
-        </div>
-      </nav>
+    <AppShell
+      maxWidth="max-w-6xl"
+      actions={
+        <a
+          href={`https://instagram.com/${target.username}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() =>
+            track("instagram_link_clicked", { username: target.username })
+          }
+          className="hidden items-center gap-1.5 text-xs font-semibold text-[#555555] transition-colors hover:text-[#121212] sm:flex"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Instagram
+        </a>
+      }
+    >
 
       {/* ── Profile Hero ── */}
       <section className="border-b border-[#E2E2DC] bg-[#F9F9F7] ramp-grid-bg">
@@ -896,16 +887,13 @@ export default function TrackPageClient({
       {/* ── Footer ── */}
       <footer className="py-8 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC]">
         <div className="max-w-4xl mx-auto text-center">
-          <Logo size="xs" className="mb-2" />
           <div className="flex items-center justify-center gap-4 text-[10px] text-[#777777] font-medium">
-            <Link href="/" className="hover:text-[#121212] transition-colors">Home</Link>
+            <Link href="/dashboard" className="hover:text-[#121212] transition-colors">Dashboard</Link>
             <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">Privacy</a>
-            <span>·</span>
-            <a href="#" className="hover:text-[#121212] transition-colors">Terms</a>
+            <Link href="/account" className="hover:text-[#121212] transition-colors">Account</Link>
           </div>
         </div>
       </footer>
-    </div>
+    </AppShell>
   );
 }

@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     const returnPath = username
       ? `/track/${encodeURIComponent(username.replace(/^@/, ""))}`
-      : "/account";
+      : "/dashboard";
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",

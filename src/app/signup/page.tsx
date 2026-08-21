@@ -101,7 +101,7 @@ function SignupContent() {
         });
       }
 
-      router.replace("/account");
+      router.replace("/dashboard");
     } catch {
       setError("Something went wrong. Please try again.");
       track("signup_error", { error: "network" });

@@ -17,7 +17,7 @@ function LoginContent() {
   const router = useRouter();
 
   const prefillEmail = searchParams.get("email") || "";
-  const next = searchParams.get("next") || "/account";
+  const next = searchParams.get("next") || "/dashboard";
 
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState("");
@@ -69,7 +69,7 @@ function LoginContent() {
       track("signed_in", { platform: "web" });
     }
 
-    router.replace(next.startsWith("/") ? next : "/account");
+    router.replace(next.startsWith("/") ? next : "/dashboard");
   };
 
   return (

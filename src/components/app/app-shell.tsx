@@ -33,9 +33,11 @@ function NavLink({
 export function AppShell({
   children,
   maxWidth = "max-w-3xl",
+  actions,
 }: {
   children: React.ReactNode;
   maxWidth?: string;
+  actions?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -73,6 +75,7 @@ export function AppShell({
               <Settings className="hidden h-3.5 w-3.5 sm:block" />
               Account
             </NavLink>
+            {actions}
             <button
               type="button"
               onClick={handleSignOut}

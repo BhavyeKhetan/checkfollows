@@ -224,31 +224,18 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FFFFFF] text-[#121212]">
-      {/* Header */}
-      <nav className="sticky top-0 z-50 ramp-glass">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Logo />
-          <button
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-xs font-bold text-[#555555] hover:text-[#121212] transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Sign out
-          </button>
-        </div>
-      </nav>
-
+    <AppShell>
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-10 space-y-6">
         {/* Account header */}
         <div>
           <Badge variant="mono" size="sm" className="mb-3">
-            YOUR ACCOUNT
+            ACCOUNT SETTINGS
           </Badge>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#121212]">
             {data?.user.email || "Account"}
           </h1>
           <p className="text-sm text-[#555555] mt-1 font-medium">
-            Manage your subscription and tracked accounts.
+            Billing, concurrent slots, alerts, and add-on credits.
           </p>
         </div>
 
@@ -261,7 +248,7 @@ export default function AccountPage() {
         {renewalSuccess && (
           <Card variant="highlight" className="border-[#86EFAC]">
             <p className="text-sm font-bold text-[#047857]">
-              Subscription active. Your dashboard and monitoring are ready.
+              Subscription active. Open the dashboard to see tracked accounts.
             </p>
           </Card>
         )}
@@ -304,6 +291,17 @@ export default function AccountPage() {
                     : "Subscribe to unlock full following lists and every-other-day monitoring."}
               </p>
             </div>
+            {data?.hasActiveSubscription && (
+              <Link href="/dashboard">
+                <Button
+                  variant="secondary"
+                  size="md"
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                >
+                  Dashboard
+                </Button>
+              </Link>
+            )}
             {!data?.hasActiveSubscription &&
               (data?.canRenew ? (
                 <a href="#renew-subscription">
@@ -508,134 +506,6 @@ export default function AccountPage() {
             </div>
           </div>
         </Card>
-
-        {/* Tracked accounts */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-extrabold text-[#121212]">
-              Tracked accounts ({trackedTargets.length})
-            </h2>
-            {data?.hasActiveSubscription && (
-              <Link
-                href="/app/add-account"
-                className="text-xs font-bold text-[#121212] underline underline-offset-2"
-                onClick={() => track("add_account_clicked")}
-              >
-                + Add account
-              </Link>
-            )}
-          </div>
-
-          {trackedTargets.length === 0 ? (
-            <Card variant="subtle" className="text-center py-10">
-              <Eye className="w-8 h-8 text-[#555555] mx-auto mb-3" />
-              <p className="text-sm text-[#555555] font-medium max-w-xs mx-auto">
-                You&apos;re not tracking anyone yet. Search a profile to start
-                watching who they follow.
-              </p>
-              <Link href="/app/add-account" className="inline-block mt-4">
-                <Button variant="secondary" size="sm" rightIcon={<ArrowRight className="w-4 h-4" />}>
-                  Search a profile
-                </Button>
-              </Link>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {trackedTargets.map((t) => (
-                <Card key={t.id} hoverable padding="md" className="flex items-center gap-4">
-                  <Avatar
-                    src={t.avatar_url}
-                    username={t.username}
-                    isVerified={t.is_verified}
-                    size="md"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-[#121212] truncate">
-                        {t.full_name || `@${t.username}`}
-                      </span>
-                      <Badge variant="mono" size="sm">@{t.username}</Badge>
-                    </div>
-                    <p className="text-xs text-[#555555] mt-0.5 flex items-center gap-2">
-                      <span>
-                        {t.following_count.toLocaleString()} following
-                      </span>
-                      <span className="text-[#E2E2DC]">·</span>
-                      <span>Last checked {formatRelative(t.last_scanned_at)}</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {t.monitoring_enabled ? (
-                      <Badge variant="lime" size="sm" className="flex items-center gap-1">
-                        <Bell className="w-3 h-3" /> Monitoring
-                      </Badge>
-                    ) : (
-                      <Badge variant="mono" size="sm">Paused</Badge>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={targetAction === t.id}
-                      leftIcon={
-                        t.monitoring_enabled ? (
-                          <Pause className="w-3.5 h-3.5" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5" />
-                        )
-                      }
-                      onClick={() => toggleTrackedAccount(t)}
-                    >
-                      {t.monitoring_enabled ? "Pause" : "Resume"}
-                    </Button>
-                    <Link href={`/track/${encodeURIComponent(t.username)}`}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        rightIcon={<ArrowRight className="w-4 h-4" />}
-                        onClick={() =>
-                          track("tracked_account_opened", { username: t.username })
-                        }
-                      >
-                        View
-                      </Button>
-                    </Link>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Value strip */}
-        <Card variant="subtle" padding="lg" className="grid sm:grid-cols-3 gap-6">
-          <div className="flex items-start gap-3">
-            <Bell className="w-5 h-5 text-[#121212] shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-extrabold text-[#121212]">Change alerts</h3>
-              <p className="text-xs text-[#555555] mt-0.5">
-                Emailed the moment they follow or unfollow someone.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <History className="w-5 h-5 text-[#121212] shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-extrabold text-[#121212]">Accumulating history</h3>
-              <p className="text-xs text-[#555555] mt-0.5">
-                Every check builds a permanent timeline.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Lock className="w-5 h-5 text-[#047857] shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-extrabold text-[#121212]">100% private</h3>
-              <p className="text-xs text-[#555555] mt-0.5">
-                The people you track are never notified.
-              </p>
-            </div>
-          </div>
-        </Card>
           </>
         ) : (
           <LockedAccount
@@ -659,7 +529,7 @@ export default function AccountPage() {
           />
         )}
       </main>
-    </div>
+    </AppShell>
   );
 }
 

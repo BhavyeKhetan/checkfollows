@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 export default async function AppPricingPage() {
   const user = await getAuthUser();
   if (!user) redirect("/login?next=/app/pricing");
-  if (await hasActiveSubscription(user.id)) redirect("/account");
+  if (await hasActiveSubscription(user.id)) redirect("/dashboard");
   return <AppPricingClient />;
 }

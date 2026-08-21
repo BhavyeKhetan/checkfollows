@@ -517,7 +517,7 @@ export default function EmbeddedCheckout({
             email_alerts: emailAlerts,
             error: "already_subscribed",
           });
-          window.location.href = "/account";
+          window.location.href = "/dashboard";
           return;
         } else {
           setError(data.error || "Failed to initialize checkout");

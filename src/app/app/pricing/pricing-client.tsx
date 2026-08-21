@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Bell, Check, Lock, Sparkles } from "lucide-react";
-import { Badge, Button, Card, Logo } from "@/design-system";
+import { Badge, Button, Card } from "@/design-system";
+import { AppShell } from "@/components/app/app-shell";
 import { track } from "@/lib/mixpanel";
 
 type Cadence = "weekly" | "quarterly";
@@ -44,7 +45,7 @@ export default function AppPricingClient() {
       });
       const json = await response.json().catch(() => ({}));
       if (response.status === 409) {
-        window.location.assign("/account");
+        window.location.assign("/dashboard");
         return;
       }
       if (!response.ok || !json.url) {
@@ -60,15 +61,8 @@ export default function AppPricingClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F8F4] text-[#121212]">
-      <nav className="sticky top-0 z-40 border-b border-[#E2E2DC] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <Logo href="/account" size="sm" />
-          <Badge variant="mono" size="sm">SECURE CHECKOUT</Badge>
-        </div>
-      </nav>
-
-      <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+    <AppShell>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <div className="mx-auto max-w-xl text-center">
           <Badge variant="lime" className="mb-4">UNLOCK YOUR ACCOUNT</Badge>
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
@@ -186,6 +180,6 @@ export default function AppPricingClient() {
           </p>
         </Card>
       </main>
-    </div>
+    </AppShell>
   );
 }

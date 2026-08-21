@@ -50,7 +50,7 @@ export function CheckoutButton({
           tier,
           email_alerts: emailAlerts,
         });
-        window.location.href = "/account";
+        window.location.href = "/dashboard";
         return;
       }
       if (data.url) {

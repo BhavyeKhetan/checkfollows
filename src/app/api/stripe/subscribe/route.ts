@@ -100,7 +100,7 @@ export async function POST(request: Request) {
       customer: customerId,
       client_reference_id: user.id,
       line_items: lineItems,
-      success_url: `${origin}/account?subscribed=1`,
+      success_url: `${origin}/dashboard?subscribed=1`,
       cancel_url: `${origin}/app/pricing?canceled=1`,
       metadata,
       subscription_data: { metadata },

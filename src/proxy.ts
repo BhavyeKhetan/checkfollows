@@ -10,6 +10,7 @@ export function proxy(request: NextRequest) {
   const isProductPath =
     pathname === "/login" ||
     pathname === "/signup" ||
+    pathname === "/dashboard" ||
     pathname.startsWith("/account") ||
     pathname.startsWith("/track/") ||
     pathname.startsWith("/app/");
@@ -25,7 +26,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (isAppHost && pathname === "/") {
-    return NextResponse.redirect(new URL("/account", request.url));
+    return NextResponse.rewrite(new URL("/dashboard", request.url));
   }
 
   // Keep the app subdomain product-only. Public marketing, legal, pricing,

@@ -1,10 +1,10 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Search, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { ArrowRight, CheckCircle2, Search, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Avatar, Badge, Button, Card, Logo } from "@/design-system";
+import { Avatar, Badge, Button, Card } from "@/design-system";
+import { AppShell } from "@/components/app/app-shell";
 import { track } from "@/lib/mixpanel";
 
 interface PreviewTarget {
@@ -82,17 +82,8 @@ export default function AddAccountClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F8F4] text-[#121212]">
-      <nav className="border-b border-[#E2E2DC] bg-white">
-        <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <Logo href="/account" size="sm" />
-          <Link href="/account" className="flex items-center gap-1 text-xs font-bold text-[#555555]">
-            <ArrowLeft className="h-3.5 w-3.5" /> Account
-          </Link>
-        </div>
-      </nav>
-
-      <main className="mx-auto w-full max-w-xl px-4 py-10 sm:px-6 sm:py-14">
+    <AppShell>
+      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <Badge variant="lime" className="mb-3">ADD A TRACKED ACCOUNT</Badge>
         <h1 className="text-3xl font-extrabold tracking-tight">Who do you want to monitor?</h1>
         <p className="mt-2 text-sm font-medium text-[#555555]">
@@ -156,6 +147,6 @@ export default function AddAccountClient() {
           </p>
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }
