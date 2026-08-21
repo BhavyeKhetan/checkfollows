@@ -78,6 +78,7 @@ export interface Database {
           stripe_subscription_id: string | null;
           active: boolean;
           user_paused: boolean;
+          removed_at: string | null;
           spike_threshold: number;
           created_at: string;
           updated_at: string;
@@ -93,6 +94,7 @@ export interface Database {
           stripe_subscription_id?: string | null;
           active?: boolean;
           user_paused?: boolean;
+          removed_at?: string | null;
           spike_threshold?: number;
           created_at?: string;
           updated_at?: string;
@@ -108,6 +110,7 @@ export interface Database {
           stripe_subscription_id?: string | null;
           active?: boolean;
           user_paused?: boolean;
+          removed_at?: string | null;
           spike_threshold?: number;
           created_at?: string;
           updated_at?: string;

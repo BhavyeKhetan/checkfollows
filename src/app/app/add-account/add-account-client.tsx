@@ -85,28 +85,28 @@ export default function AddAccountClient() {
     <AppShell>
       <main className="mx-auto w-full max-w-xl flex-1 px-4 py-10 sm:px-6 sm:py-14">
         <Badge variant="lime" className="mb-3">ADD A TRACKED ACCOUNT</Badge>
-        <h1 className="text-3xl font-extrabold tracking-tight">Who do you want to monitor?</h1>
-        <p className="mt-2 text-sm font-medium text-[#555555]">
+        <h1 className="text-3xl font-extrabold tracking-tight text-[var(--foreground)]">Who do you want to monitor?</h1>
+        <p className="mt-2 text-sm font-medium text-[var(--muted-foreground)]">
           Search a public Instagram username. They are never notified.
         </p>
 
-        <form onSubmit={searchAccount} className="mt-6 flex gap-2 rounded-2xl border-2 border-[#121212] bg-white p-2">
+        <form onSubmit={searchAccount} className="mt-6 flex gap-2 rounded-2xl border-2 border-[var(--border-dark)] bg-[var(--surface)] p-2">
           <div className="flex min-w-0 flex-1 items-center gap-2 px-2">
-            <Search className="h-5 w-5 shrink-0 text-[#555555]" />
+            <Search className="h-5 w-5 shrink-0 text-[var(--muted-foreground)]" />
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               placeholder="instagram_username"
               autoCapitalize="none"
               autoCorrect="off"
-              className="min-w-0 flex-1 py-2 text-base font-semibold outline-none"
+              className="min-w-0 flex-1 py-2 text-base font-semibold bg-transparent text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none"
             />
           </div>
           <Button type="submit" variant="primary" isLoading={loading}>Search</Button>
         </form>
 
         {error && (
-          <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>
+          <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-600 dark:text-red-400">{error}</p>
         )}
 
         {target && (
@@ -119,13 +119,13 @@ export default function AddAccountClient() {
                 size="lg"
               />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-lg font-extrabold">{target.full_name || `@${target.username}`}</h2>
-                <p className="text-sm font-bold text-[#555555]">@{target.username}</p>
-                <p className="mt-1 text-xs text-[#666660]">
+                <h2 className="truncate text-lg font-extrabold text-[var(--foreground)]">{target.full_name || `@${target.username}`}</h2>
+                <p className="text-sm font-bold text-[var(--muted-foreground)]">@{target.username}</p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
                   {(target.following_count || 0).toLocaleString()} following · {(target.follower_count || 0).toLocaleString()} followers
                 </p>
               </div>
-              <CheckCircle2 className="h-6 w-6 shrink-0 text-[#047857]" />
+              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-500" />
             </div>
             <Button
               variant="primary"
@@ -140,9 +140,9 @@ export default function AddAccountClient() {
           </Card>
         )}
 
-        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#DADAD3] bg-white p-4">
-          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#047857]" />
-          <p className="text-xs font-medium text-[#555555]">
+        <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-[var(--foreground)]">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+          <p className="text-xs font-medium text-[var(--muted-foreground)]">
             Only public Instagram accounts can be monitored. CheckFollows never logs into their account or sends them notifications.
           </p>
         </div>

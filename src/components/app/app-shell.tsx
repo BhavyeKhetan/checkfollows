@@ -21,8 +21,8 @@ function NavLink({
       href={href}
       className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
         active
-          ? "bg-[#121212] text-white"
-          : "text-[#555555] hover:text-[#121212]"
+          ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212]"
+          : "text-[#555555] hover:text-[#121212] dark:text-[#A1A1AA] dark:hover:text-[#F5F5F5]"
       }`}
     >
       {children}
@@ -56,7 +56,7 @@ export function AppShell({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#FFFFFF] text-[#121212]">
+    <div className="flex min-h-screen flex-col bg-[var(--background-subtle)] text-[var(--foreground)]">
       <nav className="sticky top-0 z-50 ramp-glass">
         <div
           className={`${maxWidth} mx-auto flex h-16 items-center justify-between gap-3 px-4 sm:px-6`}
@@ -79,7 +79,7 @@ export function AppShell({
             <button
               type="button"
               onClick={handleSignOut}
-              className="ml-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-[#555555] transition-colors hover:text-[#121212]"
+              className="ml-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-[#555555] dark:text-[#A1A1AA] transition-colors hover:text-[#121212] dark:hover:text-[#F5F5F5]"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Sign out</span>

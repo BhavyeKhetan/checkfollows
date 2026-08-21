@@ -552,13 +552,17 @@ export default function TrackPageClient({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-[#121212]">
-                  {target.full_name || `@${target.username}`}
+                  @{target.username}
                 </h1>
                 {target.is_verified && (
                   <CheckCircle2 className="w-5 h-5 text-blue-500 fill-blue-500 stroke-white" />
                 )}
               </div>
-              <p className="text-[#555555] font-medium">@{target.username}</p>
+              {target.full_name &&
+              target.full_name.replace(/^@/, "").toLowerCase() !==
+                target.username.toLowerCase() ? (
+                <p className="font-medium text-[#555555]">{target.full_name}</p>
+              ) : null}
               <div className="flex items-center gap-5 mt-2.5 text-sm">
                 <span>
                   <strong className="text-[#121212]">{target.following_count.toLocaleString()}</strong>{" "}

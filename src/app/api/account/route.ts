@@ -3,6 +3,7 @@ import { getAuthUser } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCreditsSummary } from "@/lib/purchases";
 import { getAccountCapacity, publicCapacity } from "@/lib/account-capacity";
+import { removalPolicy } from "@/lib/account-removal";
 
 /**
  * GET /api/account
@@ -24,7 +25,7 @@ export async function GET() {
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
     .select(
-      "id, target_id, plan, tier, active, user_paused, stripe_subscription_id, created_at, updated_at"
+      "id, target_id, plan, tier, active, user_paused, removed_at, stripe_subscription_id, created_at, updated_at"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
@@ -87,7 +88,9 @@ export async function GET() {
 
   const targetsById = new Map(targets.map((t) => [t.id as string, t]));
 
-  const subscriptions = (subs || []).map((s) => ({
+  const subscriptions = (subs || [])
+    .filter((s) => !s.removed_at)
+    .map((s) => ({
     id: s.id,
     plan: s.plan,
     tier: s.tier,
@@ -109,6 +112,13 @@ export async function GET() {
       : null,
   }));
 
+  const lastRemovedAt =
+    (subs || [])
+      .map((s) => s.removed_at)
+      .filter((value): value is string => !!value)
+      .sort()
+      .at(-1) || null;
+
   return NextResponse.json({
     success: true,
     user: { id: user.id, email: user.email },
@@ -116,6 +126,7 @@ export async function GET() {
     spikeThreshold: spikeRow.data?.spike_threshold ?? 5,
     credits,
     capacity: capacity ? publicCapacity(capacity) : null,
+    removal: removalPolicy(capacity.tier, lastRemovedAt),
     subscriptions,
   });
 }

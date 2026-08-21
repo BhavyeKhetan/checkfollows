@@ -11,6 +11,7 @@ import {
   Lock,
   Pause,
   Play,
+  Trash2,
 } from "lucide-react";
 import { Avatar, Badge, Button, Card } from "@/design-system";
 import { AppShell } from "@/components/app/app-shell";
@@ -28,6 +29,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<AccountData | null>(null);
   const [error, setError] = useState("");
   const [targetAction, setTargetAction] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [justSubscribed, setJustSubscribed] = useState(false);
 
   useEffect(() => {
@@ -145,14 +147,65 @@ export default function DashboardPage() {
     }
   };
 
+  const removeTrackedAccount = async (target: TrackedTarget) => {
+    if (targetAction) return;
+    setTargetAction(target.id);
+    setError("");
+    try {
+      const response = await fetch("/api/instagram/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: target.id, action: "remove" }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(json.error || "This account could not be removed.");
+        return;
+      }
+      setConfirmRemoveId(null);
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              removal: json.removal || current.removal,
+              capacity: current.capacity
+                ? (() => {
+                    const activeAccounts = Math.max(
+                      0,
+                      current.capacity.activeAccounts -
+                        (target.monitoring_enabled ? 1 : 0)
+                    );
+                    return {
+                      ...current.capacity,
+                      activeAccounts,
+                      availableAccounts: Math.max(
+                        0,
+                        current.capacity.totalAccounts - activeAccounts
+                      ),
+                    };
+                  })()
+                : current.capacity,
+              subscriptions: current.subscriptions.filter(
+                (subscription) => subscription.target?.id !== target.id
+              ),
+            }
+          : current
+      );
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setTargetAction(null);
+    }
+  };
+
   const trackedTargets = (data?.subscriptions || [])
     .map((s) => s.target)
     .filter((t): t is TrackedTarget => !!t);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#FFFFFF]">
-        <div className="border-3 h-8 w-8 animate-spin rounded-full border-[#121212] border-t-[#E7F256]" />
+      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
+        <div className="border-3 h-8 w-8 animate-spin rounded-full border-[var(--border)] border-t-[#E7F256]" />
       </div>
     );
   }
@@ -222,6 +275,26 @@ export default function DashboardPage() {
               </Link>
             </div>
 
+            {data.removal?.tier === "base" && (
+              <p className="mb-3 text-xs font-medium text-[#555555]">
+                {data.removal.canRemove
+                  ? "Basic can remove a tracked account once every 7 days. Pause anytime. Premium can pause, resume, and delete without a wait."
+                  : `Basic can remove a tracked account once every 7 days. Next removal on ${
+                      data.removal.nextRemoveAt
+                        ? new Date(data.removal.nextRemoveAt).toLocaleDateString(
+                            undefined,
+                            { month: "short", day: "numeric" }
+                          )
+                        : "a later date"
+                    }. Upgrade to Premium to delete anytime.`}
+              </p>
+            )}
+            {data.removal?.tier === "premium" && (
+              <p className="mb-3 text-xs font-medium text-[#555555]">
+                Premium: pause, resume, or delete tracked accounts anytime.
+              </p>
+            )}
+
             {trackedTargets.length === 0 ? (
               <Card variant="subtle" className="py-10 text-center">
                 <Eye className="mx-auto mb-3 h-8 w-8 text-[#555555]" />
@@ -257,11 +330,15 @@ export default function DashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-bold text-[#121212]">
-                          {t.full_name || `@${t.username}`}
-                        </span>
-                        <Badge variant="mono" size="sm">
                           @{t.username}
-                        </Badge>
+                        </span>
+                        {t.full_name &&
+                          t.full_name.replace(/^@/, "").toLowerCase() !==
+                            t.username.toLowerCase() && (
+                            <span className="truncate text-xs font-medium text-[#777777]">
+                              {t.full_name}
+                            </span>
+                          )}
                       </div>
                       <p className="mt-0.5 flex items-center gap-2 text-xs text-[#555555]">
                         <span>
@@ -271,7 +348,7 @@ export default function DashboardPage() {
                         <span>Last checked {formatRelative(t.last_scanned_at)}</span>
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       {t.monitoring_enabled ? (
                         <Badge
                           variant="lime"
@@ -314,6 +391,50 @@ export default function DashboardPage() {
                           Open
                         </Button>
                       </Link>
+                      {confirmRemoveId === t.id ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            isLoading={targetAction === t.id}
+                            onClick={() => removeTrackedAccount(t)}
+                          >
+                            Confirm delete
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setConfirmRemoveId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                          disabled={data.removal?.canRemove === false}
+                          onClick={() => {
+                            if (data.removal?.canRemove === false) {
+                              setError(
+                                data.removal.nextRemoveAt
+                                  ? `Basic can remove a tracked account once every 7 days. Next removal on ${new Date(
+                                      data.removal.nextRemoveAt
+                                    ).toLocaleDateString(undefined, {
+                                      month: "short",
+                                      day: "numeric",
+                                    })}.`
+                                  : "Basic can remove a tracked account once every 7 days."
+                              );
+                              return;
+                            }
+                            setConfirmRemoveId(t.id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </Card>
                 ))}

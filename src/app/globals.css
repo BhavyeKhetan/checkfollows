@@ -344,54 +344,119 @@ body {
   }
   :root:not(.light) .bg-\[\#F9F9F7\],
   :root:not(.light) .bg-\[\#F8F8F4\],
-  :root:not(.light) .bg-\[\#FAFAFA\] {
+  :root:not(.light) .bg-\[\#FAFAFA\],
+  :root:not(.light) .bg-\[\#FAFAF6\],
+  :root:not(.light) .bg-\[\#F8F8F5\] {
     background-color: var(--background-subtle);
   }
   :root:not(.light) .bg-\[\#EDEDE8\],
   :root:not(.light) .bg-\[\#EFEFEA\],
-  :root:not(.light) .bg-\[\#F3F3EF\] {
+  :root:not(.light) .bg-\[\#F3F3EF\],
+  :root:not(.light) .bg-\[\#F5F5F0\],
+  :root:not(.light) .bg-\[\#F2F2ED\] {
     background-color: var(--badge-bg);
   }
-  :root:not(.light) .bg-\[\#FBFDDC\] {
+  :root:not(.light) .bg-\[\#FBFDDC\],
+  :root:not(.light) .bg-\[\#F2F4B8\] {
     background-color: var(--ramp-lime-subtle);
   }
-  :root:not(.light) .bg-\[\#E6F4EA\] {
+  :root:not(.light) .bg-white\/95,
+  :root:not(.light) .bg-white\/90,
+  :root:not(.light) .bg-white\/85 {
+    background-color: rgba(23, 23, 23, 0.95);
+  }
+  :root:not(.light) .bg-white\/65,
+  :root:not(.light) .bg-white\/50 {
+    background-color: rgba(23, 23, 23, 0.65);
+  }
+  :root:not(.light) .bg-white\/25,
+  :root:not(.light) .bg-white\/10 {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+  :root:not(.light) .bg-\[\#E6F4EA\],
+  :root:not(.light) .bg-green-50,
+  :root:not(.light) .bg-emerald-50 {
     background-color: var(--emerald-subtle);
   }
-  :root:not(.light) .bg-\[\#FEF3C7\] {
+  :root:not(.light) .bg-\[\#FEF3C7\],
+  :root:not(.light) .bg-amber-50 {
     background-color: var(--amber-subtle);
   }
-  :root:not(.light) .bg-\[\#FEE2E2\] {
+  :root:not(.light) .bg-\[\#FEE2E2\],
+  :root:not(.light) .bg-red-50,
+  :root:not(.light) .bg-rose-50 {
     background-color: var(--rose-subtle);
+  }
+  :root:not(.light) .bg-\[\#EEF2FF\],
+  :root:not(.light) .bg-blue-50 {
+    background-color: rgba(59, 130, 246, 0.12);
   }
 
   :root:not(.light) .border-\[\#E2E2DC\],
-  :root:not(.light) .border-\[\#F0F0ED\] {
+  :root:not(.light) .border-\[\#F0F0ED\],
+  :root:not(.light) .border-\[\#DADAD3\],
+  :root:not(.light) .border-\[\#D9D9D2\],
+  :root:not(.light) .border-\[\#CFCFC8\],
+  :root:not(.light) .border-\[\#E8E8E2\] {
     border-color: var(--border);
   }
   :root:not(.light) .border-\[\#D0D0CA\] {
     border-color: var(--border-hover);
   }
+  :root:not(.light) .border-\[\#C9D4FF\],
+  :root:not(.light) .border-blue-200 {
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  :root:not(.light) .border-green-200,
+  :root:not(.light) .border-emerald-200 {
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+  :root:not(.light) .border-red-200,
+  :root:not(.light) .border-rose-200 {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
 
   :root:not(.light) .text-\[\#121212\]:not(.bg-\[\#E7F256\] *):not(.bg-\[\#DAE64A\] *):not(.ramp-badge-lime *):not(.ramp-btn-primary *):not([data-theme-ignore] *):not(.bg-\[\#E7F256\]):not(.bg-\[\#DAE64A\]) {
     color: var(--foreground);
   }
-  :root:not(.light) .text-\[\#555555\] {
+  :root:not(.light) .text-\[\#555555\],
+  :root:not(.light) .text-\[\#74746E\],
+  :root:not(.light) .text-\[\#666660\] {
     color: var(--muted-foreground);
   }
   :root:not(.light) .text-\[\#777777\],
   :root:not(.light) .text-\[\#888888\],
-  :root:not(.light) .text-\[\#999999\] {
+  :root:not(.light) .text-\[\#999999\],
+  :root:not(.light) .text-\[\#6B6B66\],
+  :root:not(.light) .text-\[\#777771\],
+  :root:not(.light) .text-\[\#9A9A94\] {
     color: var(--muted);
+  }
+  :root:not(.light) .text-blue-800 {
+    color: #93C5FD;
+  }
+  :root:not(.light) .text-green-800,
+  :root:not(.light) .text-emerald-700 {
+    color: #6EE7B7;
+  }
+  :root:not(.light) .text-red-700 {
+    color: #FCA5A5;
+  }
+
+  :root:not(.light) input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  :root:not(.light) textarea,
+  :root:not(.light) select {
+    background-color: var(--input);
+    color: var(--foreground);
+    border-color: var(--border);
   }
 
   :root:not(.light) .hover\:bg-\[\#F9F9F7\]:hover,
   :root:not(.light) .hover\:bg-\[\#FAFAFA\]:hover,
-  :root:not(.light) .hover\:bg-\[\#FBFBF9\]:hover {
-    background-color: var(--surface-hover);
-  }
+  :root:not(.light) .hover\:bg-\[\#FBFBF9\]:hover,
   :root:not(.light) .hover\:bg-\[\#EDEDE8\]:hover,
-  :root:not(.light) .hover\:bg-\[\#EFEFEA\]:hover {
+  :root:not(.light) .hover\:bg-\[\#EFEFEA\]:hover,
+  :root:not(.light) .hover\:bg-\[\#F2F2ED\]:hover {
     background-color: var(--surface-hover);
   }
   :root:not(.light) .hover\:border-\[\#D0D0CA\]:hover,
@@ -409,54 +474,119 @@ body {
 }
 .dark .bg-\[\#F9F9F7\],
 .dark .bg-\[\#F8F8F4\],
-.dark .bg-\[\#FAFAFA\] {
+.dark .bg-\[\#FAFAFA\],
+.dark .bg-\[\#FAFAF6\],
+.dark .bg-\[\#F8F8F5\] {
   background-color: var(--background-subtle);
 }
 .dark .bg-\[\#EDEDE8\],
 .dark .bg-\[\#EFEFEA\],
-.dark .bg-\[\#F3F3EF\] {
+.dark .bg-\[\#F3F3EF\],
+.dark .bg-\[\#F5F5F0\],
+.dark .bg-\[\#F2F2ED\] {
   background-color: var(--badge-bg);
 }
-.dark .bg-\[\#FBFDDC\] {
+.dark .bg-\[\#FBFDDC\],
+.dark .bg-\[\#F2F4B8\] {
   background-color: var(--ramp-lime-subtle);
 }
-.dark .bg-\[\#E6F4EA\] {
+.dark .bg-white\/95,
+.dark .bg-white\/90,
+.dark .bg-white\/85 {
+  background-color: rgba(23, 23, 23, 0.95);
+}
+.dark .bg-white\/65,
+.dark .bg-white\/50 {
+  background-color: rgba(23, 23, 23, 0.65);
+}
+.dark .bg-white\/25,
+.dark .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.dark .bg-\[\#E6F4EA\],
+.dark .bg-green-50,
+.dark .bg-emerald-50 {
   background-color: var(--emerald-subtle);
 }
-.dark .bg-\[\#FEF3C7\] {
+.dark .bg-\[\#FEF3C7\],
+.dark .bg-amber-50 {
   background-color: var(--amber-subtle);
 }
-.dark .bg-\[\#FEE2E2\] {
+.dark .bg-\[\#FEE2E2\],
+.dark .bg-red-50,
+.dark .bg-rose-50 {
   background-color: var(--rose-subtle);
+}
+.dark .bg-\[\#EEF2FF\],
+.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.12);
 }
 
 .dark .border-\[\#E2E2DC\],
-.dark .border-\[\#F0F0ED\] {
+.dark .border-\[\#F0F0ED\],
+.dark .border-\[\#DADAD3\],
+.dark .border-\[\#D9D9D2\],
+.dark .border-\[\#CFCFC8\],
+.dark .border-\[\#E8E8E2\] {
   border-color: var(--border);
 }
 .dark .border-\[\#D0D0CA\] {
   border-color: var(--border-hover);
 }
+.dark .border-\[\#C9D4FF\],
+.dark .border-blue-200 {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.dark .border-green-200,
+.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.dark .border-red-200,
+.dark .border-rose-200 {
+  border-color: rgba(239, 68, 68, 0.3);
+}
 
 .dark .text-\[\#121212\]:not(.bg-\[\#E7F256\] *):not(.bg-\[\#DAE64A\] *):not(.ramp-badge-lime *):not(.ramp-btn-primary *):not([data-theme-ignore] *):not(.bg-\[\#E7F256\]):not(.bg-\[\#DAE64A\]) {
   color: var(--foreground);
 }
-.dark .text-\[\#555555\] {
+.dark .text-\[\#555555\],
+.dark .text-\[\#74746E\],
+.dark .text-\[\#666660\] {
   color: var(--muted-foreground);
 }
 .dark .text-\[\#777777\],
 .dark .text-\[\#888888\],
-.dark .text-\[\#999999\] {
+.dark .text-\[\#999999\],
+.dark .text-\[\#6B6B66\],
+.dark .text-\[\#777771\],
+.dark .text-\[\#9A9A94\] {
   color: var(--muted);
+}
+.dark .text-blue-800 {
+  color: #93C5FD;
+}
+.dark .text-green-800,
+.dark .text-emerald-700 {
+  color: #6EE7B7;
+}
+.dark .text-red-700 {
+  color: #FCA5A5;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+.dark textarea,
+.dark select {
+  background-color: var(--input);
+  color: var(--foreground);
+  border-color: var(--border);
 }
 
 .dark .hover\:bg-\[\#F9F9F7\]:hover,
 .dark .hover\:bg-\[\#FAFAFA\]:hover,
-.dark .hover\:bg-\[\#FBFBF9\]:hover {
-  background-color: var(--surface-hover);
-}
+.dark .hover\:bg-\[\#FBFBF9\]:hover,
 .dark .hover\:bg-\[\#EDEDE8\]:hover,
-.dark .hover\:bg-\[\#EFEFEA\]:hover {
+.dark .hover\:bg-\[\#EFEFEA\]:hover,
+.dark .hover\:bg-\[\#F2F2ED\]:hover {
   background-color: var(--surface-hover);
 }
 .dark .hover\:border-\[\#D0D0CA\]:hover,

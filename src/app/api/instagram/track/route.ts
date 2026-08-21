@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAccountCapacity } from "@/lib/account-capacity";
+import {
+  basicRemovalCooldownMessage,
+  removalPolicy,
+} from "@/lib/account-removal";
 import { disableMonitoringIfUnused, enableMonitoring } from "@/lib/monitoring";
 import { getAuthUser, ownsTarget } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
@@ -63,6 +67,62 @@ export async function POST(request: Request) {
         },
         { status: 402 }
       );
+
+    if (action === "remove") {
+      if (!(await ownsTarget(authUser.id, targetId, authUser.email))) {
+        return NextResponse.json(
+          { success: false, error: "Tracked account not found" },
+          { status: 404 }
+        );
+      }
+
+      const { data: removalRows, error: removalLookupError } = await supabase
+        .from("subscriptions")
+        .select("removed_at")
+        .eq("user_id", authUser.id)
+        .not("removed_at", "is", null)
+        .order("removed_at", { ascending: false })
+        .limit(1);
+
+      if (removalLookupError) {
+        throw new Error(`Failed to load removal history: ${removalLookupError.message}`);
+      }
+
+      const lastRemovedAt = removalRows?.[0]?.removed_at || null;
+      const policy = removalPolicy(capacity.tier, lastRemovedAt);
+      if (!policy.canRemove && policy.nextRemoveAt) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: basicRemovalCooldownMessage(policy.nextRemoveAt),
+            atRemovalLimit: true,
+            nextRemoveAt: policy.nextRemoveAt,
+            tier: capacity.tier,
+          },
+          { status: 429 }
+        );
+      }
+
+      const now = new Date().toISOString();
+      await supabase
+        .from("subscriptions")
+        .update({
+          user_paused: true,
+          removed_at: now,
+          updated_at: now,
+        })
+        .eq("target_id", targetId)
+        .eq("user_id", authUser.id)
+        .is("removed_at", null);
+
+      await disableMonitoringIfUnused(targetId);
+
+      return NextResponse.json({
+        success: true,
+        message: "Account removed from your dashboard",
+        removal: removalPolicy(capacity.tier, now),
+      });
+    }
 
     if (action === "stop") {
       if (!(await ownsTarget(authUser.id, targetId, authUser.email))) {
@@ -136,6 +196,7 @@ export async function POST(request: Request) {
         .from("subscriptions")
         .update({
           user_paused: false,
+          removed_at: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingPaid.id);
@@ -192,6 +253,7 @@ export async function POST(request: Request) {
       stripe_subscription_id: capacity.stripeSubscriptionId,
       active: true,
       user_paused: false,
+      removed_at: null,
       updated_at: new Date().toISOString(),
     };
 

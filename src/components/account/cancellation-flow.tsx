@@ -102,37 +102,37 @@ export function CancellationFlow({
     <button
       type="button"
       onClick={() => setStep(next)}
-      className="mt-3 w-full py-3 text-sm font-bold text-[#555555] underline decoration-[#9A9A94] underline-offset-4"
+      className="mt-3 w-full py-3 text-sm font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline decoration-[var(--muted)] underline-offset-4 transition-colors"
     >
       {label}
     </button>
   );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-5">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 backdrop-blur-xs p-0 sm:items-center sm:p-5">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Cancel subscription"
-        className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:max-w-lg sm:rounded-3xl"
+        className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-[var(--card)] border border-[var(--border)] text-[var(--foreground)] shadow-2xl sm:max-w-lg sm:rounded-3xl"
       >
-        <div className="sticky top-0 z-10 border-b border-[#E2E2DC] bg-white px-5 py-4 sm:px-6">
+        <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--card)] px-5 py-4 sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-xs font-extrabold tracking-wide text-[#74746E]">
+              <div className="text-xs font-extrabold tracking-wide text-[var(--muted-foreground)]">
                 STEP {step} OF 5
               </div>
-              <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-[#EDEDE8]">
+              <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-[var(--badge-bg)]">
                 <div
-                  className="h-full rounded-full bg-[#121212] transition-all"
+                  className="h-full rounded-full bg-[#E7F256] transition-all"
                   style={{ width: `${step * 20}%` }}
                 />
               </div>
             </div>
             <button
               type="button"
-                onClick={closeFlow}
-              className="rounded-full p-2 text-[#555555] hover:bg-[#F2F2ED]"
+              onClick={closeFlow}
+              className="rounded-full p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)] transition-colors"
               aria-label="Close cancellation flow"
             >
               <X className="h-5 w-5" />
@@ -144,16 +144,16 @@ export function CancellationFlow({
           {step === 1 && (
             <div>
               <Badge variant="mono" className="mb-3">BEFORE YOU GO</Badge>
-              <h2 className="text-2xl font-extrabold tracking-tight">
+              <h2 className="text-2xl font-extrabold tracking-tight text-[var(--foreground)]">
                 Your history stops building when access ends
               </h2>
-              <p className="mt-2 text-sm font-medium text-[#555555]">
+              <p className="mt-2 text-sm font-medium text-[var(--muted-foreground)]">
                 You keep access through the paid period, then tracked profiles, timelines, alerts, rescans, and exports lock again.
               </p>
-              <div className="mt-5 space-y-2 rounded-2xl bg-[#F5F5F0] p-4 text-sm font-bold">
-                <p>• Automatic monitoring stops</p>
-                <p>• New follow and unfollow events stop accumulating</p>
-                <p>• Existing tracking history becomes hidden</p>
+              <div className="mt-5 space-y-2 rounded-2xl bg-[var(--badge-bg)] border border-[var(--border)] p-4 text-sm font-bold text-[var(--foreground)]">
+                <p className="text-[var(--foreground)]">• Automatic monitoring stops</p>
+                <p className="text-[var(--foreground)]">• New follow and unfollow events stop accumulating</p>
+                <p className="text-[var(--foreground)]">• Existing tracking history becomes hidden</p>
               </div>
               <Button variant="primary" size="lg" className="mt-6 w-full" onClick={closeFlow}>
                 Keep my subscription
@@ -164,11 +164,11 @@ export function CancellationFlow({
 
           {step === 2 && (
             <div>
-              <button type="button" onClick={() => setStep(1)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#555555]">
+              <button type="button" onClick={() => setStep(1)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
-              <h2 className="text-2xl font-extrabold">What’s making you leave?</h2>
-              <p className="mt-1 text-sm text-[#555555]">Choose the closest reason and tell us anything we should know.</p>
+              <h2 className="text-2xl font-extrabold text-[var(--foreground)]">What’s making you leave?</h2>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">Choose the closest reason and tell us anything we should know.</p>
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
                 {REASONS.map(([value, label]) => (
                   <button
@@ -178,10 +178,10 @@ export function CancellationFlow({
                       setReason(value);
                       track("cancellation_reason_selected", { reason: value });
                     }}
-                    className={`rounded-xl border p-3 text-left text-sm font-bold ${
+                    className={`rounded-xl border p-3 text-left text-sm font-bold transition-all ${
                       reason === value
-                        ? "border-[#121212] bg-[#F2F4B8]"
-                        : "border-[#E2E2DC] bg-white"
+                        ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)] shadow-xs"
+                        : "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--foreground)]"
                     }`}
                   >
                     {label}
@@ -193,7 +193,7 @@ export function CancellationFlow({
                 onChange={(event) => setNote(event.target.value.slice(0, 500))}
                 placeholder="What could we have done better? (optional)"
                 rows={4}
-                className="mt-4 w-full resize-none rounded-xl border border-[#DADAD3] p-3 text-base outline-none focus:border-[#121212]"
+                className="mt-4 w-full resize-none rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-base text-[var(--foreground)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--foreground)] focus:ring-2 focus:ring-[var(--foreground)]/10"
               />
               <Button
                 variant="primary"
@@ -210,11 +210,11 @@ export function CancellationFlow({
 
           {step === 3 && (
             <div>
-              <button type="button" onClick={() => setStep(2)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#555555]">
+              <button type="button" onClick={() => setStep(2)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
-              <h2 className="text-2xl font-extrabold">A smaller plan may fit better</h2>
-              <p className="mt-1 text-sm text-[#555555]">
+              <h2 className="text-2xl font-extrabold text-[var(--foreground)]">A smaller plan may fit better</h2>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Change tier, billing schedule, or remove email alerts without losing your tracking history.
               </p>
               <button
@@ -224,14 +224,14 @@ export function CancellationFlow({
                   onOpenPlan();
                   closeFlow();
                 }}
-                className="mt-5 flex w-full items-center gap-4 rounded-2xl border-2 border-[#121212] bg-[#FBFDDC] p-4 text-left"
+                className="mt-5 flex w-full items-center gap-4 rounded-2xl border-2 border-[#E7F256] bg-[var(--ramp-lime-subtle)] hover:bg-[var(--ramp-lime-subtle-hover)] p-4 text-left text-[var(--foreground)] transition-colors"
               >
-                <CreditCard className="h-6 w-6 shrink-0" />
+                <CreditCard className="h-6 w-6 shrink-0 text-[#E7F256]" />
                 <span className="flex-1">
-                  <span className="block font-extrabold">Change or downgrade my plan</span>
-                  <span className="block text-xs font-medium text-[#555555]">See Basic, Premium, weekly, and quarterly options</span>
+                  <span className="block font-extrabold text-[var(--foreground)]">Change or downgrade my plan</span>
+                  <span className="block text-xs font-medium text-[var(--muted-foreground)]">See Basic, Premium, weekly, and quarterly options</span>
                 </span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 text-[var(--foreground)]" />
               </button>
               <Button variant="secondary" size="lg" className="mt-4 w-full" onClick={closeFlow}>
                 Keep my current plan
@@ -242,17 +242,17 @@ export function CancellationFlow({
 
           {step === 4 && (
             <div>
-              <button type="button" onClick={() => setStep(3)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#555555]">
+              <button type="button" onClick={() => setStep(3)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
-              <h2 className="text-2xl font-extrabold">Take a billing break</h2>
-              <p className="mt-1 text-sm text-[#555555]">
+              <h2 className="text-2xl font-extrabold text-[var(--foreground)]">Take a billing break</h2>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Keep monitoring and access, but pay nothing for the next 30 days. Billing resumes automatically after the break.
               </p>
-              <div className="mt-5 rounded-2xl border border-[#C9D4FF] bg-[#EEF2FF] p-5">
-                <CalendarClock className="h-7 w-7" />
-                <p className="mt-3 font-extrabold">30 days with no charges</p>
-                <p className="mt-1 text-xs font-medium text-[#555555]">One-time retention offer. Your product access stays active.</p>
+              <div className="mt-5 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-5 text-[var(--foreground)]">
+                <CalendarClock className="h-7 w-7 text-blue-500" />
+                <p className="mt-3 font-extrabold text-[var(--foreground)]">30 days with no charges</p>
+                <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">One-time retention offer. Your product access stays active.</p>
               </div>
               {!pauseUsed ? (
                 <Button
@@ -265,7 +265,7 @@ export function CancellationFlow({
                   Pause billing for 30 days
                 </Button>
               ) : (
-                <p className="mt-4 rounded-xl bg-[#F5F5F0] p-3 text-sm font-bold text-[#555555]">This one-time billing break has already been used.</p>
+                <p className="mt-4 rounded-xl bg-[var(--badge-bg)] border border-[var(--border)] p-3 text-sm font-bold text-[var(--muted-foreground)]">This one-time billing break has already been used.</p>
               )}
               {continueButton(5, "No thanks, continue cancellation")}
             </div>
@@ -273,17 +273,17 @@ export function CancellationFlow({
 
           {step === 5 && (
             <div>
-              <button type="button" onClick={() => setStep(4)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[#555555]">
+              <button type="button" onClick={() => setStep(4)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
-              <h2 className="text-2xl font-extrabold">One final option: 50% off</h2>
-              <p className="mt-1 text-sm text-[#555555]">
+              <h2 className="text-2xl font-extrabold text-[var(--foreground)]">One final option: 50% off</h2>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
                 Stay and get 50% off your next billing cycle. Your normal price resumes after that one cycle.
               </p>
-              <div className="mt-5 rounded-2xl border-2 border-[#E7F256] bg-[#FBFDDC] p-5 text-center">
-                <Gift className="mx-auto h-8 w-8" />
-                <div className="mt-2 text-3xl font-extrabold">50% OFF</div>
-                <div className="text-xs font-bold text-[#555555]">YOUR NEXT BILLING CYCLE</div>
+              <div className="mt-5 rounded-2xl border-2 border-[#E7F256] bg-[var(--ramp-lime-subtle)] p-5 text-center text-[var(--foreground)]">
+                <Gift className="mx-auto h-8 w-8 text-[#E7F256]" />
+                <div className="mt-2 text-3xl font-extrabold text-[var(--foreground)]">50% OFF</div>
+                <div className="text-xs font-bold text-[var(--muted-foreground)]">YOUR NEXT BILLING CYCLE</div>
               </div>
               {!discountUsed ? (
                 <Button
@@ -296,16 +296,16 @@ export function CancellationFlow({
                   Apply 50% discount and stay
                 </Button>
               ) : (
-                <p className="mt-4 rounded-xl bg-[#F5F5F0] p-3 text-sm font-bold text-[#555555]">This one-time discount has already been used.</p>
+                <p className="mt-4 rounded-xl bg-[var(--badge-bg)] border border-[var(--border)] p-3 text-sm font-bold text-[var(--muted-foreground)]">This one-time discount has already been used.</p>
               )}
 
-              <div className="mt-6 border-t border-[#E2E2DC] pt-5">
-                <p className="text-center text-sm font-bold">
+              <div className="mt-6 border-t border-[var(--border)] pt-5">
+                <p className="text-center text-sm font-bold text-[var(--foreground)]">
                   {currentPeriodEnd
                     ? `Cancel now and keep access until ${formatDate(currentPeriodEnd)}`
                     : "Cancel now and stop future renewals"}
                 </p>
-                {error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+                {error && <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-600 dark:text-red-400">{error}</p>}
                 <Button variant="secondary" size="lg" className="mt-4 w-full" onClick={closeFlow}>
                   Keep my subscription
                 </Button>
@@ -313,11 +313,11 @@ export function CancellationFlow({
                   type="button"
                   disabled={loading === "cancel"}
                   onClick={() => action("cancel")}
-                  className="mt-3 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-extrabold text-white disabled:opacity-60"
+                  className="mt-3 w-full rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 px-4 py-3 text-sm font-extrabold text-white disabled:opacity-60 transition-colors shadow-sm"
                 >
                   {loading === "cancel" ? "Scheduling cancellation…" : "Cancel my subscription"}
                 </button>
-                <p className="mt-3 flex items-center justify-center gap-1 text-center text-xs text-[#6B6B66]">
+                <p className="mt-3 flex items-center justify-center gap-1 text-center text-xs text-[var(--muted)]">
                   <CheckCircle2 className="h-3.5 w-3.5" /> No additional charges after your paid period.
                 </p>
               </div>
@@ -332,14 +332,14 @@ export function CancellationFlow({
                 track("cancellation_offers_skipped", { from_step: step });
                 setStep(5);
               }}
-              className="mt-5 w-full text-center text-xs font-bold text-[#777771] underline underline-offset-4"
+              className="mt-5 w-full text-center text-xs font-bold text-[var(--muted)] hover:text-[var(--foreground)] underline underline-offset-4 transition-colors"
             >
               Skip offers and go to final cancellation
             </button>
           )}
 
           {error && step < 5 && (
-            <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>
+            <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-600 dark:text-red-400">{error}</p>
           )}
         </div>
       </div>

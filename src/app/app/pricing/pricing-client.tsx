@@ -87,15 +87,15 @@ export default function AppPricingClient() {
               }}
               className={`rounded-2xl border-2 p-5 text-left transition ${
                 tier === value
-                  ? "border-[#121212] bg-white shadow-sm"
-                  : "border-[#E2E2DC] bg-white/65"
+                  ? "border-[#E7F256] bg-[#E7F256]/15 text-[var(--foreground)] shadow-xs"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-extrabold">{label}</span>
-                {tier === value && <Check className="h-5 w-5" />}
+                <span className="font-extrabold text-[var(--foreground)]">{label}</span>
+                {tier === value && <Check className="h-5 w-5 text-[var(--foreground)]" />}
               </div>
-              <p className="mt-1 text-xs font-medium text-[#555555]">{description}</p>
+              <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">{description}</p>
             </button>
           ))}
         </div>
@@ -104,11 +104,11 @@ export default function AppPricingClient() {
           <div className="grid gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
             <div>
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
-                <h2 className="text-lg font-extrabold">Your subscription</h2>
+                <Sparkles className="h-5 w-5 text-[#E7F256]" />
+                <h2 className="text-lg font-extrabold text-[var(--foreground)]">Your subscription</h2>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-white p-1.5">
+              <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-[var(--badge-bg)] p-1.5 border border-[var(--border)]">
                 {(["weekly", "quarterly"] as const).map((value) => (
                   <button
                     key={value}
@@ -117,8 +117,10 @@ export default function AppPricingClient() {
                       setCadence(value);
                       track("billing_cadence_selected", { cadence: value, source: "app" });
                     }}
-                    className={`rounded-lg px-3 py-2.5 text-sm font-bold capitalize ${
-                      cadence === value ? "bg-[#121212] text-white" : "text-[#555555]"
+                    className={`rounded-lg px-3 py-2.5 text-sm font-bold capitalize transition-colors ${
+                      cadence === value
+                        ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212] shadow-xs"
+                        : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                     }`}
                   >
                     {value === "quarterly" ? "Every 3 months" : "Weekly"}
@@ -126,7 +128,7 @@ export default function AppPricingClient() {
                 ))}
               </div>
 
-              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#DADAD3] bg-white p-4">
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-[var(--foreground)]">
                 <input
                   type="checkbox"
                   checked={emailAlerts}

@@ -36,6 +36,13 @@ export interface AccountData {
     tier: "base" | "premium";
     emailAlerts: boolean;
   };
+  removal?: {
+    tier: "base" | "premium";
+    canRemove: boolean;
+    cooldownDays: number;
+    lastRemovedAt: string | null;
+    nextRemoveAt: string | null;
+  };
   capacity?: {
     tier: "base" | "premium";
     cadence: "weekly" | "quarterly";

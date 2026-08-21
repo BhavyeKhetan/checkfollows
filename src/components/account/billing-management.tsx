@@ -201,15 +201,15 @@ export function BillingManagement({
         </div>
 
         {billing.pauseResumesAt && (
-          <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+          <p className="mt-4 rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm font-semibold text-blue-700 dark:text-blue-400">
             Your 30-day billing break ends {formatDate(billing.pauseResumesAt)}. Access and monitoring remain active.
           </p>
         )}
         {notice && (
-          <p className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">{notice}</p>
+          <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{notice}</p>
         )}
         {error && (
-          <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>
+          <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-semibold text-rose-700 dark:text-rose-400">{error}</p>
         )}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -217,39 +217,39 @@ export function BillingManagement({
             <button
               type="button"
               onClick={() => setShowPlan((value) => !value)}
-              className="flex items-center gap-3 rounded-xl border border-[#DADAD3] bg-white p-4 text-left"
+              className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] p-4 text-left text-[var(--foreground)] transition-colors"
             >
-              <Settings2 className="h-5 w-5" />
+              <Settings2 className="h-5 w-5 text-[var(--foreground)]" />
               <span className="flex-1">
-                <span className="block text-sm font-extrabold">Change subscription</span>
-                <span className="block text-xs text-[#555555]">Upgrade, downgrade, or change billing</span>
+                <span className="block text-sm font-extrabold text-[var(--foreground)]">Change subscription</span>
+                <span className="block text-xs text-[var(--muted-foreground)]">Upgrade, downgrade, or change billing</span>
               </span>
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)]" />
             </button>
           )}
           <button
             type="button"
             onClick={openPortal}
             disabled={actionLoading === "portal"}
-            className="flex items-center gap-3 rounded-xl border border-[#DADAD3] bg-white p-4 text-left disabled:opacity-60"
+            className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] p-4 text-left text-[var(--foreground)] disabled:opacity-60 transition-colors"
           >
-            <CreditCard className="h-5 w-5" />
+            <CreditCard className="h-5 w-5 text-[var(--foreground)]" />
             <span className="flex-1">
-              <span className="block text-sm font-extrabold">Payment & invoices</span>
-              <span className="block text-xs text-[#555555]">
+              <span className="block text-sm font-extrabold text-[var(--foreground)]">Payment & invoices</span>
+              <span className="block text-xs text-[var(--muted-foreground)]">
                 {billing.paymentMethod
                   ? `${billing.paymentMethod.brand.toUpperCase()} •••• ${billing.paymentMethod.last4}`
                   : "Manage payment method securely"}
               </span>
             </span>
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-4 w-4 text-[var(--muted-foreground)]" />
           </button>
         </div>
 
         {showPlan && (
-          <div className="mt-5 rounded-2xl border-2 border-[#121212] bg-[#FAFAF6] p-4 sm:p-5">
-            <h3 className="font-extrabold">Choose your subscription</h3>
-            <p className="mt-1 text-xs font-medium text-[#555555]">
+          <div className="mt-5 rounded-2xl border-2 border-[var(--border)] bg-[var(--background-subtle)] p-4 sm:p-5 text-[var(--foreground)]">
+            <h3 className="font-extrabold text-[var(--foreground)]">Choose your subscription</h3>
+            <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">
               Stripe applies prorated charges or credits when the change takes effect.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -266,19 +266,19 @@ export function BillingManagement({
                 onChange={(value) => setCadence(value as Cadence)}
               />
             </div>
-            <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-[#DADAD3] bg-white p-3 text-sm font-bold">
+            <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm font-bold text-[var(--foreground)]">
               <input
                 type="checkbox"
                 checked={emailAlerts}
                 onChange={(event) => setEmailAlerts(event.target.checked)}
-                className="h-4 w-4 accent-[#121212]"
+                className="h-4 w-4 accent-[#E7F256]"
               />
               Include email change alerts
             </label>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <span className="text-2xl font-extrabold">${price.toFixed(2)}</span>
-                <span className="ml-1 text-xs font-bold text-[#555555]">{cadence === "weekly" ? "/week" : "/3 months"}</span>
+                <span className="text-2xl font-extrabold text-[var(--foreground)]">${price.toFixed(2)}</span>
+                <span className="ml-1 text-xs font-bold text-[var(--muted-foreground)]">{cadence === "weekly" ? "/week" : "/3 months"}</span>
               </div>
               <Button
                 variant="primary"
@@ -292,15 +292,15 @@ export function BillingManagement({
         )}
 
         {billing.invoices.length > 0 && (
-          <div className="mt-6 border-t border-[#E2E2DC] pt-5">
-            <h3 className="flex items-center gap-2 text-sm font-extrabold"><FileText className="h-4 w-4" /> Recent invoices</h3>
-            <div className="mt-3 divide-y divide-[#E8E8E2] rounded-xl border border-[#E2E2DC] bg-white">
+          <div className="mt-6 border-t border-[var(--border)] pt-5">
+            <h3 className="flex items-center gap-2 text-sm font-extrabold text-[var(--foreground)]"><FileText className="h-4 w-4" /> Recent invoices</h3>
+            <div className="mt-3 divide-y divide-[var(--border)] rounded-xl border border-[var(--border)] bg-[var(--surface)]">
               {billing.invoices.slice(0, 3).map((invoice) => (
                 <div key={invoice.id} className="flex items-center gap-3 p-3 text-sm">
-                  <span className="flex-1 font-medium text-[#555555]">{formatDate(invoice.createdAt)}</span>
-                  <span className="font-extrabold">{formatMoney(invoice.amountPaid, invoice.currency)}</span>
+                  <span className="flex-1 font-medium text-[var(--muted-foreground)]">{formatDate(invoice.createdAt)}</span>
+                  <span className="font-extrabold text-[var(--foreground)]">{formatMoney(invoice.amountPaid, invoice.currency)}</span>
                   {invoice.url && (
-                    <a href={invoice.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2">View</a>
+                    <a href={invoice.url} target="_blank" rel="noreferrer" className="font-bold underline underline-offset-2 text-[var(--foreground)] hover:text-[#E7F256]">View</a>
                   )}
                 </div>
               ))}
@@ -309,10 +309,10 @@ export function BillingManagement({
         )}
 
         {canManageRenewal && (
-        <div className="mt-6 border-t border-[#E2E2DC] pt-5">
+        <div className="mt-6 border-t border-[var(--border)] pt-5">
           {billing.cancelAtPeriodEnd ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-semibold text-[#555555]">Changed your mind? Restore automatic renewal before access ends.</p>
+              <p className="text-sm font-semibold text-[var(--muted-foreground)]">Changed your mind? Restore automatic renewal before access ends.</p>
               <Button
                 variant="secondary"
                 isLoading={actionLoading === "reactivate"}
@@ -325,7 +325,7 @@ export function BillingManagement({
             <button
               type="button"
               onClick={() => setShowCancel(true)}
-              className="text-sm font-bold text-[#7F1D1D] underline decoration-[#FCA5A5] underline-offset-4"
+              className="text-sm font-bold text-red-600 dark:text-red-400 underline decoration-red-400/50 underline-offset-4 hover:text-red-700 dark:hover:text-red-300 transition-colors"
             >
               Review cancellation options
             </button>
@@ -363,19 +363,21 @@ function OptionGroup({
 }) {
   return (
     <div>
-      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[#666660]">{label}</div>
+      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[var(--muted-foreground)]">{label}</div>
       <div className="grid grid-cols-2 gap-2">
         {options.map(([option, text]) => (
           <button
             key={option}
             type="button"
             onClick={() => onChange(option)}
-            className={`flex items-center justify-between rounded-xl border p-3 text-sm font-bold ${
-              value === option ? "border-[#121212] bg-[#F2F4B8]" : "border-[#DADAD3] bg-white"
+            className={`flex items-center justify-between rounded-xl border p-3 text-sm font-bold transition-colors ${
+              value === option
+                ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)]"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
             }`}
           >
             {text}
-            {value === option && <Check className="h-4 w-4" />}
+            {value === option && <Check className="h-4 w-4 text-[var(--foreground)]" />}
           </button>
         ))}
       </div>

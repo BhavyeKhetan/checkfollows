@@ -217,8 +217,8 @@ export default function AccountPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-3 border-[#121212] border-t-[#E7F256] animate-spin" />
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-3 border-[var(--border)] border-t-[#E7F256] animate-spin" />
       </div>
     );
   }
@@ -750,15 +750,17 @@ function ChoiceGroup({
 }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-wide text-[#555555] mb-2">{label}</p>
-      <div className="inline-flex rounded-full border border-[#D9D9D2] bg-white p-1">
+      <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted-foreground)] mb-2">{label}</p>
+      <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
             className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
-              value === option.value ? "bg-[#121212] text-white" : "text-[#555555]"
+              value === option.value
+                ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             }`}
           >
             {option.label}
