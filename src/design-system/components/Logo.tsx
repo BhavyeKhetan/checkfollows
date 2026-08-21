@@ -41,18 +41,25 @@ export function Logo({
         className={`${s.circle} shrink-0`}
         aria-hidden="true"
       >
-        <circle cx="24" cy="24" r="24" fill="#121212" />
+        <circle
+          cx="24"
+          cy="24"
+          r="23"
+          fill="#121212"
+          className="stroke-black/10 dark:stroke-white/20 dark:fill-[#1C1C1C]"
+          strokeWidth="1.5"
+        />
         <path d={BOLT_PATH} fill="#E7F256" />
       </svg>
       {showWordmark && (
-        <span className={`tracking-tight font-extrabold text-[#121212] ${s.wordmark}`}>
+        <span className={`tracking-tight font-extrabold text-[var(--foreground)] ${s.wordmark}`}>
           CheckFollows
         </span>
       )}
     </>
   );
 
-  const base = `inline-flex items-center gap-2.5 font-bold text-[#121212] ${className}`;
+  const base = `inline-flex items-center gap-2.5 font-bold text-[var(--foreground)] ${className}`;
 
   if (href) {
     return (

@@ -50,3 +50,6 @@ growth/content-intelligence/analysis/*
 !growth/content-intelligence/analysis/.gitkeep
 growth/content-intelligence/logs/*
 !growth/content-intelligence/logs/.gitkeep
+
+# Supabase CLI temp
+supabase/.temp/

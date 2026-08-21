@@ -6,7 +6,13 @@ import {
   subscriptionClientSecret,
   type PlanTier,
 } from "@/lib/stripe";
-import { getAuthUser } from "@/lib/supabase/auth";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import {
+  ALREADY_SUBSCRIBED_CODE,
+  ALREADY_SUBSCRIBED_MESSAGE,
+  findLiveCustomerSubscription,
+  findReusableIncompleteSubscription,
+} from "@/lib/subscription-management";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -46,6 +52,17 @@ export async function POST(request: Request) {
 
     const plan = emailAlerts ? "pro" : "basic";
 
+    const authUser = await getAuthUser();
+    if (authUser && (await hasActiveSubscription(authUser.id))) {
+      return NextResponse.json(
+        {
+          error: ALREADY_SUBSCRIBED_MESSAGE,
+          code: ALREADY_SUBSCRIBED_CODE,
+        },
+        { status: 409 }
+      );
+    }
+
     // Reuse an existing customer for this email (idempotent re-entry).
     const existingCustomers = await stripe.customers.list({ email, limit: 1 });
     let customer = existingCustomers.data[0];
@@ -77,8 +94,43 @@ export async function POST(request: Request) {
 
     // If the buyer is already signed in, tag the subscription so the webhook
     // can link it straight to their account (no signup step needed).
-    const authUser = await getAuthUser();
     if (authUser) metadata.user_id = authUser.id;
+
+    const live = await findLiveCustomerSubscription(customer.id);
+    if (live) {
+      return NextResponse.json(
+        {
+          error: ALREADY_SUBSCRIBED_MESSAGE,
+          code: ALREADY_SUBSCRIBED_CODE,
+        },
+        { status: 409 }
+      );
+    }
+
+    const reusable = await findReusableIncompleteSubscription(
+      customer.id,
+      items.map((item) => item.price)
+    );
+    if (reusable) {
+      let withSecret = reusable;
+      if (
+        !reusable.latest_invoice ||
+        typeof reusable.latest_invoice === "string" ||
+        !reusable.latest_invoice.confirmation_secret?.client_secret
+      ) {
+        withSecret = await stripe.subscriptions.retrieve(reusable.id, {
+          expand: ["latest_invoice.confirmation_secret"],
+        });
+      }
+      return NextResponse.json({
+        clientSecret: subscriptionClientSecret(withSecret),
+        customerId: customer.id,
+        subscriptionId: withSecret.id,
+        cadence,
+        tier,
+        emailAlerts,
+      });
+    }
 
     const subscription = await stripe.subscriptions.create({
       customer: customer.id,

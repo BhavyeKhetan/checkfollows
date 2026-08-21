@@ -43,6 +43,10 @@ export default function AppPricingClient() {
         body: JSON.stringify({ cadence, tier, email_alerts: emailAlerts }),
       });
       const json = await response.json().catch(() => ({}));
+      if (response.status === 409) {
+        window.location.assign("/account");
+        return;
+      }
       if (!response.ok || !json.url) {
         setError(json.error || "Checkout could not be started.");
         setLoading(false);

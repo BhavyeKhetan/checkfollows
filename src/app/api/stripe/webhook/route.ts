@@ -6,6 +6,7 @@ import {
   enableMonitoring,
 } from "@/lib/monitoring";
 import { trackServer } from "@/lib/mixpanel-server";
+import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 import type Stripe from "stripe";
 
 /**
@@ -114,6 +115,26 @@ export async function POST(request: Request) {
         // A subscription-mode checkout should always have a subscription id.
         if (subscriptionId && customerEmail) {
           const supabase = createServerClient();
+
+          if (metadata.reactivation !== "true") {
+            const collapsed = await collapseDuplicateStripeSubscription({
+              incomingSubscriptionId: subscriptionId,
+              customerId,
+              email: customerEmail,
+              userId: metadata.user_id || null,
+              targetId: metadata.target_id || null,
+            });
+            if (collapsed.collapsed) {
+              if (metadata.target_id) {
+                await enableMonitoring(metadata.target_id);
+              }
+              console.warn("Webhook: canceled duplicate Stripe subscription", {
+                incoming: subscriptionId,
+                canonical: collapsed.stripeSubscriptionId,
+              });
+              break;
+            }
+          }
 
           // Upsert subscription (email can exist from a prior generic purchase).
           const { data: existing } = await supabase
@@ -266,6 +287,24 @@ export async function POST(request: Request) {
         }
 
         const supabase = createServerClient();
+
+        if (email && isActive) {
+          const collapsed = await collapseDuplicateStripeSubscription({
+            incomingSubscriptionId: subscription.id,
+            customerId: (subscription.customer as string) || "",
+            email,
+            userId,
+            targetId,
+          });
+          if (collapsed.collapsed) {
+            if (targetId) await enableMonitoring(targetId);
+            console.warn("Webhook: canceled duplicate Stripe subscription", {
+              incoming: subscription.id,
+              canonical: collapsed.stripeSubscriptionId,
+            });
+            break;
+          }
+        }
 
         // Upsert the subscription row. Embedded (Payment Element) checkouts
         // create the subscription via the API, so there is no

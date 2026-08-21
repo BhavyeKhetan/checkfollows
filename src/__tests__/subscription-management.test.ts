@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type Stripe from "stripe";
 import {
+  isLiveBillingSubscription,
   isManageableSubscription,
   subscriptionPeriodEnd,
   subscriptionSelection,
@@ -64,5 +65,15 @@ describe("subscription management", () => {
     expect(isManageableSubscription(subscription({ status: "active" }))).toBe(true);
     expect(isManageableSubscription(subscription({ status: "past_due" }))).toBe(true);
     expect(isManageableSubscription(subscription({ status: "canceled" }))).toBe(false);
+  });
+
+  it("treats incomplete checkout as not live billing", () => {
+    expect(isLiveBillingSubscription(subscription({ status: "incomplete" }))).toBe(
+      false
+    );
+    expect(isLiveBillingSubscription(subscription({ status: "active" }))).toBe(true);
+    expect(isLiveBillingSubscription(subscription({ status: "canceled" }))).toBe(
+      false
+    );
   });
 });

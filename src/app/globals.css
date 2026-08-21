@@ -46,6 +46,91 @@
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
   --radius-full: 9999px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+
+    /* Ramp Lime Accent (Electric yellow/lime on dark) */
+    --ramp-lime: #E7F256;
+    --ramp-lime-hover: #DAE64A;
+    --ramp-lime-active: #C7D337;
+    --ramp-lime-subtle: rgba(231, 242, 86, 0.15);
+    --ramp-lime-subtle-hover: rgba(231, 242, 86, 0.25);
+    --ramp-lime-border: rgba(231, 242, 86, 0.35);
+    --ramp-lime-glow: rgba(231, 242, 86, 0.3);
+
+    /* Ramp Dark Identity Colors (Obsidian aesthetic) */
+    --background: #0D0D0D;
+    --background-subtle: #131313;
+    --foreground: #F5F5F5;
+    --surface: #171717;
+    --surface-hover: #1F1F1F;
+    --card: #171717;
+    --card-hover: #202020;
+    --elevated: #1C1C1C;
+    --input: #171717;
+    --badge-bg: #222222;
+
+    /* Ramp Dark Borders */
+    --border: #262626;
+    --border-subtle: #1A1A1A;
+    --border-hover: #383838;
+    --border-dark: #F5F5F5;
+
+    /* Typography Colors */
+    --muted: #737373;
+    --muted-foreground: #A1A1AA;
+    
+    /* Status Colors */
+    --emerald: #34D399;
+    --emerald-subtle: rgba(16, 185, 129, 0.15);
+    --amber: #FBBF24;
+    --amber-subtle: rgba(245, 158, 11, 0.15);
+    --rose: #F87171;
+    --rose-subtle: rgba(239, 68, 68, 0.15);
+  }
+}
+
+.dark {
+  color-scheme: dark;
+
+  --ramp-lime: #E7F256;
+  --ramp-lime-hover: #DAE64A;
+  --ramp-lime-active: #C7D337;
+  --ramp-lime-subtle: rgba(231, 242, 86, 0.15);
+  --ramp-lime-subtle-hover: rgba(231, 242, 86, 0.25);
+  --ramp-lime-border: rgba(231, 242, 86, 0.35);
+  --ramp-lime-glow: rgba(231, 242, 86, 0.3);
+
+  --background: #0D0D0D;
+  --background-subtle: #131313;
+  --foreground: #F5F5F5;
+  --surface: #171717;
+  --surface-hover: #1F1F1F;
+  --card: #171717;
+  --card-hover: #202020;
+  --elevated: #1C1C1C;
+  --input: #171717;
+  --badge-bg: #222222;
+
+  --border: #262626;
+  --border-subtle: #1A1A1A;
+  --border-hover: #383838;
+  --border-dark: #F5F5F5;
+
+  --muted: #737373;
+  --muted-foreground: #A1A1AA;
+  
+  --emerald: #34D399;
+  --emerald-subtle: rgba(16, 185, 129, 0.15);
+  --amber: #FBBF24;
+  --amber-subtle: rgba(245, 158, 11, 0.15);
+  --rose: #F87171;
+  --rose-subtle: rgba(239, 68, 68, 0.15);
 }
 
 @theme inline {
@@ -67,21 +152,32 @@
 }
 
 body {
-  background-color: var(--background);
+  background-color: var(--background-subtle);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ramp Dot Grid Pattern (As seen on Ramp.com background in screenshot) */
+/* Ramp Dot Grid Pattern */
 .ramp-grid-bg {
-  background-color: #FFFFFF;
-  background-image: radial-gradient(#E2E2DC 1.2px, transparent 1.2px);
+  background-color: var(--background);
+  background-image: radial-gradient(var(--border) 1.2px, transparent 1.2px);
   background-size: 24px 24px;
 }
 
-/* Custom Ramp Light Scrollbar */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .ramp-grid-bg {
+    background-color: var(--background);
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.2px, transparent 1.2px);
+  }
+}
+.dark .ramp-grid-bg {
+  background-color: var(--background);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1.2px, transparent 1.2px);
+}
+
+/* Custom Ramp Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -90,14 +186,14 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #D0D0CA;
+  background: var(--border-hover);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #A0A09A;
+  background: var(--muted);
 }
 
-/* Ramp Glass Light Morphism Utility */
+/* Ramp Glass Light & Dark Morphism Utility */
 .ramp-glass {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
@@ -105,17 +201,26 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .ramp-glass {
+    background: rgba(13, 13, 13, 0.85);
+  }
+}
+.dark .ramp-glass {
+  background: rgba(13, 13, 13, 0.85);
+}
+
 .ramp-glass-lime {
-  background: rgba(231, 242, 86, 0.15);
+  background: var(--ramp-lime-subtle);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--ramp-lime-border);
 }
 
-/* Ramp Primary Button (Exact #E7F256 with dark text) */
+/* Ramp Primary Button (Exact #E7F256 with dark text - high contrast in both light & dark) */
 .ramp-btn-primary {
   background: #E7F256;
-  color: #121212;
+  color: #121212 !important;
   border: 1px solid transparent;
   border-radius: var(--radius-full);
   padding: 0.75rem 1.5rem;
@@ -134,7 +239,7 @@ body {
 .ramp-btn-primary:hover {
   background: #DAE64A;
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .ramp-btn-primary:active {
@@ -142,7 +247,7 @@ body {
   background: #C7D337;
 }
 
-/* Ramp Dark Button (Black obsidian) */
+/* Ramp Dark Button */
 .ramp-btn-dark {
   background: #121212;
   color: #FFFFFF;
@@ -165,9 +270,26 @@ body {
   transform: translateY(-1px);
 }
 
-/* Ramp Card Light */
-.ramp-card {
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .ramp-btn-dark {
+    background: #FFFFFF;
+    color: #121212;
+  }
+  :root:not(.light) .ramp-btn-dark:hover {
+    background: #E5E5E5;
+  }
+}
+.dark .ramp-btn-dark {
   background: #FFFFFF;
+  color: #121212;
+}
+.dark .ramp-btn-dark:hover {
+  background: #E5E5E5;
+}
+
+/* Ramp Card */
+.ramp-card {
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 1.5rem;
@@ -176,12 +298,12 @@ body {
 }
 
 .ramp-card:hover {
-  border-color: #D0D0CA;
+  border-color: var(--border-hover);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
 }
 
 .ramp-card-highlight {
-  background: #FFFFFF;
+  background: var(--card);
   border: 2px solid #E7F256;
   border-radius: var(--radius-xl);
   padding: 1.5rem;
@@ -203,15 +325,146 @@ body {
 
 .ramp-badge-lime {
   background: #E7F256;
-  color: #121212;
+  color: #121212 !important;
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .ramp-badge-mono {
-  background: #EDEDE8;
-  color: #121212;
-  border: 1px solid #E2E2DC;
+  background: var(--badge-bg);
+  color: var(--foreground);
+  border: 1px solid var(--border);
   font-family: var(--font-geist-mono), monospace;
+}
+
+/* Automatic Dark Mode Palette Overrides for Utility Classes */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .bg-\[\#FFFFFF\],
+  :root:not(.light) .bg-white {
+    background-color: var(--card);
+  }
+  :root:not(.light) .bg-\[\#F9F9F7\],
+  :root:not(.light) .bg-\[\#F8F8F4\],
+  :root:not(.light) .bg-\[\#FAFAFA\] {
+    background-color: var(--background-subtle);
+  }
+  :root:not(.light) .bg-\[\#EDEDE8\],
+  :root:not(.light) .bg-\[\#EFEFEA\],
+  :root:not(.light) .bg-\[\#F3F3EF\] {
+    background-color: var(--badge-bg);
+  }
+  :root:not(.light) .bg-\[\#FBFDDC\] {
+    background-color: var(--ramp-lime-subtle);
+  }
+  :root:not(.light) .bg-\[\#E6F4EA\] {
+    background-color: var(--emerald-subtle);
+  }
+  :root:not(.light) .bg-\[\#FEF3C7\] {
+    background-color: var(--amber-subtle);
+  }
+  :root:not(.light) .bg-\[\#FEE2E2\] {
+    background-color: var(--rose-subtle);
+  }
+
+  :root:not(.light) .border-\[\#E2E2DC\],
+  :root:not(.light) .border-\[\#F0F0ED\] {
+    border-color: var(--border);
+  }
+  :root:not(.light) .border-\[\#D0D0CA\] {
+    border-color: var(--border-hover);
+  }
+
+  :root:not(.light) .text-\[\#121212\]:not(.bg-\[\#E7F256\] *):not(.bg-\[\#DAE64A\] *):not(.ramp-badge-lime *):not(.ramp-btn-primary *):not([data-theme-ignore] *):not(.bg-\[\#E7F256\]):not(.bg-\[\#DAE64A\]) {
+    color: var(--foreground);
+  }
+  :root:not(.light) .text-\[\#555555\] {
+    color: var(--muted-foreground);
+  }
+  :root:not(.light) .text-\[\#777777\],
+  :root:not(.light) .text-\[\#888888\],
+  :root:not(.light) .text-\[\#999999\] {
+    color: var(--muted);
+  }
+
+  :root:not(.light) .hover\:bg-\[\#F9F9F7\]:hover,
+  :root:not(.light) .hover\:bg-\[\#FAFAFA\]:hover,
+  :root:not(.light) .hover\:bg-\[\#FBFBF9\]:hover {
+    background-color: var(--surface-hover);
+  }
+  :root:not(.light) .hover\:bg-\[\#EDEDE8\]:hover,
+  :root:not(.light) .hover\:bg-\[\#EFEFEA\]:hover {
+    background-color: var(--surface-hover);
+  }
+  :root:not(.light) .hover\:border-\[\#D0D0CA\]:hover,
+  :root:not(.light) .hover\:border-\[\#121212\]:hover {
+    border-color: var(--border-hover);
+  }
+  :root:not(.light) .hover\:text-\[\#121212\]:hover {
+    color: var(--foreground);
+  }
+}
+
+.dark .bg-\[\#FFFFFF\],
+.dark .bg-white {
+  background-color: var(--card);
+}
+.dark .bg-\[\#F9F9F7\],
+.dark .bg-\[\#F8F8F4\],
+.dark .bg-\[\#FAFAFA\] {
+  background-color: var(--background-subtle);
+}
+.dark .bg-\[\#EDEDE8\],
+.dark .bg-\[\#EFEFEA\],
+.dark .bg-\[\#F3F3EF\] {
+  background-color: var(--badge-bg);
+}
+.dark .bg-\[\#FBFDDC\] {
+  background-color: var(--ramp-lime-subtle);
+}
+.dark .bg-\[\#E6F4EA\] {
+  background-color: var(--emerald-subtle);
+}
+.dark .bg-\[\#FEF3C7\] {
+  background-color: var(--amber-subtle);
+}
+.dark .bg-\[\#FEE2E2\] {
+  background-color: var(--rose-subtle);
+}
+
+.dark .border-\[\#E2E2DC\],
+.dark .border-\[\#F0F0ED\] {
+  border-color: var(--border);
+}
+.dark .border-\[\#D0D0CA\] {
+  border-color: var(--border-hover);
+}
+
+.dark .text-\[\#121212\]:not(.bg-\[\#E7F256\] *):not(.bg-\[\#DAE64A\] *):not(.ramp-badge-lime *):not(.ramp-btn-primary *):not([data-theme-ignore] *):not(.bg-\[\#E7F256\]):not(.bg-\[\#DAE64A\]) {
+  color: var(--foreground);
+}
+.dark .text-\[\#555555\] {
+  color: var(--muted-foreground);
+}
+.dark .text-\[\#777777\],
+.dark .text-\[\#888888\],
+.dark .text-\[\#999999\] {
+  color: var(--muted);
+}
+
+.dark .hover\:bg-\[\#F9F9F7\]:hover,
+.dark .hover\:bg-\[\#FAFAFA\]:hover,
+.dark .hover\:bg-\[\#FBFBF9\]:hover {
+  background-color: var(--surface-hover);
+}
+.dark .hover\:bg-\[\#EDEDE8\]:hover,
+.dark .hover\:bg-\[\#EFEFEA\]:hover {
+  background-color: var(--surface-hover);
+}
+.dark .hover\:border-\[\#D0D0CA\]:hover,
+.dark .hover\:border-\[\#121212\]:hover {
+  border-color: var(--border-hover);
+}
+.dark .hover\:text-\[\#121212\]:hover {
+  color: var(--foreground);
 }
 
 /* Ramp Infinite Marquee Animation for Ticker Bar */

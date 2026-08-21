@@ -43,6 +43,16 @@ export function CheckoutButton({
         body: JSON.stringify({ cadence, tier, email_alerts: emailAlerts }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.code === "already_subscribed") {
+        track("checkout_error", {
+          error: "already_subscribed",
+          cadence,
+          tier,
+          email_alerts: emailAlerts,
+        });
+        window.location.href = "/account";
+        return;
+      }
       if (data.url) {
         track("checkout_redirected", {
           cadence,

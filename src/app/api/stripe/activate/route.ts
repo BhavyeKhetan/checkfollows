@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
+import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 import {
   enableMonitoring,
   fullBaselineScan,
@@ -60,6 +61,24 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServerClient();
+
+    if (metadata.reactivation !== "true") {
+      const collapsed = await collapseDuplicateStripeSubscription({
+        incomingSubscriptionId: subscriptionId,
+        customerId,
+        email: customerEmail,
+        userId: metadata.user_id || null,
+        targetId,
+      });
+      if (collapsed.collapsed) {
+        if (targetId) await enableMonitoring(targetId);
+        return NextResponse.json({
+          success: true,
+          alreadySubscribed: true,
+          username,
+        });
+      }
+    }
 
     // Upsert subscription row (same logic as the webhook — idempotent).
     const { data: existing } = await supabase

@@ -29,18 +29,36 @@ interface EmbeddedCheckoutProps {
   onSuccess?: () => void;
 }
 
-const stripeAppearance = {
-  theme: "stripe" as const,
-  variables: {
-    colorPrimary: "#121212",
-    colorBackground: "#FFFFFF",
-    colorText: "#121212",
-    colorTextSecondary: "#555555",
-    colorDanger: "#B91C1C",
-    borderRadius: "12px",
-    fontFamily: "system-ui, -apple-system, sans-serif",
-  },
-};
+function useSystemTheme(): "night" | "stripe" {
+  const [theme, setTheme] = useState<"night" | "stripe">("stripe");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateTheme = () => setTheme(media.matches ? "night" : "stripe");
+    updateTheme();
+    media.addEventListener("change", updateTheme);
+    return () => media.removeEventListener("change", updateTheme);
+  }, []);
+
+  return theme;
+}
+
+function getStripeAppearance(theme: "night" | "stripe") {
+  const isDark = theme === "night";
+  return {
+    theme,
+    variables: {
+      colorPrimary: isDark ? "#E7F256" : "#121212",
+      colorBackground: isDark ? "#171717" : "#FFFFFF",
+      colorText: isDark ? "#F5F5F5" : "#121212",
+      colorTextSecondary: isDark ? "#A1A1AA" : "#555555",
+      colorDanger: isDark ? "#F87171" : "#B91C1C",
+      borderRadius: "12px",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+    },
+  };
+}
 
 type ConfirmPayment = (
   stripe: Stripe,
@@ -58,10 +76,13 @@ function UnifiedWalletButtons({
   payerEmail: string;
   onConfirm: ConfirmPayment;
 }) {
+  const theme = useSystemTheme();
+  const appearance = getStripeAppearance(theme);
+
   return (
     <Elements
       stripe={stripePromise}
-      options={{ clientSecret, appearance: stripeAppearance }}
+      options={{ clientSecret, appearance }}
     >
       <UnifiedWalletButtonsInner payerEmail={payerEmail} onConfirm={onConfirm} />
     </Elements>
@@ -111,10 +132,13 @@ function CardPaymentForm({
   loading: boolean;
   onConfirm: ConfirmPayment;
 }) {
+  const theme = useSystemTheme();
+  const appearance = getStripeAppearance(theme);
+
   return (
     <Elements
       stripe={stripePromise}
-      options={{ clientSecret, appearance: stripeAppearance }}
+      options={{ clientSecret, appearance }}
     >
       <CardPaymentFormInner loading={loading} onConfirm={onConfirm} />
     </Elements>
@@ -486,6 +510,15 @@ export default function EmbeddedCheckout({
             tier,
             email_alerts: emailAlerts,
           });
+        } else if (data.code === "already_subscribed") {
+          track("checkout_init_failed", {
+            cadence,
+            tier,
+            email_alerts: emailAlerts,
+            error: "already_subscribed",
+          });
+          window.location.href = "/account";
+          return;
         } else {
           setError(data.error || "Failed to initialize checkout");
           track("checkout_init_failed", { cadence, tier, email_alerts: emailAlerts });

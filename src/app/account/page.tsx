@@ -6,11 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   AlertCircle,
-  LogOut,
-  Bell,
   ArrowRight,
-  Eye,
-  History,
   Lock,
   Activity,
   Save,
@@ -19,78 +15,16 @@ import {
   Users,
   CreditCard,
   Sparkles,
-  Pause,
-  Play,
 } from "lucide-react";
-import { Button, Badge, Card, Avatar, Logo } from "@/design-system";
+import { Button, Badge, Card } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
-import { track, identify, reset } from "@/lib/mixpanel";
+import { track, identify } from "@/lib/mixpanel";
 import { BillingManagement } from "@/components/account/billing-management";
-
-interface TrackedTarget {
-  id: string;
-  username: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  is_verified: boolean;
-  monitoring_enabled: boolean;
-  last_scanned_at: string | null;
-  next_scan_at: string | null;
-  following_count: number;
-  follower_count: number;
-}
-
-interface SubscriptionRow {
-  id: string;
-  plan: string;
-  tier: string;
-  active: boolean;
-  user_paused: boolean;
-  created_at: string;
-  updated_at: string;
-  target: TrackedTarget | null;
-}
-
-interface AccountData {
-  success: boolean;
-  user: { id: string; email: string | null };
-  hasActiveSubscription: boolean;
-  spikeThreshold: number;
-  credits: { export: number; rescan_credits: number; mutuals: number };
-  subscriptions: SubscriptionRow[];
-  lockedTrackedAccountCount?: number;
-  canRenew?: boolean;
-  renewalDefaults?: {
-    cadence: "weekly" | "quarterly";
-    tier: "base" | "premium";
-    emailAlerts: boolean;
-  };
-  capacity?: {
-    tier: "base" | "premium";
-    cadence: "weekly" | "quarterly";
-    includedAccounts: number;
-    additionalAccounts: number;
-    totalAccounts: number;
-    activeAccounts: number;
-    availableAccounts: number;
-    unitAmount: number;
-    currency: "usd";
-  } | null;
-}
+import { AppShell } from "@/components/app/app-shell";
+import type { AccountData } from "@/lib/account-types";
 
 type RenewalCadence = "weekly" | "quarterly";
 type RenewalTier = "base" | "premium";
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return "Never";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
 
 export default function AccountPage() {
   const router = useRouter();
@@ -110,7 +44,6 @@ export default function AccountPage() {
   const [accountsToAdd, setAccountsToAdd] = useState(1);
   const [addingCapacity, setAddingCapacity] = useState(false);
   const [capacityError, setCapacityError] = useState("");
-  const [targetAction, setTargetAction] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,14 +110,6 @@ export default function AccountPage() {
       cancelled = true;
     };
   }, [router]);
-
-  const handleSignOut = async () => {
-    const supabase = createClient();
-    track("signed_out", { platform: "web" });
-    await supabase.auth.signOut();
-    reset();
-    router.replace("/");
-  };
 
   const handleSpikeSave = async () => {
     setSavingSpike(true);
@@ -284,70 +209,6 @@ export default function AccountPage() {
       setAddingCapacity(false);
     }
   };
-
-  const toggleTrackedAccount = async (target: TrackedTarget) => {
-    if (targetAction) return;
-    setTargetAction(target.id);
-    setError("");
-    const action = target.monitoring_enabled ? "stop" : "start";
-    try {
-      const response = await fetch("/api/instagram/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id, action }),
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(json.error || "The tracked account could not be updated.");
-        return;
-      }
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              capacity: current.capacity
-                ? (() => {
-                    const activeAccounts = Math.max(
-                      0,
-                      current.capacity.activeAccounts +
-                        (action === "start" ? 1 : -1)
-                    );
-                    return {
-                      ...current.capacity,
-                      activeAccounts,
-                      availableAccounts: Math.max(
-                        0,
-                        current.capacity.totalAccounts - activeAccounts
-                      ),
-                    };
-                  })()
-                : current.capacity,
-              subscriptions: current.subscriptions.map((subscription) =>
-                subscription.target?.id === target.id
-                  ? {
-                      ...subscription,
-                      user_paused: action === "stop",
-                      target: {
-                        ...subscription.target,
-                        monitoring_enabled: action === "start",
-                      },
-                    }
-                  : subscription
-              ),
-            }
-          : current
-      );
-      track("monitoring_toggled", { action, username: target.username });
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setTargetAction(null);
-    }
-  };
-
-  const trackedTargets = (data?.subscriptions || [])
-    .map((s) => s.target)
-    .filter((t): t is TrackedTarget => !!t);
 
   const planLabel = (plan: string, tier?: string) => {
     const base = tier === "premium" ? "Premium" : "Basic";

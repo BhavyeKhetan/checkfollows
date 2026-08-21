@@ -63,7 +63,10 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#F9F9F7",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F9F9F7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0D0D0D" },
+  ],
 };
 
 export default function RootLayout({
@@ -74,13 +77,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased light`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head>
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
+        <meta name="color-scheme" content="light dark" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" type="image/svg+xml" href="/logo.svg" />
         <link rel="icon" type="image/png" sizes="48x48" href="/icon-48.png" />
@@ -90,7 +95,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
       </head>
-      <body className="min-h-full flex flex-col bg-[#F9F9F7] text-[#121212]">
+      <body className="min-h-full flex flex-col bg-[var(--background-subtle)] text-[var(--foreground)] selection:bg-[#E7F256] selection:text-[#121212]">
         <MixpanelProvider>
           <Suspense fallback={null}>
             {children}

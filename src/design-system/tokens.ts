@@ -34,6 +34,17 @@ export const rampColors = {
     badge: "#EDEDE8",
   },
 
+  // Dark Backgrounds & Surfaces (Obsidian Ramp Theme)
+  darkTheme: {
+    bg: "#0D0D0D",
+    bgSubtle: "#131313",
+    surface: "#171717",
+    surfaceHover: "#1F1F1F",
+    elevated: "#1C1C1C",
+    input: "#171717",
+    badge: "#222222",
+  },
+
   // Borders
   border: {
     subtle: "#F0F0ED",
@@ -41,6 +52,12 @@ export const rampColors = {
     hover: "#D0D0CA",
     dark: "#121212",
     lime: "#DAE64A",
+    darkTheme: {
+      subtle: "#1C1C1C",
+      default: "#262626",
+      hover: "#383838",
+      dark: "#F5F5F5",
+    },
   },
 
   // Text Hierarchy
@@ -51,6 +68,12 @@ export const rampColors = {
     muted: "#888888",
     inverse: "#FFFFFF",
     inverseDark: "#121212",
+    darkTheme: {
+      primary: "#F5F5F5",
+      secondary: "#A1A1AA",
+      tertiary: "#737373",
+      muted: "#71717A",
+    },
   },
 
   // Status Tokens

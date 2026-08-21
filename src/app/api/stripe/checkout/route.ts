@@ -5,6 +5,12 @@ import {
   getEmailAlertsPriceId,
   type PlanTier,
 } from "@/lib/stripe";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import {
+  ALREADY_SUBSCRIBED_CODE,
+  ALREADY_SUBSCRIBED_MESSAGE,
+  findLiveCustomerSubscription,
+} from "@/lib/subscription-management";
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +36,36 @@ export async function POST(request: Request) {
       }
     } catch {
       // no body — default to weekly
+    }
+
+    const authUser = await getAuthUser();
+    if (authUser && (await hasActiveSubscription(authUser.id))) {
+      return NextResponse.json(
+        {
+          error: ALREADY_SUBSCRIBED_MESSAGE,
+          code: ALREADY_SUBSCRIBED_CODE,
+        },
+        { status: 409 }
+      );
+    }
+    if (customerEmail) {
+      const existingCustomers = await stripe.customers.list({
+        email: customerEmail,
+        limit: 1,
+      });
+      const existingCustomer = existingCustomers.data[0];
+      if (existingCustomer) {
+        const live = await findLiveCustomerSubscription(existingCustomer.id);
+        if (live) {
+          return NextResponse.json(
+            {
+              error: ALREADY_SUBSCRIBED_MESSAGE,
+              code: ALREADY_SUBSCRIBED_CODE,
+            },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     const priceId = getStripePriceId(cadence, tier);

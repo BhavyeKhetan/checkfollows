@@ -30,6 +30,251 @@ const MANAGEABLE_STATUSES = new Set<Stripe.Subscription.Status>([
   "paused",
 ]);
 
+/** Billing that must not be replaced by a second Checkout / Payment Element sub. */
+const LIVE_BILLING_STATUSES = new Set<Stripe.Subscription.Status>([
+  "active",
+  "trialing",
+  "past_due",
+  "unpaid",
+  "paused",
+]);
+
+export function isLiveBillingSubscription(
+  subscription: Stripe.Subscription
+): boolean {
+  return LIVE_BILLING_STATUSES.has(subscription.status);
+}
+
+export const ALREADY_SUBSCRIBED_CODE = "already_subscribed";
+
+export const ALREADY_SUBSCRIBED_MESSAGE =
+  "You already have a CheckFollows subscription. Sign in to your account to add concurrent slots instead of starting a new plan.";
+
+export async function findLiveCustomerSubscription(
+  customerId: string,
+  excludeSubscriptionId?: string
+): Promise<Stripe.Subscription | null> {
+  const stripe = getStripe();
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+  });
+  const live = subscriptions.data
+    .filter(
+      (subscription) =>
+        isLiveBillingSubscription(subscription) &&
+        subscription.id !== excludeSubscriptionId
+    )
+    .sort((a, b) => a.created - b.created);
+  return live[0] || null;
+}
+
+export async function findReusableIncompleteSubscription(
+  customerId: string,
+  priceIds: string[]
+): Promise<Stripe.Subscription | null> {
+  const stripe = getStripe();
+  const wanted = [...priceIds].sort().join(",");
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "incomplete",
+    limit: 10,
+    expand: ["data.latest_invoice.confirmation_secret"],
+  });
+  return (
+    subscriptions.data.find((subscription) => {
+      const have = subscription.items.data
+        .map((item) => item.price.id)
+        .sort()
+        .join(",");
+      return have === wanted;
+    }) || null
+  );
+}
+
+/**
+ * Another paid Stripe subscription already on this email / user, if any.
+ * Extra Instagram accounts belong on that subscription as slots, not a new plan.
+ */
+export async function findCanonicalStripeBilling(opts: {
+  userId?: string | null;
+  email?: string | null;
+  excludeSubscriptionId?: string;
+}): Promise<{
+  stripeSubscriptionId: string;
+  stripeCustomerId: string | null;
+  userId: string | null;
+  email: string;
+} | null> {
+  const supabase = createServerClient();
+  const exclude = opts.excludeSubscriptionId || "";
+
+  const byUser =
+    opts.userId
+      ? await supabase
+          .from("subscriptions")
+          .select("stripe_subscription_id, stripe_customer_id, user_id, email, active, updated_at")
+          .eq("user_id", opts.userId)
+          .eq("active", true)
+          .not("stripe_subscription_id", "is", null)
+          .order("updated_at", { ascending: true })
+          .limit(20)
+      : { data: null as null };
+
+  let rows = byUser.data || [];
+  if (rows.length === 0 && opts.email) {
+    const byEmail = await supabase
+      .from("subscriptions")
+      .select("stripe_subscription_id, stripe_customer_id, user_id, email, active, updated_at")
+      .eq("email", opts.email.toLowerCase())
+      .eq("active", true)
+      .not("stripe_subscription_id", "is", null)
+      .order("updated_at", { ascending: true })
+      .limit(20);
+    rows = byEmail.data || [];
+  }
+
+  const canonical = rows.find(
+    (row) =>
+      !!row.stripe_subscription_id &&
+      row.stripe_subscription_id !== exclude
+  );
+  if (!canonical?.stripe_subscription_id) return null;
+
+  return {
+    stripeSubscriptionId: canonical.stripe_subscription_id,
+    stripeCustomerId: canonical.stripe_customer_id,
+    userId: canonical.user_id,
+    email: canonical.email,
+  };
+}
+
+/**
+ * If this incoming Stripe subscription would be a second plan for the same
+ * buyer, attach any target to the existing plan and cancel the duplicate.
+ * Returns the Stripe subscription id that should be persisted.
+ */
+export async function collapseDuplicateStripeSubscription(opts: {
+  incomingSubscriptionId: string;
+  customerId: string;
+  email: string;
+  userId?: string | null;
+  targetId?: string | null;
+}): Promise<{
+  stripeSubscriptionId: string;
+  stripeCustomerId: string;
+  collapsed: boolean;
+}> {
+  const stripe = getStripe();
+  const liveOther = await findLiveCustomerSubscription(
+    opts.customerId,
+    opts.incomingSubscriptionId
+  );
+
+  let canonical = await findCanonicalStripeBilling({
+    userId: opts.userId,
+    email: opts.email,
+    excludeSubscriptionId: opts.incomingSubscriptionId,
+  });
+
+  // Prefer the oldest live Stripe subscription as the keeper. Never cancel
+  // the original plan because a later duplicate's webhook fired first.
+  let incomingCreated = Number.POSITIVE_INFINITY;
+  try {
+    const incoming = await stripe.subscriptions.retrieve(
+      opts.incomingSubscriptionId
+    );
+    incomingCreated = incoming.created;
+  } catch (error) {
+    console.error("Failed to retrieve incoming subscription", error);
+  }
+
+  if (liveOther && liveOther.created < incomingCreated) {
+    canonical = {
+      stripeSubscriptionId: liveOther.id,
+      stripeCustomerId:
+        typeof liveOther.customer === "string"
+          ? liveOther.customer
+          : liveOther.customer.id,
+      userId: opts.userId || canonical?.userId || null,
+      email: opts.email.toLowerCase(),
+    };
+  } else if (canonical) {
+    try {
+      const keeper = await stripe.subscriptions.retrieve(
+        canonical.stripeSubscriptionId
+      );
+      if (!(keeper.created < incomingCreated)) {
+        return {
+          stripeSubscriptionId: opts.incomingSubscriptionId,
+          stripeCustomerId: opts.customerId,
+          collapsed: false,
+        };
+      }
+    } catch {
+      /* keep supabase canonical if Stripe retrieve fails */
+    }
+  }
+
+  if (!canonical || canonical.stripeSubscriptionId === opts.incomingSubscriptionId) {
+    return {
+      stripeSubscriptionId: opts.incomingSubscriptionId,
+      stripeCustomerId: opts.customerId,
+      collapsed: false,
+    };
+  }
+
+  const supabase = createServerClient();
+
+  if (opts.targetId) {
+    const { data: existingRow } = await supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("target_id", opts.targetId)
+      .eq("email", opts.email.toLowerCase())
+      .maybeSingle();
+
+    const entitlement = {
+      email: opts.email.toLowerCase(),
+      stripe_customer_id: canonical.stripeCustomerId || opts.customerId,
+      stripe_subscription_id: canonical.stripeSubscriptionId,
+      user_id: opts.userId || canonical.userId,
+      active: true,
+      user_paused: false,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingRow) {
+      await supabase.from("subscriptions").update(entitlement).eq("id", existingRow.id);
+    } else {
+      await supabase.from("subscriptions").insert({
+        target_id: opts.targetId,
+        ...entitlement,
+      });
+    }
+  }
+
+  try {
+    await stripe.subscriptions.cancel(opts.incomingSubscriptionId, {
+      invoice_now: false,
+      prorate: true,
+    });
+  } catch (error) {
+    console.error("Failed to cancel duplicate Stripe subscription", {
+      incomingSubscriptionId: opts.incomingSubscriptionId,
+      canonicalSubscriptionId: canonical.stripeSubscriptionId,
+      error,
+    });
+  }
+
+  return {
+    stripeSubscriptionId: canonical.stripeSubscriptionId,
+    stripeCustomerId: canonical.stripeCustomerId || opts.customerId,
+    collapsed: true,
+  };
+}
+
 export function subscriptionSelection(
   subscription: Stripe.Subscription
 ): SubscriptionSelection {
