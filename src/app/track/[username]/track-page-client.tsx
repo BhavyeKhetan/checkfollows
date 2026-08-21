@@ -506,24 +506,35 @@ export default function TrackPageClient({
   // Loading / auth-gate state
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-full border-3 border-[#121212] border-t-[#E7F256] animate-spin" />
-          <p className="text-[#555555] text-sm font-semibold">Loading timeline...</p>
-        </div>
-      </div>
+      <AppShell>
+        <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-8 sm:px-6 sm:py-10 animate-pulse">
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-full bg-[var(--badge-bg)] shrink-0" />
+            <div className="space-y-2 flex-1">
+              <div className="h-6 w-48 rounded-xl bg-[var(--badge-bg)]" />
+              <div className="h-4 w-32 rounded-lg bg-[var(--badge-bg)]/80" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-20 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4" />
+            ))}
+          </div>
+          <div className="h-64 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4" />
+        </main>
+      </AppShell>
     );
   }
 
   // Error state
   if (error || !target) {
     return (
-      <div className="min-h-screen bg-[#FFFFFF] flex items-center justify-center">
-        <Card variant="subtle" className="text-center max-w-sm border-[#FCA5A5]">
-          <p className="text-[#B91C1C] text-sm font-medium mb-4">{error || "Account not found"}</p>
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <Card variant="subtle" className="text-center max-w-sm border-rose-500/30">
+          <p className="text-rose-600 dark:text-rose-400 text-sm font-medium mb-4">{error || "Account not found"}</p>
           <Link href="/dashboard">
             <Button variant="secondary" leftIcon={<ArrowLeft className="w-4 h-4" />}>
-              Back to dashboard
+              Back to tracked accounts
             </Button>
           </Link>
         </Card>

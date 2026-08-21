@@ -64,7 +64,8 @@ export function AppShell({
           <div className="flex items-center gap-1 sm:gap-2">
             <NavLink href="/app/add-account" active={onAdd}>
               <UserPlus className="h-3.5 w-3.5" />
-              <span>Add account</span>
+              <span className="hidden sm:inline">Add account</span>
+              <span className="sm:hidden">Add</span>
             </NavLink>
             <NavLink href="/account" active={onAccount || onPricing}>
               <Settings className="h-3.5 w-3.5" />

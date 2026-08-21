@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Avatar, Badge, Button, Card } from "@/design-system";
 import { AppShell } from "@/components/app/app-shell";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { createClient } from "@/lib/supabase/client";
 import { identify, track } from "@/lib/mixpanel";
 import {
@@ -203,11 +204,7 @@ export default function DashboardPage() {
     .filter((t): t is TrackedTarget => !!t);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--background)]">
-        <div className="border-3 h-8 w-8 animate-spin rounded-full border-[var(--border)] border-t-[#E7F256]" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

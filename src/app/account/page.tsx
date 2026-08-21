@@ -20,6 +20,7 @@ import { Button, Badge, Card } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { track, identify } from "@/lib/mixpanel";
 import { BillingManagement } from "@/components/account/billing-management";
+import { AccountSkeleton } from "@/components/account/account-skeleton";
 import { AppShell } from "@/components/app/app-shell";
 import type { AccountData } from "@/lib/account-types";
 
@@ -216,11 +217,7 @@ export default function AccountPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-3 border-[var(--border)] border-t-[#E7F256] animate-spin" />
-      </div>
-    );
+    return <AccountSkeleton />;
   }
 
   return (

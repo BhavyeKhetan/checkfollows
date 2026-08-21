@@ -11,43 +11,60 @@ import { createServerClient } from "@/lib/supabase/server";
 
 export type OneTimeKind = "export" | "rescan_credits" | "mutuals";
 
+// Mutex map to prevent concurrent race-condition inserts across parallel requests
+const inFlightGrants = new Map<string, Promise<void>>();
+
 /**
- * Ensures every account on a Basic or Premium plan gets 1 free rescan credit.
- * Idempotent: checks for a 'plan_free_rescan' grant row in one_time_purchases.
+ * Ensures every account on a Basic or Premium plan gets exactly 1 free rescan credit.
+ * Completely idempotent and self-healing against concurrent race conditions.
  */
 export async function ensureFreePlanCredits(userId: string): Promise<void> {
-  try {
-    const supabase = createServerClient();
-    const { data: sub } = await supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("active", true)
-      .not("stripe_subscription_id", "is", null)
-      .limit(1)
-      .maybeSingle();
+  const ongoing = inFlightGrants.get(userId);
+  if (ongoing) return ongoing;
 
-    if (!sub) return;
+  const promise = (async () => {
+    try {
+      const supabase = createServerClient();
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("active", true)
+        .not("stripe_subscription_id", "is", null)
+        .limit(1)
+        .maybeSingle();
 
-    const { data: existingFree } = await supabase
-      .from("one_time_purchases")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("stripe_session_id", "plan_free_rescan")
-      .maybeSingle();
+      if (!sub) return;
 
-    if (!existingFree) {
-      await supabase.from("one_time_purchases").insert({
-        user_id: userId,
-        kind: "rescan_credits",
-        credits: 1,
-        consumed: 0,
-        stripe_session_id: "plan_free_rescan",
-      });
+      const { data: existingRows } = await supabase
+        .from("one_time_purchases")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("stripe_session_id", "plan_free_rescan")
+        .order("created_at", { ascending: true });
+
+      if (!existingRows || existingRows.length === 0) {
+        await supabase.from("one_time_purchases").insert({
+          user_id: userId,
+          kind: "rescan_credits",
+          credits: 1,
+          consumed: 0,
+          stripe_session_id: "plan_free_rescan",
+        });
+      } else if (existingRows.length > 1) {
+        // Remove any duplicates caused by prior race conditions
+        const duplicateIds = existingRows.slice(1).map((r) => r.id);
+        await supabase.from("one_time_purchases").delete().in("id", duplicateIds);
+      }
+    } catch (err) {
+      console.error("Failed to ensure free plan rescan credits:", err);
+    } finally {
+      inFlightGrants.delete(userId);
     }
-  } catch (err) {
-    console.error("Failed to ensure free plan rescan credits:", err);
-  }
+  })();
+
+  inFlightGrants.set(userId, promise);
+  return promise;
 }
 
 export async function getRemainingCredits(
@@ -75,17 +92,26 @@ export async function getCreditsSummary(
 ): Promise<Record<OneTimeKind, number>> {
   await ensureFreePlanCredits(userId);
 
-  const [exportCredits, rescanCredits, mutualsCredits] = await Promise.all([
-    getRemainingCredits(userId, "export"),
-    getRemainingCredits(userId, "rescan_credits"),
-    getRemainingCredits(userId, "mutuals"),
-  ]);
+  const supabase = createServerClient();
+  const { data } = await supabase
+    .from("one_time_purchases")
+    .select("kind, credits, consumed")
+    .eq("user_id", userId);
 
-  return {
-    export: exportCredits,
-    rescan_credits: rescanCredits,
-    mutuals: mutualsCredits,
+  const summary: Record<OneTimeKind, number> = {
+    export: 0,
+    rescan_credits: 0,
+    mutuals: 0,
   };
+
+  for (const row of data || []) {
+    const kind = row.kind as OneTimeKind;
+    if (kind in summary) {
+      summary[kind] += Math.max(0, row.credits - row.consumed);
+    }
+  }
+
+  return summary;
 }
 
 /**
