@@ -258,47 +258,50 @@ export default function AccountPage() {
           variant={data?.hasActiveSubscription ? "highlight" : "subtle"}
           padding="lg"
         >
-          <div className="flex items-start gap-4">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                data?.hasActiveSubscription
-                  ? "bg-[#121212] text-[#E7F256]"
-                  : "bg-[#EDEDE8] text-[#555555]"
-              }`}
-            >
-              {data?.hasActiveSubscription ? (
-                <CheckCircle2 className="w-6 h-6" />
-              ) : (
-                <AlertCircle className="w-6 h-6" />
-              )}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-extrabold text-[#121212]">
-                {data?.hasActiveSubscription
-                  ? "Active subscription"
-                  : data?.canRenew
-                    ? "Subscription inactive"
-                    : "No active subscription"}
-              </h2>
-              <p className="text-sm text-[#555555] mt-0.5">
-                {data?.hasActiveSubscription
-                  ? `${planLabel(
-                      data.subscriptions.find((s) => s.active)?.plan || "basic",
-                      data.subscriptions.find((s) => s.active)?.tier
-                    )} · every-other-day monitoring enabled`
-                  : data?.canRenew
-                    ? "Your account is still here. Renew to reveal your tracked accounts and resume monitoring."
-                    : "Subscribe to unlock full following lists and every-other-day monitoring."}
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-start gap-4 flex-1">
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  data?.hasActiveSubscription
+                    ? "bg-[#121212] text-[#E7F256] dark:bg-[#E7F256] dark:text-[#121212]"
+                    : "bg-[#EDEDE8] text-[#555555] dark:bg-[#222222] dark:text-[#A1A1AA]"
+                }`}
+              >
+                {data?.hasActiveSubscription ? (
+                  <CheckCircle2 className="w-6 h-6" />
+                ) : (
+                  <AlertCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-extrabold text-[var(--foreground)]">
+                  {data?.hasActiveSubscription
+                    ? "Active subscription"
+                    : data?.canRenew
+                      ? "Subscription inactive"
+                      : "No active subscription"}
+                </h2>
+                <p className="text-sm text-[var(--muted-foreground)] mt-0.5">
+                  {data?.hasActiveSubscription
+                    ? `${planLabel(
+                        data.subscriptions.find((s) => s.active)?.plan || "basic",
+                        data.subscriptions.find((s) => s.active)?.tier
+                      )} · every-other-day monitoring enabled`
+                    : data?.canRenew
+                      ? "Your account is still here. Renew to reveal your tracked accounts and resume monitoring."
+                      : "Subscribe to unlock full following lists and every-other-day monitoring."}
+                </p>
+              </div>
             </div>
             {data?.hasActiveSubscription && (
-              <Link href="/dashboard">
+              <Link href="/dashboard" className="w-full sm:w-auto">
                 <Button
                   variant="secondary"
                   size="md"
+                  className="w-full sm:w-auto"
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                 >
-                  Dashboard
+                  View tracked accounts
                 </Button>
               </Link>
             )}

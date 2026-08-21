@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, LogOut, Settings, UserPlus } from "lucide-react";
+import { LogOut, Settings, UserPlus } from "lucide-react";
 import { Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { reset, track } from "@/lib/mixpanel";
@@ -22,7 +22,7 @@ function NavLink({
       className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
         active
           ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212]"
-          : "text-[#555555] hover:text-[#121212] dark:text-[#A1A1AA] dark:hover:text-[#F5F5F5]"
+          : "text-[#555555] hover:text-[#121212] dark:text-[#A1A1AA] dark:hover:text-[#F5F5F5] hover:bg-black/5 dark:hover:bg-white/5"
       }`}
     >
       {children}
@@ -41,7 +41,6 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const onDashboard = pathname === "/dashboard" || pathname === "/";
   const onAccount =
     pathname === "/account" || pathname.startsWith("/account/");
   const onAdd = pathname.startsWith("/app/add-account");
@@ -62,27 +61,25 @@ export function AppShell({
           className={`${maxWidth} mx-auto flex h-16 items-center justify-between gap-3 px-4 sm:px-6`}
         >
           <Logo href="/dashboard" size="sm" />
-          <div className="flex items-center gap-0.5 sm:gap-1">
-            <NavLink href="/dashboard" active={onDashboard}>
-              <LayoutDashboard className="hidden h-3.5 w-3.5 sm:block" />
-              Dashboard
-            </NavLink>
+          <div className="flex items-center gap-1 sm:gap-2">
             <NavLink href="/app/add-account" active={onAdd}>
-              <UserPlus className="hidden h-3.5 w-3.5 sm:block" />
-              Add
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Add account</span>
             </NavLink>
             <NavLink href="/account" active={onAccount || onPricing}>
-              <Settings className="hidden h-3.5 w-3.5 sm:block" />
-              Account
+              <Settings className="h-3.5 w-3.5" />
+              <span>Account</span>
             </NavLink>
             {actions}
             <button
               type="button"
               onClick={handleSignOut}
-              className="ml-1 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-[#555555] dark:text-[#A1A1AA] transition-colors hover:text-[#121212] dark:hover:text-[#F5F5F5]"
+              aria-label="Sign out"
+              title="Sign out"
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-bold text-[#555555] dark:text-[#A1A1AA] transition-colors hover:text-[#121212] dark:hover:text-[#F5F5F5] hover:bg-black/5 dark:hover:bg-white/5"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Sign out</span>
+              <span className="hidden md:inline">Sign out</span>
             </button>
           </div>
         </div>
