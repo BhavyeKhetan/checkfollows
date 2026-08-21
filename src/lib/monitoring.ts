@@ -25,6 +25,7 @@ import type {
   InstagramUserEntry,
   InstagramProfile,
 } from "@/lib/instagram/provider";
+import { ownerIdentityFromScan } from "@/lib/target-profile";
 
 // ─── Config ───────────────────────────────────────────────
 
@@ -1057,30 +1058,24 @@ export async function fullBaselineScan(username: string): Promise<{
     );
   }
 
-  // Get real Instagram ID from preview provider (cheap, ensures dedup)
-  let realUserId = "";
+  // Owner identity must come from the profile scrape — never from the
+  // following list. entries[0] is someone this account follows (e.g. a
+  // brand), not the account being tracked.
+  let ownerProfile = null;
   try {
     const previewProvider = getPreviewProvider();
-    const profile = await previewProvider.fetchProfile(cleanUsername);
-    realUserId = profile.userId;
+    ownerProfile = await previewProvider.fetchProfile(cleanUsername);
   } catch {
-    // Fallback: use the first following entry if preview fails
-    // This only happens if the preview actor is down — dedup still works
-    // for targets created via previewLookup first.
-    realUserId = entries[0]?.userId || `ig_${cleanUsername}`;
+    /* Keep existing identity if the profile actor is down. */
   }
 
-  const firstEntry = entries[0];
-  const target = await upsertInstagramTarget({
-    userId: realUserId,
-    username: cleanUsername,
-    fullName: firstEntry.fullName,
-    avatarUrl: firstEntry.avatarUrl,
-    isPrivate: firstEntry.isPrivate,
-    isVerified: firstEntry.isVerified,
-    followerCount: 0,
-    followingCount: entries.length,
-  });
+  const target = await upsertInstagramTarget(
+    ownerIdentityFromScan({
+      username: cleanUsername,
+      ownerProfile,
+      followingCount: entries.length,
+    })
+  );
 
   if (!target) {
     throw new Error("Failed to create target record");

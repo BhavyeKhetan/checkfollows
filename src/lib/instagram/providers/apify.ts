@@ -190,47 +190,10 @@ export function createApifyProvider(): InstagramProvider {
   const provider: InstagramProvider = {
     name: "apify",
 
-    async fetchProfile(username: string): Promise<InstagramProfile> {
-      // Use the actor to get profile data by scraping a single username
-      // The actor doesn't have a dedicated profile endpoint, but running
-      // with maxResultsPerUser=1 gives us enough metadata.
-      const clean = username.replace(/^@/, "").trim();
-
-      const result = await provider.batchScan({
-        usernames: [clean],
-        dataToScrape: "Followings",
-        maxResultsPerUser: 1,
-      });
-
-      if (!result.success) {
-        throw new Error(
-          result.runMetadata.error || "Failed to fetch profile"
-        );
-      }
-
-      const entries = result.entries.get(clean.toLowerCase());
-      if (!entries || entries.length === 0) {
-        // Check if account doesn't exist — the actor returns empty results for non-existent accounts
-        throw new Error("Account not found");
-      }
-
-      // We don't get follower/following counts from this actor directly.
-      // For profile display, we fetch the profile via the first entry's metadata.
-      // The counts will be populated from the last snapshot or from a separate API call.
-      const first = entries[0];
-
-      return {
-        userId: first.userId,
-        username: clean,
-        fullName: first.fullName,
-        avatarUrl: first.avatarUrl,
-        isPrivate: first.isPrivate,
-        isVerified: first.isVerified,
-        followerCount: 0, // Will be populated from snapshot
-        followingCount: entries.length, // We fetched following, so this is the count
-        biography: null,
-        externalUrl: null,
-      };
+    async fetchProfile(_username: string): Promise<InstagramProfile> {
+      throw new Error(
+        "The following-list actor cannot identify the owner. Use the preview profile scraper."
+      );
     },
 
     async fetchFollowing(userId: string): Promise<InstagramUserEntry[]> {

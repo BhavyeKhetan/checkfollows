@@ -5,6 +5,7 @@ import {
   disableMonitoringIfUnused,
   enableMonitoring,
 } from "@/lib/monitoring";
+import { ensureFreePlanCredits } from "@/lib/purchases";
 import { trackServer } from "@/lib/mixpanel-server";
 import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 import type Stripe from "stripe";
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
         if (session.mode === "payment" && metadata.kind) {
           const otpUserId = metadata.user_id || null;
           if (otpUserId) {
-            const quantity = parseInt(metadata.quantity || "1", 10) || 1;
+            const quantity = parseInt(metadata.credits || metadata.quantity || "1", 10) || 1;
             await createServerClient().from("one_time_purchases").insert({
               user_id: otpUserId,
               kind: metadata.kind,
@@ -93,13 +94,15 @@ export async function POST(request: Request) {
             console.log("One-time purchase credited:", {
               userId: otpUserId,
               kind: metadata.kind,
-              quantity,
+              credits: quantity,
+              bundle: metadata.bundle || null,
             });
             trackServer("one_time_purchase_completed", {
               user_id: otpUserId,
               ...(customerEmail ? { email: customerEmail } : {}),
               kind: metadata.kind,
-              quantity,
+              quantity: quantity,
+              ...(metadata.bundle ? { bundle: metadata.bundle } : {}),
             });
           }
           break;
@@ -229,6 +232,10 @@ export async function POST(request: Request) {
           // is the safety net if the user closes the browser early.
           if (targetId) {
             await enableMonitoring(targetId);
+          }
+
+          if (userId) {
+            await ensureFreePlanCredits(userId);
           }
 
           // Renewal checkouts are generic subscriptions. Reattach the new

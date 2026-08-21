@@ -78,19 +78,75 @@ export function getAdditionalAccountPriceId(cadence: BillingCadence): string {
   return id;
 }
 
+export type RescanBundle = "3" | "10" | "30";
+
+export interface RescanBundleOption {
+  bundle: RescanBundle;
+  credits: number;
+  price: number;
+  unitPrice: string;
+  label: string;
+  badge?: string;
+  highlighted?: boolean;
+}
+
+export const RESCAN_BUNDLES: RescanBundleOption[] = [
+  {
+    bundle: "3",
+    credits: 3,
+    price: 5,
+    unitPrice: "$1.67",
+    label: "Starter",
+  },
+  {
+    bundle: "10",
+    credits: 10,
+    price: 10,
+    unitPrice: "$1.00",
+    label: "Popular",
+  },
+  {
+    bundle: "30",
+    credits: 30,
+    price: 20,
+    unitPrice: "$0.67",
+    label: "Best Value",
+    badge: "SAVE 60%",
+    highlighted: true,
+  },
+];
+
+export const RESCAN_BUNDLE_PRICE_IDS: Record<RescanBundle, string> = {
+  "3": process.env.STRIPE_PRICE_RESCAN_3_ID || "price_1U6yWDExaeatW6VmEavDBAh2",
+  "10": process.env.STRIPE_PRICE_RESCAN_10_ID || "price_1U6yWDExaeatW6VmMUntCXDJ",
+  "30": process.env.STRIPE_PRICE_RESCAN_30_ID || "price_1U6yWEExaeatW6VmM4mSf00M",
+};
+
 /** One-time upsell price IDs: history export, on-demand rescan, mutuals. */
 export const ONE_TIME_PRICE_IDS: Record<
   "export" | "rescan_credits" | "mutuals",
   string
 > = {
   export: process.env.STRIPE_PRICE_EXPORT_ID || "",
-  rescan_credits: process.env.STRIPE_PRICE_RESCAN_ID || "",
+  rescan_credits: process.env.STRIPE_PRICE_RESCAN_ID || process.env.STRIPE_PRICE_RESCAN_3_ID || "",
   mutuals: process.env.STRIPE_PRICE_MUTUALS_ID || "",
 };
 
+export function getRescanBundlePriceId(bundle: RescanBundle = "30"): string {
+  const id = RESCAN_BUNDLE_PRICE_IDS[bundle];
+  if (!id) {
+    throw new Error(`STRIPE_PRICE_RESCAN_${bundle}_ID is not configured`);
+  }
+  return id;
+}
+
 export function getOneTimePriceId(
-  kind: "export" | "rescan_credits" | "mutuals"
+  kind: "export" | "rescan_credits" | "mutuals",
+  bundle?: RescanBundle
 ): string {
+  if (kind === "rescan_credits" && bundle) {
+    return getRescanBundlePriceId(bundle);
+  }
   const envKey =
     kind === "export"
       ? "STRIPE_PRICE_EXPORT_ID"

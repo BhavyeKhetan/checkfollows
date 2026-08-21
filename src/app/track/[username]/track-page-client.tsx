@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
 import { track } from "@/lib/mixpanel";
+import { type RescanBundle } from "@/lib/stripe";
+import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -138,6 +140,8 @@ export default function TrackPageClient({
   const [togglingMonitoring, setTogglingMonitoring] = useState(false);
   const [credits, setCredits] = useState(initialCredits);
   const [rescanning, setRescanning] = useState(false);
+  const [showRescanModal, setShowRescanModal] = useState(false);
+  const [purchasingBundle, setPurchasingBundle] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [mutualUsername, setMutualUsername] = useState("");
   const [mutualLoading, setMutualLoading] = useState(false);
@@ -253,15 +257,21 @@ export default function TrackPageClient({
 
   const purchaseOneTime = async (
     kind: "export" | "rescan_credits" | "mutuals",
-    targetId?: string
+    targetId?: string,
+    bundle?: RescanBundle
   ) => {
     try {
-      track("upsell_checkout_started", { kind, username });
+      track("upsell_checkout_started", {
+        kind,
+        username,
+        ...(bundle ? { bundle } : {}),
+      });
       const res = await fetch("/api/stripe/one-time", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind,
+          bundle,
           targetId: targetId || target?.id,
           username,
         }),
@@ -277,6 +287,12 @@ export default function TrackPageClient({
     }
   };
 
+  const handleSelectBundle = async (bundle: RescanBundle) => {
+    setPurchasingBundle(true);
+    await purchaseOneTime("rescan_credits", target?.id, bundle);
+    setPurchasingBundle(false);
+  };
+
   const handleRescan = async () => {
     if (!target || rescanning) return;
     track("rescan_clicked", {
@@ -284,7 +300,7 @@ export default function TrackPageClient({
       has_credit: credits.rescan_credits > 0,
     });
     if (credits.rescan_credits <= 0) {
-      purchaseOneTime("rescan_credits", target.id);
+      setShowRescanModal(true);
       return;
     }
     setRescanning(true);
@@ -296,7 +312,7 @@ export default function TrackPageClient({
       });
       const data = await res.json();
       if (res.status === 402 && data.needsPurchase) {
-        purchaseOneTime("rescan_credits", target.id);
+        setShowRescanModal(true);
         return;
       }
       if (!res.ok) {
@@ -639,24 +655,44 @@ export default function TrackPageClient({
           </p>
           <div className="grid sm:grid-cols-3 gap-4">
             {/* Rescan now */}
-            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col">
-              <RefreshCw className="w-5 h-5 text-[#121212] mb-2" />
-              <h3 className="text-sm font-extrabold text-[#121212]">Rescan now</h3>
-              <p className="text-xs text-[#555555] mt-1 flex-1">
-                Skip the 24h wait and check for changes immediately.
-              </p>
-              <Button
-                variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
-                size="sm"
-                className="mt-3"
-                onClick={handleRescan}
-                isLoading={rescanning}
-                fullWidth
-              >
-                {credits.rescan_credits > 0
-                  ? `Rescan now (${credits.rescan_credits} left)`
-                  : "Buy a rescan"}
-              </Button>
+            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <RefreshCw className="w-5 h-5 text-[#121212]" />
+                  {credits.rescan_credits > 0 && (
+                    <Badge variant="lime" size="sm">
+                      {credits.rescan_credits} available
+                    </Badge>
+                  )}
+                </div>
+                <h3 className="text-sm font-extrabold text-[#121212]">Rescan now</h3>
+                <p className="text-xs text-[#555555] mt-1">
+                  Skip the 48h wait and check for changes immediately.
+                </p>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <Button
+                  variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={credits.rescan_credits > 0 ? handleRescan : () => setShowRescanModal(true)}
+                  isLoading={rescanning}
+                  fullWidth
+                >
+                  {credits.rescan_credits > 0
+                    ? `Rescan now (${credits.rescan_credits} left)`
+                    : "Buy a rescan pack"}
+                </Button>
+                {credits.rescan_credits > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowRescanModal(true)}
+                    className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
+                  >
+                    + Buy more rescans (from $0.67/ea)
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Export timeline */}
@@ -898,6 +934,14 @@ export default function TrackPageClient({
           </div>
         </div>
       </footer>
+      {/* ── Rescan Bundle Modal ── */}
+      <RescanBundleModal
+        open={showRescanModal}
+        onClose={() => setShowRescanModal(false)}
+        username={target?.username || username}
+        onSelectBundle={handleSelectBundle}
+        loading={purchasingBundle}
+      />
     </AppShell>
   );
 }

@@ -17,6 +17,7 @@ const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
 const FEATURES = [
   "Complete chronological following list",
   "Every-other-day monitoring with automatic rescan",
+  "1 free on-demand rescan credit included",
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
   "No Instagram login required",
