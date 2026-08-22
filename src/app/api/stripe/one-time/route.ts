@@ -4,16 +4,19 @@ import {
   getOneTimePriceId,
   RESCAN_BUNDLES,
   type RescanBundle,
+  type ExportOptionTier,
 } from "@/lib/stripe";
 import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
+import { createServerClient } from "@/lib/supabase/server";
 
-const KINDS = ["export", "rescan_credits", "mutuals"] as const;
+const KINDS = ["export", "export_unlimited", "rescan_credits", "mutuals"] as const;
 type OneTimeKind = (typeof KINDS)[number];
 
 /**
  * POST /api/stripe/one-time
- * Body: { kind: "export" | "rescan_credits" | "mutuals",
+ * Body: { kind: "export" | "export_unlimited" | "rescan_credits" | "mutuals",
  *         bundle?: "3" | "10" | "30",
+ *         exportTier?: "single" | "unlimited",
  *         targetId?, username?, quantity? }
  *
  * Creates a Stripe one-time payment (mode: "payment") checkout for an upsell.
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const kind = typeof body.kind === "string" ? body.kind : "";
+    let kind = typeof body.kind === "string" ? body.kind : "";
     if (!KINDS.includes(kind as OneTimeKind)) {
       return NextResponse.json({ error: "Invalid purchase kind" }, { status: 400 });
     }
@@ -43,6 +46,7 @@ export async function POST(request: Request) {
     const username = typeof body.username === "string" ? body.username : undefined;
 
     let bundle: RescanBundle | undefined;
+    let exportTier: ExportOptionTier | undefined;
     let credits = 1;
 
     if (kind === "rescan_credits") {
@@ -50,6 +54,15 @@ export async function POST(request: Request) {
       bundle = rawBundle === "3" || rawBundle === "10" || rawBundle === "30" ? rawBundle : "30";
       const bundleConfig = RESCAN_BUNDLES.find((b) => b.bundle === bundle);
       credits = bundleConfig ? bundleConfig.credits : 30;
+    } else if (kind === "export" || kind === "export_unlimited") {
+      exportTier = body.exportTier === "single" ? "single" : "unlimited";
+      if (kind === "export_unlimited" || exportTier === "unlimited") {
+        kind = "export_unlimited";
+        credits = 1;
+      } else {
+        kind = "export";
+        credits = 1;
+      }
     } else {
       credits = Math.min(
         Math.max(parseInt(String(body.quantity), 10) || 1, 1),
@@ -59,7 +72,22 @@ export async function POST(request: Request) {
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
     const stripe = getStripe();
-    const priceId = getOneTimePriceId(kind as OneTimeKind, bundle);
+    const priceId = getOneTimePriceId(
+      kind as OneTimeKind,
+      bundle || exportTier
+    );
+
+    const supabase = createServerClient();
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .not("stripe_customer_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const customerId = sub?.stripe_customer_id || undefined;
 
     const metadata: Record<string, string> = {
       product: "checkfollows",
@@ -69,6 +97,7 @@ export async function POST(request: Request) {
       quantity: String(credits),
     };
     if (bundle) metadata.bundle = bundle;
+    if (exportTier) metadata.export_tier = exportTier;
     if (targetId) metadata.target_id = targetId;
     if (username) metadata.username = username;
 
@@ -78,8 +107,16 @@ export async function POST(request: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      line_items: [{ price: priceId, quantity: bundle ? 1 : credits }],
-      customer_email: user.email || undefined,
+      line_items: [{ price: priceId, quantity: 1 }],
+      ...(customerId
+        ? {
+            customer: customerId,
+            customer_update: { address: "auto", name: "auto" },
+          }
+        : { customer_email: user.email || undefined }),
+      payment_intent_data: customerId
+        ? { setup_future_usage: "on_session" }
+        : undefined,
       success_url: `${baseUrl}${returnPath}?purchase=${kind}&success=true`,
       cancel_url: `${baseUrl}${returnPath}?purchase=${kind}&canceled=true`,
       metadata,

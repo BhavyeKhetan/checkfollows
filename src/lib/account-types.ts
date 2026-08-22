@@ -27,7 +27,12 @@ export interface AccountData {
   user: { id: string; email: string | null };
   hasActiveSubscription: boolean;
   spikeThreshold: number;
-  credits: { export: number; rescan_credits: number; mutuals: number };
+  credits: {
+    export: number;
+    rescan_credits: number;
+    mutuals: number;
+    unlimited_export?: boolean;
+  };
   subscriptions: SubscriptionRow[];
   lockedTrackedAccountCount?: number;
   canRenew?: boolean;

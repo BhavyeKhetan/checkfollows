@@ -22,8 +22,9 @@ import {
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
 import { track } from "@/lib/mixpanel";
-import { type RescanBundle } from "@/lib/stripe";
+import { RESCAN_BUNDLES, type RescanBundle, type ExportOptionTier } from "@/lib/stripe";
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
+import { ExportModal } from "@/components/tracking/export-modal";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ interface TrackPageClientProps {
     export: number;
     rescan_credits: number;
     mutuals: number;
+    unlimited_export?: boolean;
   };
 }
 
@@ -143,6 +145,8 @@ export default function TrackPageClient({
   const [showRescanModal, setShowRescanModal] = useState(false);
   const [purchasingBundle, setPurchasingBundle] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [purchasingExport, setPurchasingExport] = useState(false);
   const [mutualUsername, setMutualUsername] = useState("");
   const [mutualLoading, setMutualLoading] = useState(false);
   const [mutualError, setMutualError] = useState("");
@@ -256,22 +260,31 @@ export default function TrackPageClient({
   };
 
   const purchaseOneTime = async (
-    kind: "export" | "rescan_credits" | "mutuals",
+    kind: "export" | "export_unlimited" | "rescan_credits" | "mutuals",
     targetId?: string,
-    bundle?: RescanBundle
+    bundleOrTier?: RescanBundle | ExportOptionTier
   ) => {
     try {
       track("upsell_checkout_started", {
         kind,
         username,
-        ...(bundle ? { bundle } : {}),
+        ...(bundleOrTier ? { option: bundleOrTier } : {}),
       });
       const res = await fetch("/api/stripe/one-time", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind,
-          bundle,
+          bundle:
+            typeof bundleOrTier === "string" &&
+            (bundleOrTier === "3" || bundleOrTier === "10" || bundleOrTier === "30")
+              ? bundleOrTier
+              : undefined,
+          exportTier:
+            typeof bundleOrTier === "string" &&
+            (bundleOrTier === "single" || bundleOrTier === "unlimited")
+              ? bundleOrTier
+              : undefined,
           targetId: targetId || target?.id,
           username,
         }),
@@ -287,10 +300,74 @@ export default function TrackPageClient({
     }
   };
 
-  const handleSelectBundle = async (bundle: RescanBundle) => {
+  const handleSelectBundle = async (bundle: RescanBundle, changePaymentMethod = false) => {
     setPurchasingBundle(true);
-    await purchaseOneTime("rescan_credits", target?.id, bundle);
-    setPurchasingBundle(false);
+    try {
+      if (!changePaymentMethod) {
+        const res = await fetch("/api/stripe/one-click-charge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "rescan_credits",
+            bundle,
+            targetId: target?.id,
+            username,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          const bundleConfig = RESCAN_BUNDLES.find((b) => b.bundle === bundle);
+          const added = bundleConfig ? bundleConfig.credits : 30;
+          setCredits((c) => ({
+            ...c,
+            rescan_credits: c.rescan_credits + added,
+          }));
+          setShowRescanModal(false);
+          return;
+        }
+      }
+      await purchaseOneTime("rescan_credits", target?.id, bundle);
+    } catch {
+      await purchaseOneTime("rescan_credits", target?.id, bundle);
+    } finally {
+      setPurchasingBundle(false);
+    }
+  };
+
+  const handleSelectExportOption = async (tier: ExportOptionTier, changePaymentMethod = false) => {
+    setPurchasingExport(true);
+    try {
+      if (!changePaymentMethod) {
+        const res = await fetch("/api/stripe/one-click-charge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: tier === "unlimited" ? "export_unlimited" : "export",
+            exportTier: tier,
+            targetId: target?.id,
+            username,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (tier === "unlimited") {
+            setCredits((c) => ({ ...c, unlimited_export: true }));
+          } else {
+            setCredits((c) => ({ ...c, export: c.export + 1 }));
+          }
+          setShowExportModal(false);
+          setTimeout(() => {
+            void handleExport();
+          }, 300);
+          return;
+        }
+      }
+      await purchaseOneTime("export", target?.id, tier);
+    } catch {
+      await purchaseOneTime("export", target?.id, tier);
+    } finally {
+      setPurchasingExport(false);
+    }
   };
 
   const handleRescan = async () => {
@@ -336,14 +413,16 @@ export default function TrackPageClient({
     }
   };
 
+  const hasExportAccess = Boolean(credits.unlimited_export || credits.export > 0);
+
   const handleExport = async () => {
     if (!target || exporting) return;
     track("export_clicked", {
       username: target.username,
-      has_credit: credits.export > 0,
+      has_credit: hasExportAccess,
     });
-    if (credits.export <= 0) {
-      purchaseOneTime("export", target.id);
+    if (!hasExportAccess) {
+      setShowExportModal(true);
       return;
     }
     setExporting(true);
@@ -354,7 +433,7 @@ export default function TrackPageClient({
       if (res.status === 402) {
         const data = await res.json().catch(() => ({}));
         if (data.needsPurchase) {
-          purchaseOneTime("export", target.id);
+          setShowExportModal(true);
           return;
         }
       }
@@ -372,7 +451,9 @@ export default function TrackPageClient({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setCredits((c) => ({ ...c, export: Math.max(0, c.export - 1) }));
+      if (!credits.unlimited_export) {
+        setCredits((c) => ({ ...c, export: Math.max(0, c.export - 1) }));
+      }
       track("export_completed", { username: target.username });
     } catch {
       window.alert("Network error");
@@ -390,8 +471,35 @@ export default function TrackPageClient({
       has_credit: credits.mutuals > 0,
     });
     if (credits.mutuals <= 0) {
-      purchaseOneTime("mutuals", target.id);
-      return;
+      const confirmBuy = window.confirm(
+        `Mutual Follows Report is a $4.99 add-on. Purchase now to compare @${target.username} and @${other}?`
+      );
+      if (!confirmBuy) return;
+
+      setMutualLoading(true);
+      try {
+        const chargeRes = await fetch("/api/stripe/one-click-charge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "mutuals",
+            targetId: target.id,
+            username: target.username,
+          }),
+        });
+        const chargeData = await chargeRes.json();
+        if (chargeData.success) {
+          setCredits((c) => ({ ...c, mutuals: c.mutuals + 1 }));
+        } else {
+          await purchaseOneTime("mutuals", target.id);
+          return;
+        }
+      } catch {
+        await purchaseOneTime("mutuals", target.id);
+        return;
+      } finally {
+        setMutualLoading(false);
+      }
     }
     setMutualLoading(true);
     setMutualError("");
@@ -400,22 +508,27 @@ export default function TrackPageClient({
       const res = await fetch("/api/instagram/mutuals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id, username: other }),
+        body: JSON.stringify({
+          targetId: target.id,
+          username: other,
+        }),
       });
       const data = await res.json();
       if (res.status === 402 && data.needsPurchase) {
-        purchaseOneTime("mutuals", target.id);
+        await purchaseOneTime("mutuals", target.id);
         return;
       }
       if (!res.ok) {
-        setMutualError(data.error || "Mutual follows failed");
+        setMutualError(data.error || "Failed to calculate mutual follows");
         return;
       }
+      setCredits((c) => ({
+        ...c,
+        mutuals: Math.max(0, c.mutuals - 1),
+      }));
       setMutualResult(data);
-      setCredits((c) => ({ ...c, mutuals: Math.max(0, c.mutuals - 1) }));
       track("mutuals_completed", {
         username: target.username,
-        mutual_count: data?.mutualCount ?? 0,
       });
     } catch {
       setMutualError("Network error");
@@ -731,22 +844,50 @@ export default function TrackPageClient({
             </div>
 
             {/* Export timeline */}
-            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col">
-              <Download className="w-5 h-5 text-[#121212] mb-2" />
-              <h3 className="text-sm font-extrabold text-[#121212]">Export timeline</h3>
-              <p className="text-xs text-[#555555] mt-1 flex-1">
-                Download the full follow/unfollow history as a CSV.
-              </p>
-              <Button
-                variant={credits.export > 0 ? "primary" : "secondary"}
-                size="sm"
-                className="mt-3"
-                onClick={handleExport}
-                isLoading={exporting}
-                fullWidth
-              >
-                {credits.export > 0 ? "Export CSV" : "Buy export"}
-              </Button>
+            <div className="rounded-xl border border-[#E2E2DC] p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Download className="w-5 h-5 text-[#121212]" />
+                  {credits.unlimited_export ? (
+                    <Badge variant="lime" size="sm">
+                      Unlimited Pass
+                    </Badge>
+                  ) : credits.export > 0 ? (
+                    <Badge variant="lime" size="sm">
+                      {credits.export} available
+                    </Badge>
+                  ) : null}
+                </div>
+                <h3 className="text-sm font-extrabold text-[#121212]">Export timeline</h3>
+                <p className="text-xs text-[#555555] mt-1">
+                  Download the full follow/unfollow history as a CSV spreadsheet.
+                </p>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <Button
+                  variant={hasExportAccess ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={hasExportAccess ? handleExport : () => setShowExportModal(true)}
+                  isLoading={exporting}
+                  fullWidth
+                >
+                  {credits.unlimited_export
+                    ? "Download CSV (Unlimited)"
+                    : credits.export > 0
+                    ? `Export CSV (${credits.export} left)`
+                    : "Export CSV"}
+                </Button>
+                {!credits.unlimited_export && (
+                  <button
+                    type="button"
+                    onClick={() => setShowExportModal(true)}
+                    className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
+                  >
+                    {credits.export > 0 ? "+ Upgrade to Unlimited Pass ($9.99)" : "From $4.99 · Unlimited pass $9.99"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Mutual follows */}
@@ -976,6 +1117,14 @@ export default function TrackPageClient({
         username={target?.username || username}
         onSelectBundle={handleSelectBundle}
         loading={purchasingBundle}
+      />
+      {/* ── Export Modal ── */}
+      <ExportModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        username={target?.username || username}
+        onSelectOption={handleSelectExportOption}
+        loading={purchasingExport}
       />
     </AppShell>
   );

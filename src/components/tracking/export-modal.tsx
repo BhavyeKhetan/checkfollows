@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Zap, Check, CreditCard, Sparkles } from "lucide-react";
+import { X, Download, FileSpreadsheet, Check, CreditCard, Sparkles } from "lucide-react";
 import { Button } from "@/design-system";
-import { RESCAN_BUNDLES, type RescanBundle } from "@/lib/stripe";
+import { EXPORT_OPTIONS, type ExportOptionTier } from "@/lib/stripe";
 
 interface SavedCard {
   brand: string;
@@ -13,23 +13,23 @@ interface SavedCard {
   expYear: number;
 }
 
-interface RescanBundleModalProps {
+interface ExportModalProps {
   open: boolean;
   onClose: () => void;
   username: string;
-  onSelectBundle: (bundle: RescanBundle, changePaymentMethod?: boolean) => Promise<void>;
+  onSelectOption: (tier: ExportOptionTier, changePaymentMethod?: boolean) => Promise<void>;
   loading?: boolean;
 }
 
-export function RescanBundleModal({
+export function ExportModal({
   open,
   onClose,
   username,
-  onSelectBundle,
+  onSelectOption,
   loading = false,
-}: RescanBundleModalProps) {
-  // Default to the highest value $20 bundle (30 rescans) as requested
-  const [selectedBundle, setSelectedBundle] = useState<RescanBundle>("30");
+}: ExportModalProps) {
+  // Default to Unlimited Pass ($9.99)
+  const [selectedTier, setSelectedTier] = useState<ExportOptionTier>("unlimited");
   const [card, setCard] = useState<SavedCard | null>(null);
 
   useEffect(() => {
@@ -49,14 +49,14 @@ export function RescanBundleModal({
   if (!open) return null;
 
   const currentOption =
-    RESCAN_BUNDLES.find((b) => b.bundle === selectedBundle) || RESCAN_BUNDLES[2];
+    EXPORT_OPTIONS.find((o) => o.tier === selectedTier) || EXPORT_OPTIONS[1];
 
   const handle1ClickBuy = async () => {
-    await onSelectBundle(selectedBundle, false);
+    await onSelectOption(selectedTier, false);
   };
 
   const handleChangeCard = async () => {
-    await onSelectBundle(selectedBundle, true);
+    await onSelectOption(selectedTier, true);
   };
 
   return (
@@ -84,14 +84,14 @@ export function RescanBundleModal({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#121212] text-[#E7F256] text-[11px] font-extrabold uppercase tracking-wide mb-2">
-                  <Zap className="w-3 h-3" />
-                  On-Demand Rescans
+                  <FileSpreadsheet className="w-3 h-3" />
+                  Timeline Evidence Export
                 </div>
                 <h2 className="text-xl font-extrabold text-[#121212] tracking-tight">
-                  Instant Rescan Pack
+                  Download History CSV
                 </h2>
                 <p className="text-xs text-[#555555] mt-1 font-medium">
-                  Skip the 48h monitoring queue and scan @{username} immediately.
+                  Export the full timestamped log of follow/unfollow events for @{username}.
                 </p>
               </div>
               <button
@@ -107,22 +107,14 @@ export function RescanBundleModal({
 
           {/* Body */}
           <div className="p-6 space-y-4">
-            {/* Free scan banner info */}
-            <div className="rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] p-3 text-xs text-[#166534] flex items-center gap-2.5">
-              <Check className="w-4 h-4 text-[#16A34A] shrink-0" />
-              <span>
-                <strong>1 free rescan</strong> is included with your plan. Need more? Choose a pack below.
-              </span>
-            </div>
-
-            {/* Bundle Options */}
+            {/* Options */}
             <div className="space-y-2.5">
-              {RESCAN_BUNDLES.map((option) => {
-                const isSelected = selectedBundle === option.bundle;
+              {EXPORT_OPTIONS.map((option) => {
+                const isSelected = selectedTier === option.tier;
                 return (
                   <div
-                    key={option.bundle}
-                    onClick={() => !loading && setSelectedBundle(option.bundle)}
+                    key={option.tier}
+                    onClick={() => !loading && setSelectedTier(option.tier)}
                     className={`relative rounded-xl border-2 p-4 cursor-pointer transition-all flex items-center justify-between ${
                       isSelected
                         ? "border-[#121212] bg-[#F9F9F7] shadow-sm"
@@ -144,28 +136,23 @@ export function RescanBundleModal({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-extrabold text-[#121212]">
-                            {option.credits} Rescans
+                            {option.label}
                           </span>
                           {option.badge && (
                             <span className="px-2 py-0.5 rounded-full bg-[#E7F256] text-[#121212] text-[10px] font-extrabold border border-black/10">
                               {option.badge}
                             </span>
                           )}
-                          {option.label && !option.badge && (
-                            <span className="text-[11px] font-bold text-[#777777]">
-                              ({option.label})
-                            </span>
-                          )}
                         </div>
                         <div className="text-xs text-[#666666] mt-0.5">
-                          {option.unitPrice} per scan &middot; Never expires
+                          {option.description}
                         </div>
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="text-lg font-black text-[#121212]">
-                        ${option.price}
+                        ${option.price.toFixed(2)}
                       </div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-[#777777]">
                         one-time
@@ -195,6 +182,18 @@ export function RescanBundleModal({
                 </button>
               </div>
             )}
+
+            {/* Checklist */}
+            <div className="rounded-xl border border-[#E2E2DC] bg-[#FAF9F5] p-3 text-[11px] text-[#555555] space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0" />
+                <span>Includes usernames, full names, exact event type, and timestamps</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0" />
+                <span>Universal format compatible with Excel, Google Sheets & Numbers</span>
+              </div>
+            </div>
           </div>
 
           {/* Footer */}
@@ -210,16 +209,16 @@ export function RescanBundleModal({
               {card ? (
                 <span className="flex items-center justify-center gap-1.5">
                   <Sparkles className="w-4 h-4 fill-current" />
-                  1-Click Buy &mdash; ${currentOption.price}
+                  1-Click Buy &mdash; ${currentOption.price.toFixed(2)}
                 </span>
               ) : (
-                `Get ${currentOption.credits} Rescans — $${currentOption.price}`
+                `Get ${currentOption.label} — $${currentOption.price.toFixed(2)}`
               )}
             </Button>
             <p className="text-center text-[11px] text-[#777777]">
               {card
-                ? "Charges your card on file securely · Instant delivery"
-                : "Secure 256-bit checkout via Stripe · 1-click delivery"}
+                ? "Charges your card on file securely · Instant unlock"
+                : "Secure 256-bit checkout via Stripe · Instant access"}
             </p>
           </div>
         </motion.div>

@@ -122,12 +122,46 @@ export const RESCAN_BUNDLE_PRICE_IDS: Record<RescanBundle, string> = {
   "30": process.env.STRIPE_PRICE_RESCAN_30_ID || "price_1U6yWEExaeatW6VmM4mSf00M",
 };
 
+export type ExportOptionTier = "single" | "unlimited";
+
+export interface ExportOption {
+  tier: ExportOptionTier;
+  price: number;
+  label: string;
+  description: string;
+  badge?: string;
+  highlighted?: boolean;
+}
+
+export const EXPORT_OPTIONS: ExportOption[] = [
+  {
+    tier: "single",
+    price: 4.99,
+    label: "Single Export",
+    description: "1 CSV download for this tracked account",
+  },
+  {
+    tier: "unlimited",
+    price: 9.99,
+    label: "Unlimited Pass",
+    description: "Unlimited CSV downloads forever across all tracked accounts",
+    badge: "BEST VALUE",
+    highlighted: true,
+  },
+];
+
+export const EXPORT_PRICE_IDS: Record<ExportOptionTier, string> = {
+  single: process.env.STRIPE_PRICE_EXPORT_ID || "price_1U4FuUExaeatW6VmoInvDgRL",
+  unlimited: process.env.STRIPE_PRICE_EXPORT_UNLIMITED_ID || "price_1U70K4ExaeatW6VmiurdEq3K",
+};
+
 /** One-time upsell price IDs: history export, on-demand rescan, mutuals. */
 export const ONE_TIME_PRICE_IDS: Record<
-  "export" | "rescan_credits" | "mutuals",
+  "export" | "export_unlimited" | "rescan_credits" | "mutuals",
   string
 > = {
-  export: process.env.STRIPE_PRICE_EXPORT_ID || "",
+  export: process.env.STRIPE_PRICE_EXPORT_ID || "price_1U4FuUExaeatW6VmoInvDgRL",
+  export_unlimited: process.env.STRIPE_PRICE_EXPORT_UNLIMITED_ID || "price_1U70K4ExaeatW6VmiurdEq3K",
   rescan_credits: process.env.STRIPE_PRICE_RESCAN_ID || process.env.STRIPE_PRICE_RESCAN_3_ID || "",
   mutuals: process.env.STRIPE_PRICE_MUTUALS_ID || "",
 };
@@ -140,21 +174,34 @@ export function getRescanBundlePriceId(bundle: RescanBundle = "30"): string {
   return id;
 }
 
+export function getExportPriceId(tier: ExportOptionTier = "unlimited"): string {
+  const id = EXPORT_PRICE_IDS[tier];
+  if (!id) {
+    throw new Error(`STRIPE_PRICE_EXPORT_${tier.toUpperCase()}_ID is not configured`);
+  }
+  return id;
+}
+
 export function getOneTimePriceId(
-  kind: "export" | "rescan_credits" | "mutuals",
-  bundle?: RescanBundle
+  kind: "export" | "export_unlimited" | "rescan_credits" | "mutuals",
+  bundleOrTier?: RescanBundle | ExportOptionTier
 ): string {
-  if (kind === "rescan_credits" && bundle) {
+  if (kind === "rescan_credits") {
+    const bundle =
+      bundleOrTier === "3" || bundleOrTier === "10" || bundleOrTier === "30"
+        ? bundleOrTier
+        : "30";
     return getRescanBundlePriceId(bundle);
   }
-  const envKey =
-    kind === "export"
-      ? "STRIPE_PRICE_EXPORT_ID"
-      : kind === "rescan_credits"
-        ? "STRIPE_PRICE_RESCAN_ID"
-        : "STRIPE_PRICE_MUTUALS_ID";
+  if (kind === "export" || kind === "export_unlimited") {
+    const tier =
+      kind === "export_unlimited" || bundleOrTier === "unlimited"
+        ? "unlimited"
+        : "single";
+    return getExportPriceId(tier);
+  }
   const id = ONE_TIME_PRICE_IDS[kind];
-  if (!id) throw new Error(`${envKey} is not configured`);
+  if (!id) throw new Error("STRIPE_PRICE_MUTUALS_ID is not configured");
   return id;
 }
 

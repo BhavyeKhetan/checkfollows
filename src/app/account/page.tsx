@@ -490,7 +490,9 @@ export default function AccountPage() {
               <Download className="w-5 h-5 text-[#121212] shrink-0" />
               <div>
                 <div className="text-sm font-extrabold text-[#121212]">
-                  {data?.credits?.export ?? 0} left
+                  {data?.credits?.unlimited_export
+                    ? "Unlimited Pass"
+                    : `${data?.credits?.export ?? 0} left`}
                 </div>
                 <div className="text-xs text-[#555555]">History exports</div>
               </div>
