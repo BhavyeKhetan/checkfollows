@@ -159,6 +159,8 @@ export interface Database {
           is_verified: boolean;
           detected_at: string;
           confirmed: boolean;
+          invalidated_at: string | null;
+          invalidated_reason: string | null;
           previous_snapshot_id: string | null;
           current_snapshot_id: string;
         };
@@ -173,6 +175,8 @@ export interface Database {
           is_verified?: boolean;
           detected_at?: string;
           confirmed?: boolean;
+          invalidated_at?: string | null;
+          invalidated_reason?: string | null;
           previous_snapshot_id?: string | null;
           current_snapshot_id: string;
         };
@@ -187,6 +191,8 @@ export interface Database {
           is_verified?: boolean;
           detected_at?: string;
           confirmed?: boolean;
+          invalidated_at?: string | null;
+          invalidated_reason?: string | null;
           previous_snapshot_id?: string | null;
           current_snapshot_id?: string;
         };

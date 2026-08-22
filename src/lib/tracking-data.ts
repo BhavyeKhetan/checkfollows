@@ -59,6 +59,7 @@ export async function getTrackingTimeline(
     )
     .eq("target_id", target.id)
     .eq("confirmed", true)
+    .is("invalidated_at", null)
     .order("detected_at", { ascending: false })
     .limit(Math.min(Math.max(limit, 1), 200));
 

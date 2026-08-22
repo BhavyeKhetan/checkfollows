@@ -439,6 +439,7 @@ async function processTargetDiff(
       .eq("target_id", targetId)
       .eq("confirmed", false)
       .eq("event_type", "NEW_FOLLOWING")
+      .is("invalidated_at", null)
       .eq("current_snapshot_id", prevSnapshot.id);
 
     if (unconfirmedNewFollows && unconfirmedNewFollows.length > 0) {
@@ -462,6 +463,7 @@ async function processTargetDiff(
       .eq("target_id", targetId)
       .eq("confirmed", false)
       .eq("event_type", "STOPPED_FOLLOWING")
+      .is("invalidated_at", null)
       .eq("current_snapshot_id", prevSnapshot.id);
 
     if (candidateRemovals && candidateRemovals.length > 0) {
@@ -1122,6 +1124,7 @@ export async function getEventsForTarget(
     .from("follow_events")
     .select("*")
     .eq("target_id", targetId)
+    .is("invalidated_at", null)
     .order("detected_at", { ascending: false })
     .limit(limit);
 

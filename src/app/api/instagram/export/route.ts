@@ -62,6 +62,7 @@ export async function GET(request: Request) {
     .from("follow_events")
     .select("event_type, username, full_name, detected_at, confirmed")
     .eq("target_id", targetId)
+    .is("invalidated_at", null)
     .order("detected_at", { ascending: false })
     .limit(2000);
 

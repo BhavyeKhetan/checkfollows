@@ -16,6 +16,10 @@ import type {
   ScanInput,
   ScanOutput,
 } from "../provider";
+import {
+  validateFullScanCompletion,
+  type ApifyCompletionOutput,
+} from "../apify-completion";
 
 const APIFY_API_BASE = "https://api.apify.com/v2";
 const ACTOR_ID = "dead00~instagram-followers-following-scraper-no-cookies";
@@ -25,6 +29,8 @@ const ACTOR_ID = "dead00~instagram-followers-following-scraper-no-cookies";
 interface ApifyConfig {
   token: string;
   actorId: string;
+  /** Exact tested Actor build. Avoid silently adopting Store updates. */
+  build: string;
   /** Max seconds to wait for actor run to finish */
   waitTimeoutSecs: number;
   /** Poll interval in seconds */
@@ -44,6 +50,7 @@ function getConfig(): ApifyConfig {
   return {
     token,
     actorId: process.env.APIFY_INSTAGRAM_ACTOR || ACTOR_ID,
+    build: process.env.APIFY_INSTAGRAM_BUILD || "0.0.56",
     waitTimeoutSecs: parseInt(process.env.APIFY_WAIT_TIMEOUT || "300", 10),
     pollIntervalSecs: parseInt(process.env.APIFY_POLL_INTERVAL || "10", 10),
     maxBatchSize: parseInt(process.env.APIFY_MAX_BATCH_SIZE || "15", 10),
@@ -75,11 +82,17 @@ async function startActorRun(
   input: ApifyActorInput,
   config: ApifyConfig
 ): Promise<{ runId: string }> {
-  const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs?token=${encodeURIComponent(config.token)}`;
+  const url = new URL(
+    `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs`
+  );
+  url.searchParams.set("build", config.build);
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(input),
   });
 
@@ -101,13 +114,17 @@ async function waitForRun(
 ): Promise<{
   status: string;
   defaultDatasetId?: string;
+  defaultKeyValueStoreId?: string;
+  buildId?: string;
   errorMessage?: string;
 }> {
-  const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs/${runId}?token=${encodeURIComponent(config.token)}`;
+  const url = `${APIFY_API_BASE}/actor-runs/${encodeURIComponent(runId)}`;
   const deadline = Date.now() + config.waitTimeoutSecs * 1000;
 
   while (Date.now() < deadline) {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
     if (!res.ok) {
       throw new Error(`Apify run status check failed (${res.status})`);
     }
@@ -119,6 +136,8 @@ async function waitForRun(
       return {
         status: "SUCCEEDED",
         defaultDatasetId: run?.data?.defaultDatasetId,
+        defaultKeyValueStoreId: run?.data?.defaultKeyValueStoreId,
+        buildId: run?.data?.buildId,
       };
     }
 
@@ -146,15 +165,34 @@ async function getDatasetItems(
   datasetId: string,
   config: ApifyConfig
 ): Promise<ApifyDatasetItem[]> {
-  const url = `${APIFY_API_BASE}/datasets/${datasetId}/items?token=${encodeURIComponent(config.token)}&clean=true&format=json`;
+  const url = `${APIFY_API_BASE}/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${config.token}` },
+  });
   if (!res.ok) {
     throw new Error(`Apify dataset fetch failed (${res.status})`);
   }
 
   const items: ApifyDatasetItem[] = await res.json();
   return items;
+}
+
+async function getCompletionOutput(
+  keyValueStoreId: string,
+  config: ApifyConfig
+): Promise<ApifyCompletionOutput | null> {
+  const url = `${APIFY_API_BASE}/key-value-stores/${encodeURIComponent(keyValueStoreId)}/records/OUTPUT`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${config.token}` },
+  });
+
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`Apify completion fetch failed (${res.status})`);
+  }
+
+  return res.json();
 }
 
 // ─── Normalization ────────────────────────────────────────
@@ -256,7 +294,11 @@ export function createApifyProvider(): InstagramProvider {
         // Wait for completion
         const runResult = await waitForRun(runId, config);
 
-        if (runResult.status !== "SUCCEEDED" || !runResult.defaultDatasetId) {
+        if (
+          runResult.status !== "SUCCEEDED" ||
+          !runResult.defaultDatasetId ||
+          !runResult.defaultKeyValueStoreId
+        ) {
           return {
             success: false,
             entries: new Map(),
@@ -271,11 +313,40 @@ export function createApifyProvider(): InstagramProvider {
           };
         }
 
-        // Fetch dataset items
-        const items = await getDatasetItems(runResult.defaultDatasetId, config);
+        // Fetch both the data and the Actor's explicit integrity verdict.
+        const [items, completionOutput] = await Promise.all([
+          getDatasetItems(runResult.defaultDatasetId, config),
+          getCompletionOutput(runResult.defaultKeyValueStoreId, config),
+        ]);
 
         // Group by source username
         const entries = groupBySourceUsername(items);
+
+        // Full monitoring scans must fail closed. Capped previews are
+        // intentionally partial, so they do not require a complete manifest.
+        if (actorInput.maxResultsPerUser === 0) {
+          const completionError = validateFullScanCompletion({
+            output: completionOutput,
+            entries,
+            usernames: cleanUsernames,
+            dataToScrape: actorInput.dataToScrape,
+          });
+
+          if (completionError) {
+            return {
+              success: false,
+              entries: new Map(),
+              totalProfilesReturned: 0,
+              runMetadata: {
+                provider: "apify",
+                actorId: config.actorId,
+                runId,
+                status: "INCOMPLETE",
+                error: completionError,
+              },
+            };
+          }
+        }
 
         // Calculate cost estimate: $0.20 per 1,000 profiles
         const costEstimate = (items.length / 1000) * 0.2;
