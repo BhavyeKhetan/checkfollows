@@ -68,7 +68,7 @@ async function startRun(
   usernames: string[],
   config: PreviewConfig
 ): Promise<string> {
-  const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs?token=${encodeURIComponent(config.token)}`;
+  const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs`;
 
   const input = {
     usernames,
@@ -79,7 +79,10 @@ async function startRun(
 
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(input),
   });
 
@@ -99,11 +102,13 @@ async function waitForCompletion(
   runId: string,
   config: PreviewConfig
 ): Promise<string | null> {
-  const url = `${APIFY_API_BASE}/acts/${encodeURIComponent(config.actorId)}/runs/${runId}?token=${encodeURIComponent(config.token)}`;
+  const url = `${APIFY_API_BASE}/actor-runs/${encodeURIComponent(runId)}`;
   const deadline = Date.now() + config.waitTimeoutSecs * 1000;
 
   while (Date.now() < deadline) {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
     if (!res.ok) throw new Error(`Preview status check failed (${res.status})`);
 
     const run = await res.json();
@@ -127,8 +132,10 @@ async function fetchItems(
   datasetId: string,
   config: PreviewConfig
 ): Promise<PreviewDatasetItem[]> {
-  const url = `${APIFY_API_BASE}/datasets/${datasetId}/items?token=${encodeURIComponent(config.token)}&clean=true&format=json`;
-  const res = await fetch(url);
+  const url = `${APIFY_API_BASE}/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${config.token}` },
+  });
 
   if (!res.ok) {
     throw new Error(`Preview dataset fetch failed (${res.status})`);

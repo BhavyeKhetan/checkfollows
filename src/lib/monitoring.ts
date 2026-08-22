@@ -26,6 +26,7 @@ import type {
   InstagramProfile,
 } from "@/lib/instagram/provider";
 import { ownerIdentityFromScan } from "@/lib/target-profile";
+import { shouldRunAutomatedFollowingScan } from "@/lib/monitoring-policy";
 
 // ─── Config ───────────────────────────────────────────────
 
@@ -33,6 +34,9 @@ const SUSPECT_THRESHOLD = parseFloat(
   process.env.SUSPECT_THRESHOLD_PCT || "0.20"
 );
 const BATCH_SIZE = parseInt(process.env.MONITORING_BATCH_SIZE || "10", 10);
+const PROFILE_CHECK_COST_USD = parseFloat(
+  process.env.PROFILE_CHECK_COST_USD || "0.0023"
+);
 
 // Monitoring cadence: every other day (48h) instead of daily (24h).
 const DEFAULT_INTERVAL_HOURS = parseInt(
@@ -777,12 +781,14 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
 
 export async function processDueScans(): Promise<{
   scanned: number;
+  unchanged: number;
   failed: number;
   suspect: number;
   results: ScanResult[];
 }> {
   const supabase = createServerClient();
   const provider = getMonitoringProvider();
+  const previewProvider = getPreviewProvider();
   const now = new Date().toISOString();
 
   // Get target IDs that have an active PAID subscription.
@@ -805,7 +811,7 @@ export async function processDueScans(): Promise<{
 
   const { data: dueTargets } = await supabase
     .from("instagram_targets")
-    .select("id, username, monitoring_interval_hours")
+    .select("id, username, following_count, monitoring_interval_hours")
     .eq("monitoring_enabled", true)
     .lte("next_scan_at", now)
     .order("next_scan_at", { ascending: true })
@@ -818,7 +824,7 @@ export async function processDueScans(): Promise<{
 
   const eligibleIds = eligibleTargets.map((t) => t.id);
   if (eligibleIds.length === 0) {
-    return { scanned: 0, failed: 0, suspect: 0, results: [] };
+    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, results: [] };
   }
 
   // ─── Atomic claim (concurrency-safe) ─────────────────
@@ -832,36 +838,166 @@ export async function processDueScans(): Promise<{
     .update({ next_scan_at: claimUntil })
     .in("id", eligibleIds)
     .lte("next_scan_at", now)
-    .select("id, username, monitoring_interval_hours");
+    .select("id, username, following_count, monitoring_interval_hours");
 
   const batchTargets = (claimedTargets || []).filter((t) =>
     paidTargetIds.has(t.id)
   );
 
   if (batchTargets.length === 0) {
-    return { scanned: 0, failed: 0, suspect: 0, results: [] };
+    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, results: [] };
   }
 
   const results: ScanResult[] = [];
   let scanned = 0;
+  let unchanged = 0;
   let failed = 0;
   let suspect = 0;
 
-  // ─── TRUE BATCHING: One Apify call per batch ─────────
+  // Automated monitoring is following-only and count-gated. A cheap profile
+  // lookup runs first; the paid full-list Actor runs only for targets whose
+  // absolute following count changed. Paid manual rescans call scanFollowing()
+  // directly and intentionally bypass this gate.
   for (let i = 0; i < batchTargets.length; i += BATCH_SIZE) {
     const batch = batchTargets.slice(i, i + BATCH_SIZE);
     const batchUsernames = batch.map((t) => t.username);
+    const profiles = await previewProvider.fetchProfiles(batchUsernames);
+    const profilesByUsername = new Map(
+      profiles.map((profile) => [profile.username.toLowerCase(), profile])
+    );
+    const changedTargets: typeof batch = [];
 
-    // Make ONE Apify call for all targets in this batch
+    for (const target of batch) {
+      const profile = profilesByUsername.get(target.username.toLowerCase());
+
+      if (!profile) {
+        const retryAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        const { data: failScan } = await supabase
+          .from("scans")
+          .insert({
+            target_id: target.id,
+            status: "failed",
+            started_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+            provider: previewProvider.name,
+            error_message: "Profile count check failed",
+            api_cost: 0,
+            target_count: batch.length,
+            profiles_returned: 0,
+            suspect: false,
+          })
+          .select("id")
+          .maybeSingle();
+
+        const { error: retryScheduleError } = await supabase
+          .from("instagram_targets")
+          .update({ next_scan_at: retryAt, updated_at: new Date().toISOString() })
+          .eq("id", target.id);
+        if (retryScheduleError) {
+          console.error(
+            "Monitoring: failed to schedule profile-check retry:",
+            retryScheduleError.message
+          );
+        }
+
+        results.push({
+          scanId: failScan?.id || "",
+          targetId: target.id,
+          status: "failed",
+          events: [],
+          error: "Profile count check failed",
+        });
+        failed++;
+        continue;
+      }
+
+      if (
+        !shouldRunAutomatedFollowingScan(
+          target.following_count,
+          profile.followingCount
+        )
+      ) {
+        const nextCheckAt = new Date(
+          Date.now() +
+            (target.monitoring_interval_hours || DEFAULT_INTERVAL_HOURS) *
+              60 *
+              60 *
+              1000
+        ).toISOString();
+
+        const { error: targetUpdateError } = await supabase
+          .from("instagram_targets")
+          .update({
+            follower_count: profile.followerCount,
+            next_scan_at: nextCheckAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", target.id);
+
+        if (targetUpdateError) {
+          results.push({
+            scanId: "",
+            targetId: target.id,
+            status: "failed",
+            events: [],
+            error: "Failed to schedule next profile count check",
+          });
+          failed++;
+          continue;
+        }
+
+        const { error: skippedScanError } = await supabase
+          .from("scans")
+          .insert({
+            target_id: target.id,
+            status: "skipped",
+            started_at: new Date().toISOString(),
+            completed_at: new Date().toISOString(),
+            provider: previewProvider.name,
+            api_cost: PROFILE_CHECK_COST_USD,
+            target_count: batch.length,
+            profiles_returned: 1,
+            suspect: false,
+          });
+        if (skippedScanError) {
+          console.error(
+            "Monitoring: failed to record skipped full scan:",
+            skippedScanError.message
+          );
+        }
+
+        unchanged++;
+        continue;
+      }
+
+      const { error: countRefreshError } = await supabase
+        .from("instagram_targets")
+        .update({
+          follower_count: profile.followerCount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", target.id);
+      if (countRefreshError) {
+        console.error(
+          "Monitoring: failed to refresh profile follower count:",
+          countRefreshError.message
+        );
+      }
+      changedTargets.push(target);
+    }
+
+    if (changedTargets.length === 0) continue;
+
+    // Make one paid full-list call only for changed targets.
     const batchResult = await provider.batchScan({
-      usernames: batchUsernames,
+      usernames: changedTargets.map((target) => target.username),
       dataToScrape: "Followings",
       maxResultsPerUser: 0,
     });
 
     if (!batchResult.success) {
       // Entire batch failed — mark all as failed
-      for (const target of batch) {
+      for (const target of changedTargets) {
         const { data: failScan } = await supabase
           .from("scans")
           .insert({
@@ -872,7 +1008,7 @@ export async function processDueScans(): Promise<{
             provider: provider.name,
             error_message: batchResult.runMetadata.error || "Batch scan failed",
             api_cost: 0,
-            target_count: batch.length,
+            target_count: changedTargets.length,
             profiles_returned: 0,
             suspect: false,
           })
@@ -908,7 +1044,7 @@ export async function processDueScans(): Promise<{
     }
 
     // Process each target in the batch with its own entries
-    for (const target of batch) {
+    for (const target of changedTargets) {
       const entries = batchResult.entries.get(target.username.toLowerCase()) || [];
       const allocatedCost = batchResult.totalProfilesReturned
         ? ((batchResult.runMetadata.costEstimate || 0) * entries.length) /
@@ -924,7 +1060,7 @@ export async function processDueScans(): Promise<{
           started_at: new Date().toISOString(),
           provider: provider.name,
           api_cost: allocatedCost,
-          target_count: batch.length,
+          target_count: changedTargets.length,
           profiles_returned: entries.length,
           actor_id: batchResult.runMetadata.actorId || null,
           run_id: batchResult.runMetadata.runId || null,
@@ -944,16 +1080,6 @@ export async function processDueScans(): Promise<{
 
       if (result.status === "completed") {
         scanned++;
-        // Optionally scan followers for small accounts
-        const { data: t } = await supabase
-          .from("instagram_targets")
-          .select("follower_count")
-          .eq("id", target.id)
-          .single();
-
-        if (t && t.follower_count <= 2500) {
-          await scanFollowers(target.id);
-        }
       } else if (result.status === "suspect") {
         suspect++;
       } else {
@@ -962,7 +1088,7 @@ export async function processDueScans(): Promise<{
     }
   }
 
-  return { scanned, failed, suspect, results };
+  return { scanned, unchanged, failed, suspect, results };
 }
 
 // ─── Preview Lookup (unpaid landing-page search) ─────────

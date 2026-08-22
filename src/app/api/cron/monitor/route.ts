@@ -101,6 +101,7 @@ async function runMonitor(request: Request) {
     return NextResponse.json({
       ok: true,
       scanned: result.scanned,
+      unchanged: result.unchanged,
       failed: result.failed,
       suspect: result.suspect,
       emailsSent,

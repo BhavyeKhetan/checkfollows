@@ -743,7 +743,7 @@ export default function TrackPageClient({
           <div className="flex items-center gap-1.5 text-[#555555] font-semibold">
             <div className={`w-2 h-2 rounded-full ${target.last_scanned_at ? "bg-emerald-500" : "bg-[#E2E2DC]"}`} />
             <span>
-              Last checked:{" "}
+              Last full scan:{" "}
               <strong className="text-[#121212]">
                 {formatRelativeTime(target.last_scanned_at)}
               </strong>

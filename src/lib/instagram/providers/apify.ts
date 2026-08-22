@@ -2,7 +2,7 @@
  * Apify Provider — dead00/instagram-followers-following-scraper-no-cookies
  *
  * Actor: https://apify.com/dead00/instagram-followers-following-scraper-no-cookies
- * Pricing: $0.20 / 1,000 delivered Instagram profiles
+ * Pricing: $0.29 / 1,000 delivered Instagram profiles
  * Works on PUBLIC accounts only — no cookies/credentials needed.
  *
  * Dataset item fields:
@@ -348,8 +348,8 @@ export function createApifyProvider(): InstagramProvider {
           }
         }
 
-        // Calculate cost estimate: $0.20 per 1,000 profiles
-        const costEstimate = (items.length / 1000) * 0.2;
+        // Calculate cost estimate: $0.29 per 1,000 delivered profiles.
+        const costEstimate = (items.length / 1000) * 0.29;
 
         return {
           success: true,

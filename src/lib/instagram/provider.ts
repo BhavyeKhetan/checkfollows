@@ -10,7 +10,7 @@
  *
  *   getMonitoringProvider() — dead00/instagram-followers-following-scraper-no-cookies
  *     Full following/followers scrape for paid users.
- *     $0.20/1,000 profiles. Baseline, diffs, daily monitoring.
+ *     $0.29/1,000 profiles. Baseline, diffs, scheduled monitoring.
  *
  *   HikerAPI code preserved in src/lib/hikerapi.ts (reference only).
  */

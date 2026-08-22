@@ -350,7 +350,7 @@ export default function DashboardPage() {
                             {t.following_count.toLocaleString()} following
                           </span>
                           <span className="text-[var(--border)]">·</span>
-                          <span>Last checked {formatRelative(t.last_scanned_at)}</span>
+                          <span>Last full scan {formatRelative(t.last_scanned_at)}</span>
                         </p>
                       </div>
                     </div>
