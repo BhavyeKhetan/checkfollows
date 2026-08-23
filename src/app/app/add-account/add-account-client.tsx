@@ -8,6 +8,7 @@ import { AppShell } from "@/components/app/app-shell";
 import { track } from "@/lib/mixpanel";
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 import type { RescanBundle } from "@/lib/stripe";
+import { refreshAccountData } from "@/lib/account-data-client";
 
 interface PreviewTarget {
   id: string;
@@ -172,6 +173,9 @@ export default function AddAccountClient({
       }
 
       track("tracked_account_added", { username: target.username });
+      void refreshAccountData({ force: true }).catch(() => {
+        // The tracking page still loads from the server; this only warms nav data.
+      });
       router.push(`/track/${encodeURIComponent(target.username)}`);
     } catch {
       setError("Network error. Please try again.");

@@ -6,6 +6,10 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { AppShell } from "@/components/app/app-shell";
 import {
+  refreshAccountData,
+  updateAccountData,
+} from "@/lib/account-data-client";
+import {
   ArrowLeft,
   UserPlus,
   UserMinus,
@@ -110,6 +114,45 @@ function formatNextCheck(iso: string | null): string {
   if (diffHrs < 24) return `~${diffHrs}h`;
   const diffDays = Math.floor(diffHrs / 24);
   return `~${diffDays}d`;
+}
+
+function updateCachedMonitoring(targetId: string, monitoringEnabled: boolean) {
+  updateAccountData((current) => {
+    let activeDelta = 0;
+    const subscriptions = current.subscriptions.map((subscription) => {
+      if (subscription.target?.id !== targetId) return subscription;
+      if (subscription.target.monitoring_enabled !== monitoringEnabled) {
+        activeDelta = monitoringEnabled ? 1 : -1;
+      }
+      return {
+        ...subscription,
+        user_paused: !monitoringEnabled,
+        target: {
+          ...subscription.target,
+          monitoring_enabled: monitoringEnabled,
+        },
+      };
+    });
+
+    const capacity = current.capacity
+      ? (() => {
+          const activeAccounts = Math.max(
+            0,
+            current.capacity.activeAccounts + activeDelta
+          );
+          return {
+            ...current.capacity,
+            activeAccounts,
+            availableAccounts: Math.max(
+              0,
+              current.capacity.totalAccounts - activeAccounts
+            ),
+          };
+        })()
+      : current.capacity;
+
+    return { ...current, subscriptions, capacity };
+  });
 }
 
 // ─── Page ───────────────────────────────────────────────────
@@ -233,6 +276,7 @@ export default function TrackPageClient({
           return;
         }
         setTarget((prev) => prev ? { ...prev, monitoring_enabled: false } : null);
+        updateCachedMonitoring(target.id, false);
         if (data?.message) window.alert(data.message);
         return;
       }
@@ -272,6 +316,7 @@ export default function TrackPageClient({
 
       // Already paid → monitoring activated server-side.
       setTarget((prev) => prev ? { ...prev, monitoring_enabled: true } : null);
+      updateCachedMonitoring(target.id, true);
       if (data?.message) window.alert(data.message);
     } catch { /* ignore */ }
     finally { setTogglingMonitoring(false); }
@@ -448,6 +493,17 @@ export default function TrackPageClient({
           scan_purchased: data.credits.purchased,
           scan_weekly_allowance: data.credits.weeklyAllowance,
           scan_refresh_at: data.credits.refreshAt,
+        }));
+        updateAccountData((current) => ({
+          ...current,
+          credits: {
+            ...current.credits,
+            rescan_credits: data.credits.purchased,
+            scan_included: data.credits.included,
+            scan_purchased: data.credits.purchased,
+            scan_weekly_allowance: data.credits.weeklyAllowance,
+            scan_refresh_at: data.credits.refreshAt,
+          },
         }));
       }
       track("rescan_completed", { username: target.username });
@@ -639,9 +695,8 @@ export default function TrackPageClient({
       for (let i = 0; i < 4; i++) {
         if (cancelled) return;
         try {
-          const res = await fetch("/api/account");
-          const data = await res.json();
-          if (data?.credits) {
+          const data = await refreshAccountData({ force: true });
+          if (data.credits) {
             setCredits(data.credits);
             break;
           }

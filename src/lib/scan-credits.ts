@@ -23,6 +23,11 @@ export interface ScanCreditSummary {
   tier: PlanTier;
 }
 
+export interface ScanCreditPlan {
+  tier: PlanTier;
+  stripeSubscriptionId: string;
+}
+
 export function availableCreditsForReason(
   summary: Pick<ScanCreditSummary, "included" | "purchased">,
   reason: ScanCreditReason
@@ -39,10 +44,7 @@ export interface ScanCreditReservation {
   refreshAt: string | null;
 }
 
-async function loadPlanForWallet(userId: string): Promise<{
-  tier: PlanTier;
-  stripeSubscriptionId: string;
-} | null> {
+async function loadPlanForWallet(userId: string): Promise<ScanCreditPlan | null> {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("subscriptions")
@@ -130,32 +132,26 @@ async function refundStaleReservations(userId: string): Promise<void> {
 }
 
 export async function getScanCreditSummary(
-  userId: string
+  userId: string,
+  preloadedPlan?: ScanCreditPlan | null
 ): Promise<ScanCreditSummary | null> {
-  const plan = await loadPlanForWallet(userId);
+  const plan = preloadedPlan === undefined
+    ? await loadPlanForWallet(userId)
+    : preloadedPlan;
   if (!plan) return null;
 
+  await maintainScanCreditWallet(userId);
   const allowance = INCLUDED_WEEKLY_SCAN_CREDITS[plan.tier];
   const supabase = createServerClient();
-  const { error } = await supabase.rpc("sync_scan_credit_wallet", {
+  const { data, error } = await supabase.rpc("sync_scan_credit_wallet", {
     p_user_id: userId,
     p_tier: plan.tier,
     p_allowance: allowance,
     p_stripe_subscription_id: plan.stripeSubscriptionId,
   });
   if (error) throw new Error(`Failed to sync scan credits: ${error.message}`);
-
-  await refundStaleReservations(userId);
-  await migrateLegacyRescanCredits(userId);
-
-  const { data: wallet, error: walletError } = await supabase
-    .from("scan_credit_wallets")
-    .select("included_balance, purchased_balance, included_allowance, refresh_at, tier")
-    .eq("user_id", userId)
-    .single();
-  if (walletError) {
-    throw new Error(`Failed to load scan credits: ${walletError.message}`);
-  }
+  const wallet = data?.[0];
+  if (!wallet) throw new Error("Failed to load scan credits");
 
   return {
     included: wallet.included_balance,
@@ -163,8 +159,15 @@ export async function getScanCreditSummary(
     total: wallet.included_balance + wallet.purchased_balance,
     weeklyAllowance: wallet.included_allowance,
     refreshAt: wallet.refresh_at,
-    tier: wallet.tier === "premium" ? "premium" : "base",
+    tier: plan.tier,
   };
+}
+
+export async function maintainScanCreditWallet(userId: string): Promise<void> {
+  await Promise.all([
+    refundStaleReservations(userId),
+    migrateLegacyRescanCredits(userId),
+  ]);
 }
 
 export async function reserveUserScanCredits(args: {

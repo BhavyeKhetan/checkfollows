@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,78 +16,72 @@ import {
 import { Avatar, Badge, Button, Card } from "@/design-system";
 import { AppShell } from "@/components/app/app-shell";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
-import { createClient } from "@/lib/supabase/client";
 import { identify, track } from "@/lib/mixpanel";
 import {
   formatRelative,
-  type AccountData,
   type TrackedTarget,
 } from "@/lib/account-types";
 import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
+import {
+  AccountDataRequestError,
+  useAccountData,
+} from "@/lib/account-data-client";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<AccountData | null>(null);
+  const { data, loading, error: loadError, refresh, update } = useAccountData();
   const [error, setError] = useState("");
   const [targetAction, setTargetAction] = useState<string | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [justSubscribed, setJustSubscribed] = useState(false);
+  const trackedView = useRef(false);
 
   useEffect(() => {
+    if (!(loadError instanceof AccountDataRequestError)) return;
+    if (loadError.status === 401) router.replace("/login?next=/dashboard");
+  }, [loadError, router]);
+
+  useEffect(() => {
+    if (!data || trackedView.current) return;
+    trackedView.current = true;
+    identify(data.user.id, { $email: data.user.email ?? undefined });
+    track("dashboard_viewed", {
+      has_active_subscription: data.hasActiveSubscription,
+    });
+  }, [data]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("subscribed") !== "1") return;
     let cancelled = false;
     (async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/login?next=/dashboard");
-        return;
-      }
-
-      identify(user.id, { $email: user.email ?? undefined });
-
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const returningFromPurchase = urlParams.get("subscribed") === "1";
-        const attempts = returningFromPurchase ? 6 : 1;
-        for (let attempt = 0; attempt < attempts; attempt++) {
-          const res = await fetch("/api/account", { cache: "no-store" });
-          if (res.status === 401) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const next = await refresh(true);
+          if (cancelled) return;
+          if (next.hasActiveSubscription || attempt === 5) {
+            if (next.hasActiveSubscription) setJustSubscribed(true);
+            window.history.replaceState({}, "", "/dashboard");
+            return;
+          }
+        } catch (refreshError) {
+          if (
+            refreshError instanceof AccountDataRequestError &&
+            refreshError.status === 401
+          ) {
             router.replace("/login?next=/dashboard");
             return;
           }
-          const json = await res.json();
-          if (cancelled) return;
-          if (!json.success) {
-            setError(json.error || "Failed to load dashboard");
-            break;
-          }
-          if (json.hasActiveSubscription || attempt === attempts - 1) {
-            setData(json);
-            if (returningFromPurchase && json.hasActiveSubscription) {
-              setJustSubscribed(true);
-              window.history.replaceState({}, "", "/dashboard");
-            }
-            track("dashboard_viewed", {
-              has_active_subscription: json.hasActiveSubscription,
-            });
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-      } catch {
-        if (!cancelled) setError("Network error");
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (attempt < 5) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [refresh, router]);
 
   const toggleTrackedAccount = async (target: TrackedTarget) => {
     if (targetAction) return;
@@ -126,9 +120,7 @@ export default function DashboardPage() {
         setError(json.error || "The tracked account could not be updated.");
         return;
       }
-      setData((current) =>
-        current
-          ? {
+      update((current) => ({
               ...current,
               capacity: current.capacity
                 ? (() => {
@@ -159,9 +151,7 @@ export default function DashboardPage() {
                     }
                   : subscription
               ),
-            }
-          : current
-      );
+            }));
       track("monitoring_toggled", { action, username: target.username });
     } catch {
       setError("Network error. Please try again.");
@@ -186,9 +176,7 @@ export default function DashboardPage() {
         return;
       }
       setConfirmRemoveId(null);
-      setData((current) =>
-        current
-          ? {
+      update((current) => ({
               ...current,
               removal: json.removal || current.removal,
               capacity: current.capacity
@@ -211,9 +199,7 @@ export default function DashboardPage() {
               subscriptions: current.subscriptions.filter(
                 (subscription) => subscription.target?.id !== target.id
               ),
-            }
-          : current
-      );
+            }));
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -225,7 +211,7 @@ export default function DashboardPage() {
     .map((s) => s.target)
     .filter((t): t is TrackedTarget => !!t);
 
-  if (loading) {
+  if (loading && !data) {
     return <DashboardSkeleton />;
   }
 
@@ -250,9 +236,9 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {error && (
+        {(error || loadError) && (
           <Card variant="subtle" className="border-rose-500/30">
-            <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>
+            <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error || loadError?.message}</p>
           </Card>
         )}
 

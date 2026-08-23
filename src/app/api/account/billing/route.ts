@@ -21,7 +21,10 @@ export async function GET() {
 
     const stripe = getStripe();
     const { subscription, customerId } = owned;
-    const customer = await stripe.customers.retrieve(customerId);
+    const [customer, invoices] = await Promise.all([
+      stripe.customers.retrieve(customerId),
+      stripe.invoices.list({ customer: customerId, limit: 6 }),
+    ]);
     if (customer.deleted) {
       return NextResponse.json({ error: "Billing customer not found" }, { status: 404 });
     }
@@ -47,7 +50,6 @@ export async function GET() {
       }
     }
 
-    const invoices = await stripe.invoices.list({ customer: customerId, limit: 6 });
     const selection = subscriptionSelection(subscription);
 
     return NextResponse.json({

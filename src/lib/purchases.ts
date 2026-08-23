@@ -1,5 +1,8 @@
 import { createServerClient } from "@/lib/supabase/server";
-import { getScanCreditSummary } from "@/lib/scan-credits";
+import {
+  getScanCreditSummary,
+  type ScanCreditPlan,
+} from "@/lib/scan-credits";
 
 /**
  * One-time upsell credits: history export, on-demand rescan, mutual follows.
@@ -88,15 +91,18 @@ export interface CreditsSummary {
 }
 
 export async function getCreditsSummary(
-  userId: string
+  userId: string,
+  scanPlan?: ScanCreditPlan | null
 ): Promise<CreditsSummary> {
-  const scanCredits = await getScanCreditSummary(userId);
-
   const supabase = createServerClient();
-  const { data } = await supabase
-    .from("one_time_purchases")
-    .select("kind, credits, consumed")
-    .eq("user_id", userId);
+  const [scanCredits, purchases] = await Promise.all([
+    getScanCreditSummary(userId, scanPlan),
+    supabase
+      .from("one_time_purchases")
+      .select("kind, credits, consumed")
+      .eq("user_id", userId),
+  ]);
+  const data = purchases.data;
 
   let hasUnlimitedExp = false;
   const summary: Record<"export" | "rescan_credits" | "mutuals", number> = {

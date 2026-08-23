@@ -70,3 +70,26 @@ export async function getTrackingTimeline(
     events: (events || []) as TrackedEvent[],
   };
 }
+
+export async function getTrackingTimelineForTarget(
+  target: TrackingTarget,
+  limit = 50
+): Promise<TrackingTimeline> {
+  const supabase = createServerClient();
+  const { data: events, error } = await supabase
+    .from("follow_events")
+    .select(
+      "id, event_type, instagram_id, username, full_name, avatar_url, is_verified, detected_at, confirmed"
+    )
+    .eq("target_id", target.id)
+    .eq("confirmed", true)
+    .is("invalidated_at", null)
+    .order("detected_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 200));
+
+  if (error) throw error;
+  return {
+    target,
+    events: (events || []) as TrackedEvent[],
+  };
+}

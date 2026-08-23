@@ -1,24 +1,37 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Settings, UserPlus } from "lucide-react";
 import { Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { reset, track } from "@/lib/mixpanel";
+import {
+  clearAccountDataCache,
+  prefetchAccountData,
+} from "@/lib/account-data-client";
+import {
+  clearBillingDataCache,
+  prefetchBillingData,
+} from "@/lib/billing-data-client";
 
 function NavLink({
   href,
   active,
+  onPrefetch,
   children,
 }: {
   href: string;
   active: boolean;
+  onPrefetch?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
+      onFocus={onPrefetch}
+      onPointerEnter={onPrefetch}
       className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
         active
           ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212]"
@@ -46,10 +59,16 @@ export function AppShell({
   const onAdd = pathname.startsWith("/app/add-account");
   const onPricing = pathname.startsWith("/app/pricing");
 
+  useEffect(() => {
+    prefetchAccountData();
+  }, []);
+
   const handleSignOut = async () => {
     const supabase = createClient();
     track("signed_out", { platform: "web" });
     await supabase.auth.signOut();
+    clearAccountDataCache();
+    clearBillingDataCache();
     reset();
     router.replace("/login");
   };
@@ -62,12 +81,23 @@ export function AppShell({
         >
           <Logo href="/dashboard" size="sm" />
           <div className="flex items-center gap-1 sm:gap-2">
-            <NavLink href="/app/add-account" active={onAdd}>
+            <NavLink
+              href="/app/add-account"
+              active={onAdd}
+              onPrefetch={prefetchAccountData}
+            >
               <UserPlus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Add account</span>
               <span className="sm:hidden">Add</span>
             </NavLink>
-            <NavLink href="/account" active={onAccount || onPricing}>
+            <NavLink
+              href="/account"
+              active={onAccount || onPricing}
+              onPrefetch={() => {
+                prefetchAccountData();
+                prefetchBillingData();
+              }}
+            >
               <Settings className="h-3.5 w-3.5" />
               <span>Account</span>
             </NavLink>

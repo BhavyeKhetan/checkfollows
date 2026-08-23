@@ -28,10 +28,13 @@ export interface AccountCapacity {
   stripeSubscription: Stripe.Subscription;
 }
 
-interface SubscriptionRow {
+export interface AccountCapacitySubscriptionRow {
   stripe_subscription_id: string | null;
   tier: string;
   updated_at: string;
+  active: boolean;
+  user_paused: boolean;
+  target_id: string | null;
 }
 
 function isStripeSubscriptionUsable(subscription: Stripe.Subscription): boolean {
@@ -48,21 +51,30 @@ function isStripeSubscriptionUsable(subscription: Stripe.Subscription): boolean 
  * target rows attached to the selected Stripe subscription.
  */
 export async function getAccountCapacity(
-  userId: string
+  userId: string,
+  preloadedRows?: AccountCapacitySubscriptionRow[]
 ): Promise<AccountCapacity | null> {
   const supabase = createServerClient();
-  const { data, error } = await supabase
-    .from("subscriptions")
-    .select("stripe_subscription_id, tier, updated_at")
-    .eq("user_id", userId)
-    .not("stripe_subscription_id", "is", null)
-    .order("updated_at", { ascending: false });
+  let rows = preloadedRows;
+  if (!rows) {
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select(
+        "stripe_subscription_id, tier, updated_at, active, user_paused, target_id"
+      )
+      .eq("user_id", userId)
+      .not("stripe_subscription_id", "is", null)
+      .order("updated_at", { ascending: false });
 
-  if (error) throw new Error(`Failed to load subscription capacity: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to load subscription capacity: ${error.message}`);
+    }
+    rows = (data || []) as AccountCapacitySubscriptionRow[];
+  }
 
   const uniqueRows = Array.from(
     new Map(
-      ((data || []) as SubscriptionRow[])
+      rows
         .filter((row) => !!row.stripe_subscription_id)
         .map((row) => [row.stripe_subscription_id as string, row])
     ).values()
@@ -92,17 +104,29 @@ export async function getAccountCapacity(
     const additionalAccounts = Math.max(0, addonItem?.quantity || 0);
     const includedAccounts = INCLUDED_ACCOUNTS[tier];
 
-    const { count, error: countError } = await supabase
-      .from("subscriptions")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .eq("stripe_subscription_id", subscription.id)
-      .eq("active", true)
-      .eq("user_paused", false)
-      .not("target_id", "is", null);
+    let activeAccounts: number;
+    if (preloadedRows) {
+      activeAccounts = preloadedRows.filter(
+        (candidate) =>
+          candidate.stripe_subscription_id === subscription.id &&
+          candidate.active &&
+          !candidate.user_paused &&
+          !!candidate.target_id
+      ).length;
+    } else {
+      const { count, error: countError } = await supabase
+        .from("subscriptions")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("stripe_subscription_id", subscription.id)
+        .eq("active", true)
+        .eq("user_paused", false)
+        .not("target_id", "is", null);
 
-    if (countError) {
-      throw new Error(`Failed to count active accounts: ${countError.message}`);
+      if (countError) {
+        throw new Error(`Failed to count active accounts: ${countError.message}`);
+      }
+      activeAccounts = count || 0;
     }
 
     return {
@@ -113,7 +137,7 @@ export async function getAccountCapacity(
       additionalAccounts,
       totalAccounts: includedAccounts + additionalAccounts,
       unitAmount: ADDITIONAL_ACCOUNT_UNIT_AMOUNTS[cadence],
-      activeAccounts: count || 0,
+      activeAccounts,
       addonItemId: addonItem?.id || null,
       stripeSubscription: subscription,
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowRight,
   CalendarDays,
@@ -14,35 +14,10 @@ import {
 import { Badge, Button, Card } from "@/design-system";
 import { track } from "@/lib/mixpanel";
 import { CancellationFlow } from "./cancellation-flow";
+import { useBillingData } from "@/lib/billing-data-client";
 
 type Cadence = "weekly" | "quarterly";
 type Tier = "base" | "premium";
-
-interface BillingData {
-  status: string;
-  cancelAtPeriodEnd: boolean;
-  currentPeriodEnd: string;
-  pauseResumesAt: string | null;
-  cadence: Cadence;
-  tier: Tier;
-  emailAlerts: boolean;
-  paymentMethod: {
-    brand: string;
-    last4: string;
-    expMonth: number;
-    expYear: number;
-  } | null;
-  retentionDiscountUsed: boolean;
-  pauseOfferUsed: boolean;
-  invoices: Array<{
-    id: string;
-    createdAt: string;
-    amountPaid: number;
-    currency: string;
-    status: string | null;
-    url: string | null;
-  }>;
-}
 
 export function BillingManagement({
   onPlanChanged,
@@ -53,44 +28,18 @@ export function BillingManagement({
     emailAlerts: boolean;
   }) => void;
 }) {
-  const [billing, setBilling] = useState<BillingData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: billing, loading, error: loadError, refresh } = useBillingData();
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showPlan, setShowPlan] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
-  const [cadence, setCadence] = useState<Cadence>("weekly");
-  const [tier, setTier] = useState<Tier>("base");
-  const [emailAlerts, setEmailAlerts] = useState(false);
-
-  const loadBilling = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/account/billing", { cache: "no-store" });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(json.error || "Billing details could not be loaded.");
-        return;
-      }
-      const next = json.subscription as BillingData | null;
-      setBilling(next);
-      if (next) {
-        setCadence(next.cadence);
-        setTier(next.tier);
-        setEmailAlerts(next.emailAlerts);
-      }
-    } catch {
-      setError("Billing details could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void loadBilling(), 0);
-    return () => window.clearTimeout(timer);
-  }, [loadBilling]);
+  const [cadenceOverride, setCadence] = useState<Cadence | null>(null);
+  const [tierOverride, setTier] = useState<Tier | null>(null);
+  const [emailAlertsOverride, setEmailAlerts] = useState<boolean | null>(null);
+  const cadence = cadenceOverride ?? billing?.cadence ?? "weekly";
+  const tier = tierOverride ?? billing?.tier ?? "base";
+  const emailAlerts = emailAlertsOverride ?? billing?.emailAlerts ?? false;
 
   const price = useMemo(() => {
     const base =
@@ -127,7 +76,7 @@ export function BillingManagement({
         track("subscription_reactivated");
         setNotice("Your scheduled cancellation has been removed.");
       }
-      await loadBilling();
+      await refresh(true);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -208,8 +157,8 @@ export function BillingManagement({
         {notice && (
           <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-700 dark:text-emerald-400">{notice}</p>
         )}
-        {error && (
-          <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-semibold text-rose-700 dark:text-rose-400">{error}</p>
+        {(error || loadError) && (
+          <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-semibold text-rose-700 dark:text-rose-400">{error || loadError}</p>
         )}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -343,7 +292,7 @@ export function BillingManagement({
         onOpenPlan={() => setShowPlan(true)}
         onChanged={(message) => {
           setNotice(message);
-          void loadBilling();
+          void refresh(true);
         }}
       />
     </>

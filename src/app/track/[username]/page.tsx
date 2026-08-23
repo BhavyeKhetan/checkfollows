@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import TrackPageClient from "./track-page-client";
-import {
-  getAuthUser,
-  hasActiveSubscription,
-  ownsTarget,
-} from "@/lib/supabase/auth";
+import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 import { getCreditsSummary } from "@/lib/purchases";
-import { getTrackingTimeline } from "@/lib/tracking-data";
+import {
+  getTrackingTimelineForTarget,
+  type TrackingTarget,
+} from "@/lib/tracking-data";
 import { createServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -33,33 +32,51 @@ export default async function TrackPage({
     redirect(`/login?next=${encodeURIComponent(`/track/${username}`)}`);
   }
 
-  const active = await hasActiveSubscription(user.id);
+  const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
+  const supabase = createServerClient();
+  const [active, targetResult] = await Promise.all([
+    hasActiveSubscription(user.id),
+    supabase
+      .from("instagram_targets")
+      .select(
+        "id, instagram_id, username, full_name, avatar_url, is_verified, following_count, follower_count, last_scanned_at, next_scan_at, monitoring_enabled, monitoring_interval_hours"
+      )
+      .eq("username", cleanUsername)
+      .maybeSingle(),
+  ]);
   if (!active) {
     redirect(
       `/account?renew=1&returnTo=${encodeURIComponent(`/track/${username}`)}`
     );
   }
 
-  const supabase = createServerClient();
-  const { data: target } = await supabase
-    .from("instagram_targets")
-    .select("id")
-    .eq("username", username)
+  const target = targetResult.data as TrackingTarget | null;
+  if (!target) notFound();
+
+  const ownership = await supabase
+    .from("subscriptions")
+    .select("user_paused, id")
+    .eq("user_id", user.id)
+    .eq("target_id", target.id)
     .maybeSingle();
-  if (!target || !(await ownsTarget(user.id, target.id, user.email))) notFound();
 
-  const [timeline, credits, ownership] = await Promise.all([
-    getTrackingTimeline(username),
-    getCreditsSummary(user.id),
-    supabase
+  let ownershipRow = ownership.data;
+  if (!ownershipRow && user.email) {
+    const fallback = await supabase
       .from("subscriptions")
-      .select("user_paused")
-      .eq("user_id", user.id)
+      .select("user_paused, id")
+      .eq("email", user.email)
       .eq("target_id", target.id)
-      .maybeSingle(),
-  ]);
+      .maybeSingle();
+    ownershipRow = fallback.data;
+  }
+  if (!ownershipRow) notFound();
 
-  if (!timeline) notFound();
+  // Fetch private timeline data only after the ownership check passes.
+  const [timeline, credits] = await Promise.all([
+    getTrackingTimelineForTarget(target),
+    getCreditsSummary(user.id),
+  ]);
 
   return (
     <TrackPageClient
@@ -68,7 +85,7 @@ export default async function TrackPage({
       initialTarget={{
         ...timeline.target,
         monitoring_enabled:
-          timeline.target.monitoring_enabled && ownership.data?.user_paused !== true,
+          timeline.target.monitoring_enabled && ownershipRow.user_paused !== true,
       }}
       initialEvents={timeline.events}
       initialCredits={credits}

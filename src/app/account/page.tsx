@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,27 +17,28 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button, Badge, Card } from "@/design-system";
-import { createClient } from "@/lib/supabase/client";
 import { track, identify } from "@/lib/mixpanel";
 import { BillingManagement } from "@/components/account/billing-management";
 import { AccountSkeleton } from "@/components/account/account-skeleton";
 import { AppShell } from "@/components/app/app-shell";
-import type { AccountData } from "@/lib/account-types";
+import {
+  AccountDataRequestError,
+  useAccountData,
+} from "@/lib/account-data-client";
 
 type RenewalCadence = "weekly" | "quarterly";
 type RenewalTier = "base" | "premium";
 
 export default function AccountPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<AccountData | null>(null);
+  const { data, loading, error: loadError, refresh, update } = useAccountData();
   const [error, setError] = useState("");
-  const [spikeThreshold, setSpikeThreshold] = useState(5);
+  const [spikeThresholdOverride, setSpikeThreshold] = useState<number | null>(null);
   const [savingSpike, setSavingSpike] = useState(false);
   const [spikeSaved, setSpikeSaved] = useState(false);
-  const [renewalCadence, setRenewalCadence] = useState<RenewalCadence>("weekly");
-  const [renewalTier, setRenewalTier] = useState<RenewalTier>("base");
-  const [renewalEmailAlerts, setRenewalEmailAlerts] = useState(false);
+  const [renewalCadenceOverride, setRenewalCadence] = useState<RenewalCadence | null>(null);
+  const [renewalTierOverride, setRenewalTier] = useState<RenewalTier | null>(null);
+  const [renewalEmailAlertsOverride, setRenewalEmailAlerts] = useState<boolean | null>(null);
   const [showWinbackOffer, setShowWinbackOffer] = useState(false);
   const [renewalLoading, setRenewalLoading] = useState<"standard" | "winback_50" | null>(null);
   const [renewalError, setRenewalError] = useState("");
@@ -45,72 +46,72 @@ export default function AccountPage() {
   const [accountsToAdd, setAccountsToAdd] = useState(1);
   const [addingCapacity, setAddingCapacity] = useState(false);
   const [capacityError, setCapacityError] = useState("");
+  const trackedView = useRef(false);
+  const spikeThreshold = spikeThresholdOverride ?? data?.spikeThreshold ?? 5;
+  const renewalCadence =
+    renewalCadenceOverride ?? data?.renewalDefaults?.cadence ?? "weekly";
+  const renewalTier =
+    renewalTierOverride ?? data?.renewalDefaults?.tier ?? "base";
+  const renewalEmailAlerts =
+    renewalEmailAlertsOverride ?? data?.renewalDefaults?.emailAlerts ?? false;
 
   useEffect(() => {
+    if (!(loadError instanceof AccountDataRequestError)) return;
+    if (loadError.status === 401) router.replace("/login?next=/account");
+  }, [loadError, router]);
+
+  useEffect(() => {
+    if (!data || trackedView.current) return;
+    trackedView.current = true;
+    identify(data.user.id, { $email: data.user.email ?? undefined });
+    track("account_viewed", {
+      has_active_subscription: data.hasActiveSubscription,
+    });
+  }, [data]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const returningFromRenewal = urlParams.get("renewed") === "1";
+    const returningFromPurchase = urlParams.get("subscribed") === "1";
+    if (!returningFromRenewal && !returningFromPurchase) return;
+
     let cancelled = false;
     (async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        router.replace("/login?next=/account");
-        return;
-      }
-
-      identify(user.id, { $email: user.email ?? undefined });
-
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const returningFromRenewal = urlParams.get("renewed") === "1";
-        const returningFromPurchase = urlParams.get("subscribed") === "1";
-        const returningFromCheckout = returningFromRenewal || returningFromPurchase;
-        const attempts = returningFromCheckout ? 6 : 1;
-        for (let attempt = 0; attempt < attempts; attempt++) {
-          const res = await fetch("/api/account", { cache: "no-store" });
-          if (res.status === 401) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          const next = await refresh(true);
+          if (cancelled) return;
+          if (next.hasActiveSubscription || attempt === 5) {
+            if (next.hasActiveSubscription) {
+              setRenewalSuccess(true);
+              track(
+                returningFromRenewal
+                  ? "renewal_completed"
+                  : "subscription_activated",
+                { source: "app" }
+              );
+            }
+            window.history.replaceState({}, "", "/account");
+            return;
+          }
+        } catch (refreshError) {
+          if (
+            refreshError instanceof AccountDataRequestError &&
+            refreshError.status === 401
+          ) {
             router.replace("/login?next=/account");
             return;
           }
-          const json = await res.json();
-          if (cancelled) return;
-          if (!json.success) {
-            setError(json.error || "Failed to load account");
-            break;
-          }
-          if (json.hasActiveSubscription || attempt === attempts - 1) {
-            setData(json);
-            setSpikeThreshold(json.spikeThreshold ?? 5);
-            if (json.renewalDefaults) {
-              setRenewalCadence(json.renewalDefaults.cadence || "weekly");
-              setRenewalTier(json.renewalDefaults.tier || "base");
-              setRenewalEmailAlerts(json.renewalDefaults.emailAlerts === true);
-            }
-            if (returningFromCheckout && json.hasActiveSubscription) {
-              setRenewalSuccess(true);
-              track(returningFromRenewal ? "renewal_completed" : "subscription_activated", {
-                source: "app",
-              });
-              window.history.replaceState({}, "", "/account");
-            }
-            track("account_viewed", {
-              has_active_subscription: json.hasActiveSubscription,
-            });
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1500));
         }
-      } catch {
-        if (!cancelled) setError("Network error");
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (attempt < 5) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [refresh, router]);
 
   const handleSpikeSave = async () => {
     setSavingSpike(true);
@@ -126,6 +127,10 @@ export default function AccountPage() {
         setError(json.error || "Failed to save setting");
       } else {
         setSpikeThreshold(json.spike_threshold ?? spikeThreshold);
+        update((current) => ({
+          ...current,
+          spikeThreshold: json.spike_threshold ?? spikeThreshold,
+        }));
         setSpikeSaved(true);
         track("spike_threshold_saved", {
           threshold: json.spike_threshold ?? spikeThreshold,
@@ -200,9 +205,7 @@ export default function AccountPage() {
         return;
       }
 
-      setData((current) =>
-        current ? { ...current, capacity: json.capacity } : current
-      );
+      update((current) => ({ ...current, capacity: json.capacity }));
       setAccountsToAdd(1);
     } catch {
       setCapacityError("Network error. Please try again.");
@@ -216,7 +219,7 @@ export default function AccountPage() {
     return plan === "pro" ? `${base} (with email alerts)` : base;
   };
 
-  if (loading) {
+  if (loading && !data) {
     return <AccountSkeleton />;
   }
 
@@ -236,9 +239,9 @@ export default function AccountPage() {
           </p>
         </div>
 
-        {error && (
+        {(error || loadError) && (
           <Card variant="subtle" className="border-[#FCA5A5]">
-            <p className="text-sm text-[#B91C1C] font-medium">{error}</p>
+            <p className="text-sm text-[#B91C1C] font-medium">{error || loadError?.message}</p>
           </Card>
         )}
 
@@ -337,30 +340,26 @@ export default function AccountPage() {
               tier: nextTier,
               emailAlerts: nextEmailAlerts,
             }) =>
-              setData((current) =>
-                current
+              update((current) => ({
+                ...current,
+                capacity: current.capacity
                   ? {
-                      ...current,
-                      capacity: current.capacity
-                        ? {
-                            ...current.capacity,
-                            cadence: nextCadence,
-                            tier: nextTier,
-                            includedAccounts: nextTier === "premium" ? 5 : 3,
-                            totalAccounts:
-                              (nextTier === "premium" ? 5 : 3) +
-                              current.capacity.additionalAccounts,
-                            unitAmount: nextCadence === "weekly" ? 100 : 1400,
-                          }
-                        : current.capacity,
-                      subscriptions: current.subscriptions.map((subscription) => ({
-                        ...subscription,
-                        tier: nextTier,
-                        plan: nextEmailAlerts ? "pro" : "basic",
-                      })),
+                      ...current.capacity,
+                      cadence: nextCadence,
+                      tier: nextTier,
+                      includedAccounts: nextTier === "premium" ? 5 : 3,
+                      totalAccounts:
+                        (nextTier === "premium" ? 5 : 3) +
+                        current.capacity.additionalAccounts,
+                      unitAmount: nextCadence === "weekly" ? 100 : 1400,
                     }
-                  : current
-              )
+                  : current.capacity,
+                subscriptions: current.subscriptions.map((subscription) => ({
+                  ...subscription,
+                  tier: nextTier,
+                  plan: nextEmailAlerts ? "pro" : "basic",
+                })),
+              }))
             }
           />
         )}

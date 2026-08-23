@@ -2,8 +2,26 @@ import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCreditsSummary } from "@/lib/purchases";
-import { getAccountCapacity, publicCapacity } from "@/lib/account-capacity";
+import {
+  getAccountCapacity,
+  publicCapacity,
+  type AccountCapacitySubscriptionRow,
+} from "@/lib/account-capacity";
 import { removalPolicy } from "@/lib/account-removal";
+
+function accountResponse(
+  startedAt: number,
+  body: Record<string, unknown>,
+  status = 200
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "Server-Timing": `account;dur=${(performance.now() - startedAt).toFixed(1)}`,
+    },
+  });
+}
 
 /**
  * GET /api/account
@@ -11,30 +29,27 @@ import { removalPolicy } from "@/lib/account-removal";
  * Returns the user's subscription rows + the Instagram targets they track.
  */
 export async function GET() {
+  const startedAt = performance.now();
   const user = await getAuthUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return accountResponse(startedAt, { error: "Unauthorized" }, 401);
   }
 
   const supabase = createServerClient();
-  // Stripe is the entitlement source of truth. This also repairs legacy rows
-  // where pausing the last target incorrectly set `active=false` in Supabase.
-  const capacity = await getAccountCapacity(user.id);
-  const active = !!capacity;
-
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
     .select(
-      "id, target_id, plan, tier, active, user_paused, removed_at, stripe_subscription_id, scan_credit_auto_limit, scan_credit_consent_at, scan_credit_blocked_at, scan_credit_required, created_at, updated_at"
+      "id, target_id, plan, tier, active, user_paused, removed_at, stripe_subscription_id, spike_threshold, scan_credit_auto_limit, scan_credit_consent_at, scan_credit_blocked_at, scan_credit_required, created_at, updated_at"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (subsError) {
     console.error("account: subscriptions fetch error:", subsError.message);
-    return NextResponse.json(
+    return accountResponse(
+      startedAt,
       { success: false, error: "Failed to load account" },
-      { status: 500 }
+      500
     );
   }
 
@@ -46,8 +61,45 @@ export async function GET() {
       .filter((id): id is string => !!id)
   )];
 
+  const canonicalActive = paidSubs.find((subscription) => subscription.active);
+  const canonicalStripeId = canonicalActive?.stripe_subscription_id || null;
+  const canonicalRows = canonicalStripeId
+    ? paidSubs.filter(
+        (subscription) =>
+          subscription.active &&
+          subscription.stripe_subscription_id === canonicalStripeId
+      )
+    : [];
+  const scanPlan = canonicalStripeId
+    ? {
+        tier: canonicalRows.some((subscription) => subscription.tier === "premium")
+          ? ("premium" as const)
+          : ("base" as const),
+        stripeSubscriptionId: canonicalStripeId,
+      }
+    : null;
+
+  const targetsPromise = targetIds.length > 0
+    ? supabase
+        .from("instagram_targets")
+        .select(
+          "id, username, full_name, avatar_url, is_verified, monitoring_enabled, last_scanned_at, next_scan_at, following_count, follower_count"
+        )
+        .in("id", targetIds)
+    : Promise.resolve({ data: [], error: null });
+
+  const [capacity, credits, targetResult] = await Promise.all([
+    getAccountCapacity(
+      user.id,
+      (subs || []) as AccountCapacitySubscriptionRow[]
+    ),
+    getCreditsSummary(user.id, scanPlan),
+    targetsPromise,
+  ]);
+  const active = !!capacity;
+
   if (!active) {
-    return NextResponse.json({
+    return accountResponse(startedAt, {
       success: true,
       user: { id: user.id, email: user.email },
       hasActiveSubscription: false,
@@ -72,27 +124,7 @@ export async function GET() {
     });
   }
 
-  const [spikeRow, credits] = await Promise.all([
-    supabase
-      .from("subscriptions")
-      .select("spike_threshold")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    getCreditsSummary(user.id),
-  ]);
-
-  let targets: Record<string, unknown>[] = [];
-  if (targetIds.length > 0) {
-    const { data } = await supabase
-      .from("instagram_targets")
-      .select(
-        "id, username, full_name, avatar_url, is_verified, monitoring_enabled, last_scanned_at, next_scan_at, following_count, follower_count"
-      )
-      .in("id", targetIds);
-    targets = data || [];
-  }
+  const targets = (targetResult.data || []) as Record<string, unknown>[];
 
   const targetsById = new Map(targets.map((t) => [t.id as string, t]));
 
@@ -131,11 +163,11 @@ export async function GET() {
       .sort()
       .at(-1) || null;
 
-  return NextResponse.json({
+  return accountResponse(startedAt, {
     success: true,
     user: { id: user.id, email: user.email },
     hasActiveSubscription: active,
-    spikeThreshold: spikeRow.data?.spike_threshold ?? 5,
+    spikeThreshold: subs?.[0]?.spike_threshold ?? 5,
     credits,
     capacity: capacity ? publicCapacity(capacity) : null,
     removal: removalPolicy(capacity.tier, lastRemovedAt),
