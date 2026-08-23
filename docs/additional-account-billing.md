@@ -9,19 +9,22 @@
 - Pausing an account frees its slot. Saved history remains attached to the account.
 - Customers can add slots to either tier. The account UI supports adding up to 50
   at once; the server accepts up to 500 additional slots per subscription.
+- Slots and scan credits are separate. Adding a slot does not mint scan
+  credits; every target shares the subscriber's pooled weekly and purchased
+  scan-credit balance.
 
-## Why quarterly costs $14 per slot
+## Cost controls
 
-The production monitoring path fetches both following changes and, for eligible
-smaller targets, follower changes every 48 hours. The configured Apify Actor
-charges $0.20 per 1,000 delivered profiles. In the small live sample available
-on 2026-08-19, the three complete paired monitoring cycles averaged 1,301.3
-delivered profiles. At 46 cycles per quarter, that is about $11.97 in Apify
-usage per average account before Stripe fees.
+Automated monitoring performs a low-cost profile-count check every 48 hours.
+It does not automatically fetch follower lists. A complete following-list scan
+runs only when the following count changes, a baseline is missing, or the user
+requests an immediate rescan.
 
-The $14 quarterly price is intentionally close to cost. Ten extra accounts add
-$140 per quarter, or about $10.77 per week total. A $5-per-week ten-account
-bundle would lose money at the observed usage level.
+The configured Actor charges $0.29 per 1,000 delivered profiles. One customer
+scan credit covers up to 1,000 following profiles. Basic receives 12 credits
+per week and Premium receives 18; purchased credits never expire. Complete
+scans reserve the required credits before the Actor is called and refund them
+when the result is failed, suspect, or incomplete.
 
 Sources:
 

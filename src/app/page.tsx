@@ -497,8 +497,10 @@ export default function Home() {
           body: JSON.stringify({ session_id: sessionId }),
         });
         const data = await res.json();
-        if (data?.success && data.username) {
-          router.replace(`/track/${encodeURIComponent(data.username)}`);
+        if (data?.success && data.username && data.targetId) {
+          router.replace(
+            `/app/add-account?username=${encodeURIComponent(data.username)}&targetId=${encodeURIComponent(data.targetId)}&postPurchase=1`
+          );
         } else if (data?.success) {
           // Generic purchase without a linked account — land on pricing.
           router.replace("/pricing");

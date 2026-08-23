@@ -23,6 +23,7 @@ import {
   type AccountData,
   type TrackedTarget,
 } from "@/lib/account-types";
+import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -93,11 +94,32 @@ export default function DashboardPage() {
     setTargetAction(target.id);
     setError("");
     const action = target.monitoring_enabled ? "stop" : "start";
+    const requiredScanCredits = scanCreditsForFollowingCount(
+      target.following_count
+    );
+    if (
+      action === "start" &&
+      !window.confirm(
+        `Automatic count checks are free. Complete scans of @${target.username} currently use ${requiredScanCredits} ${requiredScanCredits === 1 ? "scan credit" : "scan credits"}. Approve and resume?`
+      )
+    ) {
+      setTargetAction(null);
+      return;
+    }
     try {
       const response = await fetch("/api/instagram/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id, action }),
+        body: JSON.stringify({
+          targetId: target.id,
+          action,
+          ...(action === "start"
+            ? {
+                scanCreditsConfirmed: true,
+                quotedScanCredits: requiredScanCredits,
+              }
+            : {}),
+        }),
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -237,12 +259,18 @@ export default function DashboardPage() {
         {data?.hasActiveSubscription && data.capacity && (
           <Card variant="subtle" padding="md">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-[var(--muted-foreground)]">
-                <strong className="font-extrabold text-[var(--foreground)]">
-                  {data.capacity.activeAccounts} of {data.capacity.totalAccounts}
-                </strong>{" "}
-                concurrent slots in use
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  <strong className="font-extrabold text-[var(--foreground)]">
+                    {data.capacity.activeAccounts} of {data.capacity.totalAccounts}
+                  </strong>{" "}
+                  concurrent slots in use
+                </p>
+                <p className="text-xs font-semibold text-[var(--muted-foreground)]">
+                  <strong className="text-[var(--foreground)]">{data.credits.rescan_credits}</strong>{" "}
+                  scan credits available · {data.credits.scan_weekly_allowance} included weekly
+                </p>
+              </div>
               <Link
                 href="/account"
                 className="text-xs font-bold text-[var(--foreground)] underline underline-offset-2 hover:opacity-80 transition-opacity"
@@ -352,6 +380,17 @@ export default function DashboardPage() {
                           <span className="text-[var(--border)]">·</span>
                           <span>Last full scan {formatRelative(t.last_scanned_at)}</span>
                         </p>
+                        {data.subscriptions.find((subscription) => subscription.target?.id === t.id)?.scan_credit_blocked_at && (
+                          <p className="mt-1 text-xs font-bold text-amber-700">
+                            Full scan waiting for {data.subscriptions.find((subscription) => subscription.target?.id === t.id)?.scan_credit_required || 1} scan credits or updated approval ·{" "}
+                            <Link
+                              href={`/app/add-account?username=${encodeURIComponent(t.username)}&targetId=${encodeURIComponent(t.id)}`}
+                              className="underline underline-offset-2"
+                            >
+                              Review
+                            </Link>
+                          </p>
+                        )}
                       </div>
                     </div>
 

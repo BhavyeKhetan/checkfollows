@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
-import { enableMonitoring } from "@/lib/monitoring";
 import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 
 /**
@@ -10,8 +9,9 @@ import { collapseDuplicateStripeSubscription } from "@/lib/subscription-manageme
  *
  * Called by the frontend after an in-page (embedded) Stripe payment succeeds.
  * Verifies the subscription is active, upserts the subscription row, enables
- * monitoring for the linked target, and establishes the baseline snapshot if
- * one doesn't already exist. Idempotent.
+ * the paid entitlement. A selected target is returned to the client but is not
+ * monitored until the signed-in buyer confirms its scan-credit cost.
+ * Idempotent.
  */
 export async function POST(request: Request) {
   try {
@@ -61,18 +61,20 @@ export async function POST(request: Request) {
       customerId,
       email: customerEmail,
       userId: metadata.user_id || null,
-      targetId,
+      targetId: null,
     });
     if (collapsed.collapsed) {
-      if (targetId) await enableMonitoring(targetId);
       return NextResponse.json({
         success: true,
         alreadySubscribed: true,
         username,
+        targetId,
+        needsScanConfirmation: !!targetId,
       });
     }
 
-    // Upsert subscription row (same idempotent logic as the webhook).
+    // Upsert a generic subscription entitlement. Target attachment happens
+    // only after explicit post-paywall scan-credit confirmation.
     const { data: existing } = await supabase
       .from("subscriptions")
       .select("id")
@@ -86,7 +88,6 @@ export async function POST(request: Request) {
       stripe_subscription_id: subscriptionId,
       active: true,
       user_paused: false,
-      ...(targetId ? { target_id: targetId } : {}),
     };
 
     if (existing) {
@@ -126,38 +127,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Enable monitoring for the linked target.
-    if (targetId) {
-      await enableMonitoring(targetId);
-    }
-
-    // Establish the baseline in the BACKGROUND. The full-following Apify scan
-    // can take minutes; awaiting it here leaves the buyer stuck on
-    // "Processing..." after their card already succeeded. The hourly monitor
-    // cron is the authoritative path: it atomically claims this target
-    // (next_scan_at is already "now" via enableMonitoring above) and
-    // establishes the baseline + diffs on its next run. We also nudge that
-    // same cron to run immediately, best-effort, so the first scan starts
-    // right away without blocking this response.
-    try {
-      if (targetId && process.env.CRON_SECRET) {
-        const baseUrl =
-          process.env.NEXT_PUBLIC_SITE_URL ||
-          request.headers.get("origin") ||
-          "https://www.checkfollows.com";
-        fetch(
-          `${baseUrl}/api/cron/monitor?secret=${encodeURIComponent(
-            process.env.CRON_SECRET
-          )}`,
-          { method: "POST" }
-        ).catch(() => {
-          /* best-effort */
-        });
-      }
-    } catch {
-      /* best-effort */
-    }
-
     return NextResponse.json({
       success: true,
       activated: true,
@@ -165,6 +134,7 @@ export async function POST(request: Request) {
       username,
       baselineEstablished: false,
       followingCount: null,
+      needsScanConfirmation: !!targetId,
     });
   } catch (error) {
     console.error("Stripe activate-subscription error:", error);

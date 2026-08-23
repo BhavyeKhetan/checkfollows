@@ -4,9 +4,18 @@ import AddAccountClient from "./add-account-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function AddAccountPage() {
+export default async function AddAccountPage({
+  searchParams,
+}: PageProps<"/app/add-account">) {
   const user = await getAuthUser();
   if (!user) redirect("/login?next=/app/add-account");
   if (!(await hasActiveSubscription(user.id))) redirect("/app/pricing");
-  return <AddAccountClient />;
+  const params = await searchParams;
+  return (
+    <AddAccountClient
+      initialUsername={typeof params.username === "string" ? params.username : ""}
+      initialTargetId={typeof params.targetId === "string" ? params.targetId : ""}
+      postPurchase={params.postPurchase === "1"}
+    />
+  );
 }

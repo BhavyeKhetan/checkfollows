@@ -10,14 +10,13 @@ import { FaqList } from "@/components/marketing/faq-list";
 type Tier = "base" | "premium";
 type Cadence = "weekly" | "quarterly";
 
-const BASE_PRICE: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
-const PREMIUM_PRICE: Record<Cadence, number> = { weekly: 12.99, quarterly: 64.99 };
+const BASE_PRICE: Record<Cadence, number> = { weekly: 9.99, quarterly: 99 };
+const PREMIUM_PRICE: Record<Cadence, number> = { weekly: 12.99, quarterly: 129 };
 const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
 
 const FEATURES = [
   "Complete chronological following list",
-  "Every-other-day monitoring with automatic rescan",
-  "1 free on-demand rescan credit included",
+  "Free every-other-day Instagram count checks",
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
   "No Instagram login required",
@@ -57,7 +56,11 @@ const PRICING_FAQS = [
   },
   {
     q: "What happens after I subscribe?",
-    a: "We immediately run a full scan of the account you searched, save it as your baseline, and start monitoring it every 48 hours automatically. You'll see new follows and unfollows as they happen.",
+    a: "After payment, we show the account's current following count, exact credit cost per complete scan, and your balance. Nothing expensive runs until you confirm. Free count checks continue every 48 hours; complete scans use credits only when needed.",
+  },
+  {
+    q: "How do scan credits work?",
+    a: "One credit covers up to 1,000 following profiles in a successful complete scan. Basic includes 12 each week and Premium includes 18. Failed or incomplete scans are refunded, and purchased credits never expire.",
   },
   {
     q: "How many accounts can I track?",
@@ -154,7 +157,7 @@ export function Pricing() {
                   track("billing_cadence_selected", { cadence: "quarterly", source: "pricing" });
                 }}
                 label="Quarterly"
-                badge="Save 62%"
+                badge="Save 24%"
               />
             </div>
           </div>
@@ -243,7 +246,7 @@ export function Pricing() {
               }`}
             >
               <Badge variant="lime" size="sm" className="absolute -top-3 left-6">
-                <Zap className="w-3 h-3" /> Best value · Save 62%
+                <Zap className="w-3 h-3" /> Best value · Save 24%
               </Badge>
               <h3 className="text-lg font-bold text-[#121212]">Quarterly</h3>
               <p className="text-sm text-[#555555] mt-0.5">For ongoing monitoring</p>
@@ -257,7 +260,7 @@ export function Pricing() {
                 <span className="text-sm font-semibold text-[#777777]">/week</span>
               </div>
               <p className="text-xs text-[#888888] mt-2">
-                <strong className="text-[#121212] font-bold">${livePrice("quarterly", emailAlerts, tier).toFixed(2)} billed quarterly</strong> (every 3 months) · Save 62% vs weekly · extra slots $14/quarter each
+                <strong className="text-[#121212] font-bold">${livePrice("quarterly", emailAlerts, tier).toFixed(2)} billed quarterly</strong> (every 3 months) · Save about 24% vs weekly · extra slots $14/quarter each
                 {emailAlerts && (
                   <span className="text-[#047857] font-semibold"> · includes +${(ALERTS_ADDON.quarterly / 13).toFixed(2)}/wk email alerts</span>
                 )}
@@ -281,6 +284,12 @@ export function Pricing() {
               Everything included in both plans
             </h3>
             <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+              <li className="flex items-start gap-2.5 text-sm text-[#555555]">
+                <span className="w-5 h-5 rounded-full bg-[#E7F256] border border-black/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Check className="w-3 h-3 text-[#121212]" strokeWidth={3} />
+                </span>
+                <span><strong>{tier === "premium" ? 18 : 12} scan credits included every week</strong></span>
+              </li>
               {FEATURES.map((f) => (
                 <li key={f} className="flex items-start gap-2.5 text-sm text-[#555555]">
                   <span className="w-5 h-5 rounded-full bg-[#E7F256] border border-black/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -294,7 +303,7 @@ export function Pricing() {
 
           {/* Value props */}
           <div className="grid sm:grid-cols-3 gap-6 mt-10">
-            <MiniValue icon={Clock} title="Every-other-day monitoring" body="We rescan automatically every 48 hours so you never miss a change." />
+            <MiniValue icon={Clock} title="Every-other-day monitoring" body="Free count checks run every 48 hours. When a complete list is needed, the exact credit cost is shown and enforced." />
             <MiniValue icon={History} title="Accumulating history" body="Every check builds a permanent timeline you can revisit anytime." />
             <MiniValue icon={Bell} title="Change detection" body="New follows and unfollows appear in your timeline the moment they're detected." />
           </div>

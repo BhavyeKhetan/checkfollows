@@ -19,6 +19,8 @@ interface RescanBundleModalProps {
   username: string;
   onSelectBundle: (bundle: RescanBundle, changePaymentMethod?: boolean) => Promise<void>;
   loading?: boolean;
+  requiredCredits?: number;
+  currentBalance?: number;
 }
 
 export function RescanBundleModal({
@@ -27,8 +29,10 @@ export function RescanBundleModal({
   username,
   onSelectBundle,
   loading = false,
+  requiredCredits,
+  currentBalance,
 }: RescanBundleModalProps) {
-  // Default to the highest value $20 bundle (30 rescans) as requested
+  // Default to the highest value credit pack.
   const [selectedBundle, setSelectedBundle] = useState<RescanBundle>("30");
   const [card, setCard] = useState<SavedCard | null>(null);
 
@@ -85,13 +89,13 @@ export function RescanBundleModal({
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#121212] text-[#E7F256] text-[11px] font-extrabold uppercase tracking-wide mb-2">
                   <Zap className="w-3 h-3" />
-                  On-Demand Rescans
+                  Scan Credits
                 </div>
                 <h2 className="text-xl font-extrabold text-[#121212] tracking-tight">
-                  Instant Rescan Pack
+                  Add scan credits
                 </h2>
                 <p className="text-xs text-[#555555] mt-1 font-medium">
-                  Skip the 48h monitoring queue and scan @{username} immediately.
+                  Credits pay for complete following-list scans of @{username}.
                 </p>
               </div>
               <button
@@ -107,13 +111,23 @@ export function RescanBundleModal({
 
           {/* Body */}
           <div className="p-6 space-y-4">
-            {/* Free scan banner info */}
             <div className="rounded-xl bg-[#F0FDF4] border border-[#BBF7D0] p-3 text-xs text-[#166534] flex items-center gap-2.5">
               <Check className="w-4 h-4 text-[#16A34A] shrink-0" />
               <span>
-                <strong>1 free rescan</strong> is included with your plan. Need more? Choose a pack below.
+                One credit covers up to 1,000 following profiles. Purchased
+                credits never expire.
               </span>
             </div>
+
+            {typeof requiredCredits === "number" && (
+              <div className="rounded-xl border border-[#E2E2DC] bg-[#FAF9F5] p-3 text-xs text-[#555555]">
+                A complete scan of <strong className="text-[#121212]">@{username}</strong>{" "}
+                currently uses <strong className="text-[#121212]">{requiredCredits} {requiredCredits === 1 ? "credit" : "credits"}</strong>.
+                {typeof currentBalance === "number" && (
+                  <> Your current balance is <strong className="text-[#121212]">{currentBalance}</strong>.</>
+                )}
+              </div>
+            )}
 
             {/* Bundle Options */}
             <div className="space-y-2.5">
@@ -144,7 +158,7 @@ export function RescanBundleModal({
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-extrabold text-[#121212]">
-                            {option.credits} Rescans
+                            {option.credits} Scan Credits
                           </span>
                           {option.badge && (
                             <span className="px-2 py-0.5 rounded-full bg-[#E7F256] text-[#121212] text-[10px] font-extrabold border border-black/10">
@@ -158,7 +172,7 @@ export function RescanBundleModal({
                           )}
                         </div>
                         <div className="text-xs text-[#666666] mt-0.5">
-                          {option.unitPrice} per scan &middot; Never expires
+                          {option.unitPrice} &middot; Never expires
                         </div>
                       </div>
                     </div>
@@ -213,7 +227,7 @@ export function RescanBundleModal({
                   1-Click Buy &mdash; ${currentOption.price}
                 </span>
               ) : (
-                `Get ${currentOption.credits} Rescans — $${currentOption.price}`
+                `Get ${currentOption.credits} Credits — $${currentOption.price}`
               )}
             </Button>
             <p className="text-center text-[11px] text-[#777777]">
@@ -227,4 +241,3 @@ export function RescanBundleModal({
     </AnimatePresence>
   );
 }
-

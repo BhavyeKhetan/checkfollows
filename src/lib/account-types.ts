@@ -17,6 +17,10 @@ export interface SubscriptionRow {
   tier: string;
   active: boolean;
   user_paused: boolean;
+  scan_credit_auto_limit: number | null;
+  scan_credit_consent_at: string | null;
+  scan_credit_blocked_at: string | null;
+  scan_credit_required: number | null;
   created_at: string;
   updated_at: string;
   target: TrackedTarget | null;
@@ -32,6 +36,10 @@ export interface AccountData {
     rescan_credits: number;
     mutuals: number;
     unlimited_export?: boolean;
+    scan_included: number;
+    scan_purchased: number;
+    scan_weekly_allowance: number;
+    scan_refresh_at: string | null;
   };
   subscriptions: SubscriptionRow[];
   lockedTrackedAccountCount?: number;

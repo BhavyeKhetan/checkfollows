@@ -3,6 +3,7 @@ import { getAuthUser, hasActiveSubscription } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import { getStripe, RESCAN_BUNDLES, type RescanBundle, type ExportOptionTier } from "@/lib/stripe";
 import { trackServer } from "@/lib/mixpanel-server";
+import { grantPurchasedScanCredits } from "@/lib/scan-credits";
 
 export async function POST(request: Request) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       const bundleConfig = RESCAN_BUNDLES.find((b) => b.bundle === rawBundle) || RESCAN_BUNDLES[2];
       amountCents = bundleConfig.price * 100;
       credits = bundleConfig.credits;
-      description = `CheckFollows - ${bundleConfig.credits} On-Demand Rescans`;
+      description = `CheckFollows - ${bundleConfig.credits} Scan Credits`;
     } else if (kind === "export" || kind === "export_unlimited") {
       const exportTier = (body.exportTier === "single" ? "single" : "unlimited") as ExportOptionTier;
       if (kind === "export_unlimited" || exportTier === "unlimited") {
@@ -134,14 +135,23 @@ export async function POST(request: Request) {
     });
 
     if (paymentIntent.status === "succeeded") {
-      await supabase.from("one_time_purchases").insert({
-        user_id: user.id,
-        kind,
-        target_id: targetId || null,
-        credits,
-        consumed: 0,
-        stripe_session_id: paymentIntent.id,
-      });
+      if (kind === "rescan_credits") {
+        await grantPurchasedScanCredits({
+          userId: user.id,
+          units: credits,
+          idempotencyKey: `stripe-payment-intent:${paymentIntent.id}`,
+          reason: "scan_credit_purchase",
+        });
+      } else {
+        await supabase.from("one_time_purchases").insert({
+          user_id: user.id,
+          kind,
+          target_id: targetId || null,
+          credits,
+          consumed: 0,
+          stripe_session_id: paymentIntent.id,
+        });
+      }
 
       trackServer("one_time_purchase_completed", {
         user_id: user.id,

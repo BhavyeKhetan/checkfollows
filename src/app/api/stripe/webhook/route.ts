@@ -6,6 +6,7 @@ import {
   enableMonitoring,
 } from "@/lib/monitoring";
 import { ensureFreePlanCredits } from "@/lib/purchases";
+import { grantPurchasedScanCredits } from "@/lib/scan-credits";
 import { trackServer } from "@/lib/mixpanel-server";
 import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 import type Stripe from "stripe";
@@ -83,14 +84,23 @@ export async function POST(request: Request) {
           const otpUserId = metadata.user_id || null;
           if (otpUserId) {
             const quantity = parseInt(metadata.credits || metadata.quantity || "1", 10) || 1;
-            await createServerClient().from("one_time_purchases").insert({
-              user_id: otpUserId,
-              kind: metadata.kind,
-              target_id: metadata.target_id || null,
-              credits: quantity,
-              consumed: 0,
-              stripe_session_id: session.id,
-            });
+            if (metadata.kind === "rescan_credits") {
+              await grantPurchasedScanCredits({
+                userId: otpUserId,
+                units: quantity,
+                idempotencyKey: `stripe-checkout:${session.id}`,
+                reason: "scan_credit_purchase",
+              });
+            } else {
+              await createServerClient().from("one_time_purchases").insert({
+                user_id: otpUserId,
+                kind: metadata.kind,
+                target_id: metadata.target_id || null,
+                credits: quantity,
+                consumed: 0,
+                stripe_session_id: session.id,
+              });
+            }
             console.log("One-time purchase credited:", {
               userId: otpUserId,
               kind: metadata.kind,
@@ -125,12 +135,9 @@ export async function POST(request: Request) {
               customerId,
               email: customerEmail,
               userId: metadata.user_id || null,
-              targetId: metadata.target_id || null,
+              targetId: null,
             });
             if (collapsed.collapsed) {
-              if (metadata.target_id) {
-                await enableMonitoring(metadata.target_id);
-              }
               console.warn("Webhook: canceled duplicate Stripe subscription", {
                 incoming: subscriptionId,
                 canonical: collapsed.stripeSubscriptionId,
@@ -160,7 +167,6 @@ export async function POST(request: Request) {
             stripe_subscription_id: subscriptionId,
             active: true,
             updated_at: new Date().toISOString(),
-            ...(targetId ? { target_id: targetId } : {}),
             ...(userId ? { user_id: userId } : {}),
           };
 
@@ -179,7 +185,6 @@ export async function POST(request: Request) {
                 stripe_customer_id: customerId,
                 stripe_subscription_id: subscriptionId,
                 active: true,
-                ...(targetId ? { target_id: targetId } : {}),
                 ...(userId ? { user_id: userId } : {}),
               });
 
@@ -224,15 +229,8 @@ export async function POST(request: Request) {
             }
           }
 
-          // ─── THE FIX: paid = monitoring on ─────────────────
-          // If this purchase is tied to a specific Instagram account,
-          // enable monitoring immediately (next_scan_at = now). The baseline
-          // itself is established synchronously by /api/stripe/activate when
-          // the browser redirects back; the cron (which respects next_scan_at)
-          // is the safety net if the user closes the browser early.
-          if (targetId) {
-            await enableMonitoring(targetId);
-          }
+          // Payment creates entitlement only. The selected target waits for
+          // explicit post-paywall scan-credit confirmation before monitoring.
 
           if (userId) {
             await ensureFreePlanCredits(userId);
@@ -301,10 +299,9 @@ export async function POST(request: Request) {
             customerId: (subscription.customer as string) || "",
             email,
             userId,
-            targetId,
+            targetId: null,
           });
           if (collapsed.collapsed) {
-            if (targetId) await enableMonitoring(targetId);
             console.warn("Webhook: canceled duplicate Stripe subscription", {
               incoming: subscription.id,
               canonical: collapsed.stripeSubscriptionId,
@@ -331,7 +328,6 @@ export async function POST(request: Request) {
             stripe_subscription_id: subscription.id,
             active: isActive,
             updated_at: new Date().toISOString(),
-            ...(targetId ? { target_id: targetId } : {}),
             ...(userId ? { user_id: userId } : {}),
           };
 

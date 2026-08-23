@@ -2,12 +2,6 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { createServerClient } from "@/lib/supabase/server";
 import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
-import {
-  enableMonitoring,
-  fullBaselineScan,
-  getLatestSnapshot,
-  getEventsForTarget,
-} from "@/lib/monitoring";
 
 /**
  * POST /api/stripe/activate
@@ -15,8 +9,8 @@ import {
  *
  * Called by the frontend after Stripe redirects back (success=true).
  * Verifies the session is paid, stores/links the subscription, enables
- * monitoring for the linked target, and establishes the baseline snapshot
- * if one doesn't already exist.
+ * the paid entitlement. A selected target is returned for the post-paywall
+ * scan-credit confirmation screen and is not scanned here.
  *
  * Idempotent: safe to call multiple times (webhook + redirect race).
  */
@@ -68,19 +62,21 @@ export async function POST(request: Request) {
         customerId,
         email: customerEmail,
         userId: metadata.user_id || null,
-        targetId,
+        targetId: null,
       });
       if (collapsed.collapsed) {
-        if (targetId) await enableMonitoring(targetId);
         return NextResponse.json({
           success: true,
           alreadySubscribed: true,
           username,
+          targetId,
+          needsScanConfirmation: !!targetId,
         });
       }
     }
 
-    // Upsert subscription row (same logic as the webhook — idempotent).
+    // Upsert a generic subscription entitlement. The target is attached only
+    // after the customer approves its current per-scan credit amount.
     const { data: existing } = await supabase
       .from("subscriptions")
       .select("id")
@@ -96,7 +92,6 @@ export async function POST(request: Request) {
       stripe_subscription_id: subscriptionId,
       active: true,
       user_paused: false,
-      ...(targetId ? { target_id: targetId } : {}),
     };
 
     if (existing) {
@@ -136,50 +131,15 @@ export async function POST(request: Request) {
       }
     }
 
-    // Enable monitoring for the linked target if present.
-    if (targetId) {
-      await enableMonitoring(targetId);
-    }
-
-    // Establish baseline only if none exists and no scan is already running
-    // (avoids double-scans with the webhook's fire-and-forget baseline).
-    let baseline: Awaited<ReturnType<typeof fullBaselineScan>> | null = null;
-    if (targetId && username) {
-      const existingSnapshot = await getLatestSnapshot(targetId, "following");
-      const { data: runningScan } = await supabase
-        .from("scans")
-        .select("id")
-        .eq("target_id", targetId)
-        .eq("status", "running")
-        .limit(1)
-        .maybeSingle();
-
-      if (!existingSnapshot && !runningScan) {
-        try {
-          baseline = await fullBaselineScan(username);
-        } catch (err) {
-          console.error("Activate: baseline scan failed:", err);
-        }
-      }
-    }
-
-    // Load events to return to the frontend.
-    let events: unknown[] = [];
-    if (targetId) {
-      events = await getEventsForTarget(targetId, {
-        limit: 50,
-        confirmedOnly: true,
-      });
-    }
-
     return NextResponse.json({
       success: true,
       activated: true,
       targetId,
       username,
-      baselineEstablished: !!baseline,
-      followingCount: baseline?.following.length ?? null,
-      events,
+      baselineEstablished: false,
+      followingCount: null,
+      events: [],
+      needsScanConfirmation: !!targetId,
     });
   } catch (error) {
     console.error("Stripe activate error:", error);

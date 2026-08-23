@@ -8,6 +8,10 @@ import { disableMonitoringIfUnused, enableMonitoring } from "@/lib/monitoring";
 import { getAuthUser, ownsTarget } from "@/lib/supabase/auth";
 import { createServerClient } from "@/lib/supabase/server";
 import type { PlanTier } from "@/lib/stripe";
+import {
+  getScanCreditSummary,
+  scanCreditsForFollowingCount,
+} from "@/lib/scan-credits";
 
 /**
  * Starts or stops monitoring for an authenticated subscriber. Stripe-backed
@@ -17,6 +21,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { targetId, action = "start" } = body;
+    const scanCreditsConfirmed = body.scanCreditsConfirmed === true;
+    const quotedScanCredits = Number.isInteger(body.quotedScanCredits)
+      ? body.quotedScanCredits
+      : null;
 
     if (!targetId) {
       return NextResponse.json(
@@ -160,7 +168,7 @@ export async function POST(request: Request) {
 
     const { data: target } = await supabase
       .from("instagram_targets")
-      .select("id, username, monitoring_enabled")
+      .select("id, username, monitoring_enabled, following_count, follower_count, is_private")
       .eq("id", targetId)
       .single();
 
@@ -170,15 +178,93 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+    if (target.is_private) {
+      return NextResponse.json(
+        { success: false, error: "Private accounts cannot be monitored" },
+        { status: 403 }
+      );
+    }
+
+    const requiredScanCredits = scanCreditsForFollowingCount(
+      target.following_count
+    );
+    const credits = await getScanCreditSummary(authUser.id);
+    if (!credits) {
+      return NextResponse.json(
+        { success: false, error: "An active subscription is required" },
+        { status: 402 }
+      );
+    }
+
+    const quotePayload = {
+      followingCount: target.following_count,
+      followerCount: target.follower_count,
+      requiredScanCredits,
+      credits,
+      canAfford: credits.total >= requiredScanCredits,
+    };
 
     const { data: existingPaid } = await supabase
       .from("subscriptions")
-      .select("id, user_paused")
+      .select("id, user_paused, scan_credit_auto_limit, scan_credit_consent_at")
       .eq("target_id", targetId)
       .eq("user_id", authUser.id)
       .eq("active", true)
       .not("stripe_subscription_id", "is", null)
       .maybeSingle();
+
+    const hasCurrentConsent =
+      !!existingPaid?.scan_credit_consent_at &&
+      (existingPaid.scan_credit_auto_limit || 0) >= requiredScanCredits;
+
+    if (!hasCurrentConsent && !scanCreditsConfirmed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Confirm this account's full-scan credit cost before monitoring starts.",
+          needsScanConfirmation: true,
+          quote: quotePayload,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (
+      scanCreditsConfirmed &&
+      quotedScanCredits !== requiredScanCredits
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This account's following count changed. Review the updated scan cost.",
+          quoteChanged: true,
+          needsScanConfirmation: true,
+          quote: quotePayload,
+        },
+        { status: 409 }
+      );
+    }
+
+    const { data: existingSnapshot } = await supabase
+      .from("follow_snapshots")
+      .select("id")
+      .eq("target_id", targetId)
+      .eq("snapshot_type", "following")
+      .order("captured_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingSnapshot && credits.total < requiredScanCredits) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `The first full scan needs ${requiredScanCredits} scan credits. Add credits to continue.`,
+          needsCredits: true,
+          quote: quotePayload,
+        },
+        { status: 402 }
+      );
+    }
 
     if (existingPaid) {
       if (
@@ -197,6 +283,14 @@ export async function POST(request: Request) {
         .update({
           user_paused: false,
           removed_at: null,
+          ...(scanCreditsConfirmed
+            ? {
+                scan_credit_auto_limit: requiredScanCredits,
+                scan_credit_consent_at: new Date().toISOString(),
+              }
+            : {}),
+          scan_credit_blocked_at: null,
+          scan_credit_required: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingPaid.id);
@@ -206,6 +300,7 @@ export async function POST(request: Request) {
         success: true,
         alreadySubscribed: true,
         message: `Now tracking @${target.username} — monitoring is active`,
+        quote: quotePayload,
       });
     }
 
@@ -254,6 +349,10 @@ export async function POST(request: Request) {
       active: true,
       user_paused: false,
       removed_at: null,
+      scan_credit_auto_limit: requiredScanCredits,
+      scan_credit_consent_at: new Date().toISOString(),
+      scan_credit_blocked_at: null,
+      scan_credit_required: null,
       updated_at: new Date().toISOString(),
     };
 
@@ -277,6 +376,7 @@ export async function POST(request: Request) {
       success: true,
       attachedToExistingSubscription: true,
       message: `@${target.username} added to your subscription — monitoring is active`,
+      quote: quotePayload,
     });
   } catch (error) {
     console.error("Track API error:", error);

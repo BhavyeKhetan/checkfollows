@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="August 12, 2026">
+    <LegalPage title="Terms of Service" updated="August 23, 2026">
       <p className="text-[15px] leading-relaxed text-[#555555]">
         Welcome to CheckFollows. These Terms of Service (&ldquo;Terms&rdquo;)
         govern your access to and use of our website, services, and tools
@@ -91,6 +91,14 @@ export default function TermsPage() {
           We may modify pricing, plans, or features at any time. Continued use
           after changes constitutes acceptance. Cancellation and refund terms are
           described in our Refund Policy.
+        </p>
+        <p>
+          Paid plans include a weekly pool of scan credits shared across tracked
+          accounts. One scan credit covers up to 1,000 following profiles in a
+          successful complete scan. The current cost is shown before you approve
+          an account or request a rescan. Failed or incomplete scans are refunded.
+          Included credits refresh weekly and do not roll over; separately
+          purchased scan credits do not expire while your account remains open.
         </p>
       </LegalSection>
 

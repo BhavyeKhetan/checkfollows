@@ -23,8 +23,8 @@ export default function AppPricingClient() {
   const price = useMemo(() => {
     const base =
       tier === "premium"
-        ? cadence === "weekly" ? 12.99 : 64.99
-        : cadence === "weekly" ? 9.99 : 49.99;
+        ? cadence === "weekly" ? 12.99 : 129
+        : cadence === "weekly" ? 9.99 : 99;
     return base + (emailAlerts ? (cadence === "weekly" ? 2 : 10) : 0);
   }, [cadence, tier, emailAlerts]);
 
@@ -76,7 +76,7 @@ export default function AppPricingClient() {
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
           {([
             ["base", "Basic", "Track up to 3 accounts total"],
-            ["premium", "Premium", "Unlimited accounts, 5 monitored at once"],
+            ["premium", "Premium", "Track 5 accounts at once"],
           ] as const).map(([value, label, description]) => (
             <button
               key={value}
@@ -159,6 +159,10 @@ export default function AppPricingClient() {
                 {cadence === "weekly" ? "per week" : "every 3 months"}
               </div>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm font-semibold text-[var(--foreground)]">
+            {tier === "premium" ? 18 : 12} scan credits included every week and shared across all tracked accounts. One credit covers up to 1,000 following profiles in a complete scan.
           </div>
 
           {error && (

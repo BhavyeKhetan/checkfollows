@@ -79,6 +79,11 @@ export interface Database {
           active: boolean;
           user_paused: boolean;
           removed_at: string | null;
+          scan_credit_auto_limit: number | null;
+          scan_credit_consent_at: string | null;
+          pending_scan_credit_reservation_id: string | null;
+          scan_credit_blocked_at: string | null;
+          scan_credit_required: number | null;
           spike_threshold: number;
           created_at: string;
           updated_at: string;
@@ -95,6 +100,11 @@ export interface Database {
           active?: boolean;
           user_paused?: boolean;
           removed_at?: string | null;
+          scan_credit_auto_limit?: number | null;
+          scan_credit_consent_at?: string | null;
+          pending_scan_credit_reservation_id?: string | null;
+          scan_credit_blocked_at?: string | null;
+          scan_credit_required?: number | null;
           spike_threshold?: number;
           created_at?: string;
           updated_at?: string;
@@ -111,6 +121,11 @@ export interface Database {
           active?: boolean;
           user_paused?: boolean;
           removed_at?: string | null;
+          scan_credit_auto_limit?: number | null;
+          scan_credit_consent_at?: string | null;
+          pending_scan_credit_reservation_id?: string | null;
+          scan_credit_blocked_at?: string | null;
+          scan_credit_required?: number | null;
           spike_threshold?: number;
           created_at?: string;
           updated_at?: string;
@@ -339,9 +354,151 @@ export interface Database {
         };
         Relationships: [];
       };
+      scan_credit_wallets: {
+        Row: {
+          user_id: string;
+          included_balance: number;
+          purchased_balance: number;
+          included_allowance: number;
+          refresh_at: string;
+          tier: string;
+          stripe_subscription_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          included_balance?: number;
+          purchased_balance?: number;
+          included_allowance?: number;
+          refresh_at?: string;
+          tier?: string;
+          stripe_subscription_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          included_balance?: number;
+          purchased_balance?: number;
+          included_allowance?: number;
+          refresh_at?: string;
+          tier?: string;
+          stripe_subscription_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      scan_credit_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_id: string | null;
+          scan_id: string | null;
+          entry_type: string;
+          reason: string;
+          included_delta: number;
+          purchased_delta: number;
+          status: string;
+          idempotency_key: string;
+          reversal_of: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_id?: string | null;
+          scan_id?: string | null;
+          entry_type: string;
+          reason: string;
+          included_delta?: number;
+          purchased_delta?: number;
+          status?: string;
+          idempotency_key: string;
+          reversal_of?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          target_id?: string | null;
+          scan_id?: string | null;
+          entry_type?: string;
+          reason?: string;
+          included_delta?: number;
+          purchased_delta?: number;
+          status?: string;
+          idempotency_key?: string;
+          reversal_of?: string | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      sync_scan_credit_wallet: {
+        Args: {
+          p_user_id: string;
+          p_tier: string;
+          p_allowance: number;
+          p_stripe_subscription_id: string;
+        };
+        Returns: Array<{
+          included_balance: number;
+          purchased_balance: number;
+          included_allowance: number;
+          refresh_at: string;
+        }>;
+      };
+      grant_purchased_scan_credits: {
+        Args: {
+          p_user_id: string;
+          p_units: number;
+          p_idempotency_key: string;
+          p_reason?: string;
+        };
+        Returns: Array<{
+          granted: boolean;
+          included_balance: number;
+          purchased_balance: number;
+          refresh_at: string;
+        }>;
+      };
+      reserve_scan_credits: {
+        Args: {
+          p_user_id: string;
+          p_units: number;
+          p_target_id: string;
+          p_reason: string;
+          p_idempotency_key: string;
+        };
+        Returns: Array<{
+          reserved: boolean;
+          reservation_id: string | null;
+          included_balance: number;
+          purchased_balance: number;
+          refresh_at: string | null;
+        }>;
+      };
+      complete_scan_credit_reservation: {
+        Args: { p_reservation_id: string; p_scan_id?: string | null };
+        Returns: boolean;
+      };
+      refund_scan_credit_reservation: {
+        Args: { p_reservation_id: string; p_reason?: string };
+        Returns: Array<{
+          refunded: boolean;
+          included_balance: number;
+          purchased_balance: number;
+          refresh_at: string | null;
+        }>;
+      };
+    };
     Enums: Record<string, never>;
   };
 }

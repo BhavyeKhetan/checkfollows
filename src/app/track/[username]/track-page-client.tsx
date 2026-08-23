@@ -25,6 +25,7 @@ import { track } from "@/lib/mixpanel";
 import { RESCAN_BUNDLES, type RescanBundle, type ExportOptionTier } from "@/lib/stripe";
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 import { ExportModal } from "@/components/tracking/export-modal";
+import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -123,6 +124,10 @@ interface TrackPageClientProps {
     rescan_credits: number;
     mutuals: number;
     unlimited_export?: boolean;
+    scan_included: number;
+    scan_purchased: number;
+    scan_weekly_allowance: number;
+    scan_refresh_at: string | null;
   };
 }
 
@@ -232,13 +237,26 @@ export default function TrackPageClient({
         return;
       }
 
-      // ─── START tracking (already paid — no prompt needed) ───
+      // ─── START tracking — confirm the current account-size scan cost ───
       if (!userEmail) return;
+
+      const requiredCredits = scanCreditsForFollowingCount(
+        target.following_count
+      );
+      const approved = window.confirm(
+        `Automatic count checks are free. When @${target.username} needs a complete scan, it currently uses ${requiredCredits} ${requiredCredits === 1 ? "scan credit" : "scan credits"}. Approve and resume monitoring?`
+      );
+      if (!approved) return;
 
       const res = await fetch("/api/instagram/track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id, email: userEmail }),
+        body: JSON.stringify({
+          targetId: target.id,
+          email: userEmail,
+          scanCreditsConfirmed: true,
+          quotedScanCredits: requiredCredits,
+        }),
       });
       const data = await res.json();
 
@@ -321,6 +339,7 @@ export default function TrackPageClient({
           setCredits((c) => ({
             ...c,
             rescan_credits: c.rescan_credits + added,
+            scan_purchased: c.scan_purchased + added,
           }));
           setShowRescanModal(false);
           return;
@@ -376,20 +395,34 @@ export default function TrackPageClient({
       window.alert("Tracking is paused for this account. Please resume tracking before running a rescan.");
       return;
     }
+    const requiredCredits = scanCreditsForFollowingCount(
+      target.following_count
+    );
     track("rescan_clicked", {
       username: target.username,
-      has_credit: credits.rescan_credits > 0,
+      has_credit: credits.rescan_credits >= requiredCredits,
+      required_credits: requiredCredits,
     });
-    if (credits.rescan_credits <= 0) {
+    if (credits.rescan_credits < requiredCredits) {
       setShowRescanModal(true);
       return;
     }
+    const approved = window.confirm(
+      `@${target.username} follows ${target.following_count.toLocaleString()} accounts. This complete scan will use ${requiredCredits} ${requiredCredits === 1 ? "scan credit" : "scan credits"}. Continue?`
+    );
+    if (!approved) return;
     setRescanning(true);
     try {
+      const requestId = crypto.randomUUID();
       const res = await fetch("/api/instagram/rescan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetId: target.id }),
+        body: JSON.stringify({
+          targetId: target.id,
+          requestId,
+          scanCreditsConfirmed: true,
+          quotedScanCredits: requiredCredits,
+        }),
       });
       const data = await res.json();
       if (res.status === 402 && data.needsPurchase) {
@@ -397,13 +430,26 @@ export default function TrackPageClient({
         return;
       }
       if (!res.ok) {
+        if (data.quote?.followingCount) {
+          setTarget((current) =>
+            current
+              ? { ...current, following_count: data.quote.followingCount }
+              : current
+          );
+        }
         window.alert(data.error || "Rescan failed");
         return;
       }
-      setCredits((c) => ({
-        ...c,
-        rescan_credits: Math.max(0, c.rescan_credits - 1),
-      }));
+      if (data.credits) {
+        setCredits((c) => ({
+          ...c,
+          rescan_credits: data.credits.total,
+          scan_included: data.credits.included,
+          scan_purchased: data.credits.purchased,
+          scan_weekly_allowance: data.credits.weeklyAllowance,
+          scan_refresh_at: data.credits.refreshAt,
+        }));
+      }
       track("rescan_completed", { username: target.username });
       await loadData();
     } catch {
@@ -414,6 +460,9 @@ export default function TrackPageClient({
   };
 
   const hasExportAccess = Boolean(credits.unlimited_export || credits.export > 0);
+  const requiredScanCredits = target
+    ? scanCreditsForFollowingCount(target.following_count)
+    : 1;
 
   const handleExport = async () => {
     if (!target || exporting) return;
@@ -539,7 +588,7 @@ export default function TrackPageClient({
 
   // ─── Post-payment success handling ───
   // Stripe redirects here with ?session_id=...&success=true. We verify the
-  // session, activate monitoring, and establish the baseline.
+  // session, then route a selected target through scan-credit confirmation.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
@@ -556,7 +605,13 @@ export default function TrackPageClient({
         });
         const data = await res.json();
         if (data?.success) {
-          window.alert("Payment confirmed — tracking is now active. A full scan is running to establish your baseline.");
+          if (data.needsScanConfirmation && data.targetId && data.username) {
+            router.replace(
+              `/app/add-account?username=${encodeURIComponent(data.username)}&targetId=${encodeURIComponent(data.targetId)}&postPurchase=1`
+            );
+            return;
+          }
+          window.alert("Payment confirmed. Review the account's scan cost before monitoring begins.");
           // Reload to show the latest monitoring state + events.
           await loadData();
         }
@@ -569,7 +624,7 @@ export default function TrackPageClient({
         window.history.replaceState({}, "", url.toString());
       }
     })();
-  }, [loadData]);
+  }, [loadData, router]);
 
   // ─── One-time purchase success handling ───
   // Stripe returns here with ?purchase=...&success=true. Poll /api/account a
@@ -791,9 +846,9 @@ export default function TrackPageClient({
                     <Badge variant="mono" size="sm">
                       Paused
                     </Badge>
-                  ) : credits.rescan_credits > 0 ? (
+                  ) : credits.rescan_credits >= requiredScanCredits ? (
                     <Badge variant="lime" size="sm">
-                      {credits.rescan_credits} available
+                      {credits.rescan_credits} credits
                     </Badge>
                   ) : null}
                 </div>
@@ -801,7 +856,7 @@ export default function TrackPageClient({
                 <p className="text-xs text-[#555555] mt-1">
                   {!target.monitoring_enabled
                     ? "Tracking is currently paused. Resume to run on-demand rescans."
-                    : "Skip the 48h wait and check for changes immediately."}
+                    : `A complete scan uses ${requiredScanCredits} ${requiredScanCredits === 1 ? "credit" : "credits"} at this account's current size.`}
                 </p>
               </div>
 
@@ -819,23 +874,23 @@ export default function TrackPageClient({
                 ) : (
                   <>
                     <Button
-                      variant={credits.rescan_credits > 0 ? "primary" : "secondary"}
+                      variant={credits.rescan_credits >= requiredScanCredits ? "primary" : "secondary"}
                       size="sm"
-                      onClick={credits.rescan_credits > 0 ? handleRescan : () => setShowRescanModal(true)}
+                      onClick={credits.rescan_credits >= requiredScanCredits ? handleRescan : () => setShowRescanModal(true)}
                       isLoading={rescanning}
                       fullWidth
                     >
-                      {credits.rescan_credits > 0
-                        ? `Rescan now (${credits.rescan_credits} left)`
-                        : "Buy a rescan pack"}
+                      {credits.rescan_credits >= requiredScanCredits
+                        ? `Rescan now · Uses ${requiredScanCredits}`
+                        : "Add scan credits"}
                     </Button>
-                    {credits.rescan_credits > 0 && (
+                    {credits.rescan_credits >= requiredScanCredits && (
                       <button
                         type="button"
                         onClick={() => setShowRescanModal(true)}
                         className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
                       >
-                        + Buy more rescans (from $0.67/ea)
+                        + Buy more scan credits
                       </button>
                     )}
                   </>
@@ -1115,6 +1170,8 @@ export default function TrackPageClient({
         open={showRescanModal}
         onClose={() => setShowRescanModal(false)}
         username={target?.username || username}
+        requiredCredits={requiredScanCredits}
+        currentBalance={credits.rescan_credits}
         onSelectBundle={handleSelectBundle}
         loading={purchasingBundle}
       />

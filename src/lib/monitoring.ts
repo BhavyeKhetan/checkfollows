@@ -27,6 +27,12 @@ import type {
 } from "@/lib/instagram/provider";
 import { ownerIdentityFromScan } from "@/lib/target-profile";
 import { shouldRunAutomatedFollowingScan } from "@/lib/monitoring-policy";
+import {
+  completeScanCreditReservation,
+  refundScanCreditReservation,
+  reserveUserScanCredits,
+  scanCreditsForFollowingCount,
+} from "@/lib/scan-credits";
 
 // ─── Config ───────────────────────────────────────────────
 
@@ -784,6 +790,7 @@ export async function processDueScans(): Promise<{
   unchanged: number;
   failed: number;
   suspect: number;
+  creditBlocked: number;
   results: ScanResult[];
 }> {
   const supabase = createServerClient();
@@ -798,13 +805,17 @@ export async function processDueScans(): Promise<{
   // explicitly paused (user_paused = true) are excluded.
   const { data: paidSubs } = await supabase
     .from("subscriptions")
-    .select("target_id")
+    .select("id, target_id, user_id, scan_credit_auto_limit, scan_credit_consent_at")
     .eq("active", true)
     .eq("user_paused", false)
     .not("stripe_subscription_id", "is", null);
 
   const paidTargetIds = new Set(
     (paidSubs || [])
+      .filter(
+        (subscription) =>
+          !!subscription.user_id && !!subscription.scan_credit_consent_at
+      )
       .map((s) => s.target_id)
       .filter((id): id is string => !!id)
   );
@@ -824,8 +835,17 @@ export async function processDueScans(): Promise<{
 
   const eligibleIds = eligibleTargets.map((t) => t.id);
   if (eligibleIds.length === 0) {
-    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, results: [] };
+    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, creditBlocked: 0, results: [] };
   }
+
+  const { data: snapshotRows } = await supabase
+    .from("follow_snapshots")
+    .select("target_id")
+    .in("target_id", eligibleIds)
+    .eq("snapshot_type", "following");
+  const targetsWithBaseline = new Set(
+    (snapshotRows || []).map((snapshot) => snapshot.target_id)
+  );
 
   // ─── Atomic claim (concurrency-safe) ─────────────────
   // The hourly Supabase scheduler AND the daily Vercel cron can overlap.
@@ -845,7 +865,7 @@ export async function processDueScans(): Promise<{
   );
 
   if (batchTargets.length === 0) {
-    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, results: [] };
+    return { scanned: 0, unchanged: 0, failed: 0, suspect: 0, creditBlocked: 0, results: [] };
   }
 
   const results: ScanResult[] = [];
@@ -853,11 +873,17 @@ export async function processDueScans(): Promise<{
   let unchanged = 0;
   let failed = 0;
   let suspect = 0;
+  let creditBlocked = 0;
+  const creditReservations = new Map<
+    string,
+    { reservationId: string; userId: string; units: number }
+  >();
 
   // Automated monitoring is following-only and count-gated. A cheap profile
-  // lookup runs first; the paid full-list Actor runs only for targets whose
-  // absolute following count changed. Paid manual rescans call scanFollowing()
-  // directly and intentionally bypass this gate.
+  // lookup runs first; the paid full-list Actor runs only when a baseline is
+  // missing or the absolute following count changed, and only after an atomic
+  // account-size credit reservation. Paid manual rescans use the same wallet
+  // but intentionally bypass the count-change gate.
   for (let i = 0; i < batchTargets.length; i += BATCH_SIZE) {
     const batch = batchTargets.slice(i, i + BATCH_SIZE);
     const batchUsernames = batch.map((t) => t.username);
@@ -912,6 +938,7 @@ export async function processDueScans(): Promise<{
       }
 
       if (
+        targetsWithBaseline.has(target.id) &&
         !shouldRunAutomatedFollowingScan(
           target.following_count,
           profile.followingCount
@@ -983,6 +1010,91 @@ export async function processDueScans(): Promise<{
           countRefreshError.message
         );
       }
+
+      const requiredCredits = scanCreditsForFollowingCount(
+        profile.followingCount
+      );
+      const subscribers = (paidSubs || []).filter(
+        (subscription) =>
+          subscription.target_id === target.id &&
+          !!subscription.user_id &&
+          !!subscription.scan_credit_consent_at
+      );
+      let sponsor:
+        | { reservationId: string; userId: string; units: number }
+        | undefined;
+
+      for (const subscription of subscribers) {
+        if (
+          !subscription.user_id ||
+          (subscription.scan_credit_auto_limit || 0) < requiredCredits
+        ) {
+          await supabase
+            .from("subscriptions")
+            .update({
+              scan_credit_blocked_at: new Date().toISOString(),
+              scan_credit_required: requiredCredits,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", subscription.id);
+          continue;
+        }
+
+        const reservation = await reserveUserScanCredits({
+          userId: subscription.user_id,
+          targetId: target.id,
+          units: requiredCredits,
+          reason: targetsWithBaseline.has(target.id) ? "automatic" : "baseline",
+          idempotencyKey: `automatic:${target.id}:${claimUntil}`,
+        });
+        if (reservation.reserved && reservation.reservationId) {
+          sponsor = {
+            reservationId: reservation.reservationId,
+            userId: subscription.user_id,
+            units: requiredCredits,
+          };
+          break;
+        }
+
+        await supabase
+          .from("subscriptions")
+          .update({
+            scan_credit_blocked_at: new Date().toISOString(),
+            scan_credit_required: requiredCredits,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", subscription.id);
+      }
+
+      if (!sponsor) {
+        const nextCheckAt = new Date(
+          Date.now() +
+            (target.monitoring_interval_hours || DEFAULT_INTERVAL_HOURS) *
+              60 *
+              60 *
+              1000
+        ).toISOString();
+        await supabase
+          .from("instagram_targets")
+          .update({ next_scan_at: nextCheckAt, updated_at: new Date().toISOString() })
+          .eq("id", target.id);
+        await supabase.from("scans").insert({
+          target_id: target.id,
+          status: "skipped",
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          provider: provider.name,
+          error_message: `Scan credits required: ${requiredCredits}`,
+          api_cost: 0,
+          target_count: 1,
+          profiles_returned: 0,
+          suspect: false,
+        });
+        creditBlocked++;
+        continue;
+      }
+
+      creditReservations.set(target.id, sponsor);
       changedTargets.push(target);
     }
 
@@ -998,6 +1110,14 @@ export async function processDueScans(): Promise<{
     if (!batchResult.success) {
       // Entire batch failed — mark all as failed
       for (const target of changedTargets) {
+        const reservation = creditReservations.get(target.id);
+        if (reservation) {
+          await refundScanCreditReservation(
+            reservation.reservationId,
+            "automatic_batch_failed"
+          );
+          creditReservations.delete(target.id);
+        }
         const { data: failScan } = await supabase
           .from("scans")
           .insert({
@@ -1070,30 +1190,97 @@ export async function processDueScans(): Promise<{
         .single();
 
       if (!scan) {
+        const reservation = creditReservations.get(target.id);
+        if (reservation) {
+          await refundScanCreditReservation(
+            reservation.reservationId,
+            "scan_record_failed"
+          );
+          creditReservations.delete(target.id);
+        }
         results.push({ scanId: "", targetId: target.id, status: "failed", events: [], error: "Failed to create scan" });
         failed++;
         continue;
       }
 
-      const result = await processTargetDiff(target, scan, entries);
+      let reservation = creditReservations.get(target.id);
+      let result: ScanResult;
+      try {
+        result = await processTargetDiff(target, scan, entries);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to process scan";
+        if (reservation) {
+          await refundScanCreditReservation(
+            reservation.reservationId,
+            "automatic_processing_failed"
+          );
+          creditReservations.delete(target.id);
+          reservation = undefined;
+        }
+        await supabase
+          .from("scans")
+          .update({
+            status: "failed",
+            error_message: message,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", scan.id);
+        result = {
+          scanId: scan.id,
+          targetId: target.id,
+          status: "failed",
+          events: [],
+          error: message,
+        };
+      }
       results.push(result);
 
       if (result.status === "completed") {
+        if (reservation) {
+          await completeScanCreditReservation(
+            reservation.reservationId,
+            result.scanId
+          );
+          creditReservations.delete(target.id);
+        }
+        await supabase
+          .from("subscriptions")
+          .update({
+            scan_credit_blocked_at: null,
+            scan_credit_required: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("target_id", target.id)
+          .eq("active", true)
+          .gte("scan_credit_auto_limit", reservation?.units || 1);
         scanned++;
       } else if (result.status === "suspect") {
+        if (reservation) {
+          await refundScanCreditReservation(
+            reservation.reservationId,
+            "automatic_scan_incomplete"
+          );
+          creditReservations.delete(target.id);
+        }
         suspect++;
       } else {
+        if (reservation) {
+          await refundScanCreditReservation(
+            reservation.reservationId,
+            "automatic_scan_failed"
+          );
+          creditReservations.delete(target.id);
+        }
         failed++;
       }
     }
   }
 
-  return { scanned, unchanged, failed, suspect, results };
+  return { scanned, unchanged, failed, suspect, creditBlocked, results };
 }
 
 // ─── Preview Lookup (unpaid landing-page search) ─────────
-
-const PREVIEW_CAP = parseInt(process.env.PREVIEW_FOLLOW_CAP || "10", 10);
 
 /**
  * Lightweight preview for unpaid landing-page searches.
@@ -1130,9 +1317,8 @@ export async function previewLookup(username: string): Promise<{
   // Upsert target (or update existing) so we have a record
   const target = await upsertInstagramTarget(profile);
 
-  // Follow/followers lists are NOT fetched here — they require the expensive
-  // dead00 actor. The frontend can lazily fetch capped previews on-demand
-  // via /api/instagram/follows?preview=true&username=...
+  // Follow/follower membership lists are never fetched for public preview.
+  // Complete following lists are restricted to server-enforced credit paths.
 
   return {
     profile,

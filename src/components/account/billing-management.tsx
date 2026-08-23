@@ -95,8 +95,8 @@ export function BillingManagement({
   const price = useMemo(() => {
     const base =
       tier === "premium"
-        ? cadence === "weekly" ? 12.99 : 64.99
-        : cadence === "weekly" ? 9.99 : 49.99;
+        ? cadence === "weekly" ? 12.99 : 129
+        : cadence === "weekly" ? 9.99 : 99;
     return base + (emailAlerts ? (cadence === "weekly" ? 2 : 10) : 0);
   }, [cadence, tier, emailAlerts]);
 

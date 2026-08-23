@@ -1,4 +1,5 @@
 import { createServerClient } from "@/lib/supabase/server";
+import { getScanCreditSummary } from "@/lib/scan-credits";
 
 /**
  * One-time upsell credits: history export, on-demand rescan, mutual follows.
@@ -31,8 +32,8 @@ export async function hasUnlimitedExports(userId: string): Promise<boolean> {
 }
 
 /**
- * Ensures every account on a Basic or Premium plan gets exactly 1 free rescan credit.
- * Completely idempotent and self-healing against concurrent race conditions.
+ * Legacy entrypoint retained for webhook callers. It now synchronizes the
+ * subscriber's weekly pooled scan-credit wallet.
  */
 export async function ensureFreePlanCredits(userId: string): Promise<void> {
   const ongoing = inFlightGrants.get(userId);
@@ -40,40 +41,9 @@ export async function ensureFreePlanCredits(userId: string): Promise<void> {
 
   const promise = (async () => {
     try {
-      const supabase = createServerClient();
-      const { data: sub } = await supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("active", true)
-        .not("stripe_subscription_id", "is", null)
-        .limit(1)
-        .maybeSingle();
-
-      if (!sub) return;
-
-      const { data: existingRows } = await supabase
-        .from("one_time_purchases")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("stripe_session_id", "plan_free_rescan")
-        .order("created_at", { ascending: true });
-
-      if (!existingRows || existingRows.length === 0) {
-        await supabase.from("one_time_purchases").insert({
-          user_id: userId,
-          kind: "rescan_credits",
-          credits: 1,
-          consumed: 0,
-          stripe_session_id: "plan_free_rescan",
-        });
-      } else if (existingRows.length > 1) {
-        // Remove any duplicates caused by prior race conditions
-        const duplicateIds = existingRows.slice(1).map((r) => r.id);
-        await supabase.from("one_time_purchases").delete().in("id", duplicateIds);
-      }
+      await getScanCreditSummary(userId);
     } catch (err) {
-      console.error("Failed to ensure free plan rescan credits:", err);
+      console.error("Failed to synchronize plan scan credits:", err);
     } finally {
       inFlightGrants.delete(userId);
     }
@@ -88,7 +58,7 @@ export async function getRemainingCredits(
   kind: "export" | "rescan_credits" | "mutuals"
 ): Promise<number> {
   if (kind === "rescan_credits") {
-    await ensureFreePlanCredits(userId);
+    return (await getScanCreditSummary(userId))?.total || 0;
   }
   if (kind === "export" && (await hasUnlimitedExports(userId))) {
     return 999999;
@@ -111,12 +81,16 @@ export interface CreditsSummary {
   rescan_credits: number;
   mutuals: number;
   unlimited_export: boolean;
+  scan_included: number;
+  scan_purchased: number;
+  scan_weekly_allowance: number;
+  scan_refresh_at: string | null;
 }
 
 export async function getCreditsSummary(
   userId: string
 ): Promise<CreditsSummary> {
-  await ensureFreePlanCredits(userId);
+  const scanCredits = await getScanCreditSummary(userId);
 
   const supabase = createServerClient();
   const { data } = await supabase
@@ -127,7 +101,7 @@ export async function getCreditsSummary(
   let hasUnlimitedExp = false;
   const summary: Record<"export" | "rescan_credits" | "mutuals", number> = {
     export: 0,
-    rescan_credits: 0,
+    rescan_credits: scanCredits?.total || 0,
     mutuals: 0,
   };
 
@@ -135,7 +109,7 @@ export async function getCreditsSummary(
     const kind = row.kind;
     if (kind === "export_unlimited") {
       hasUnlimitedExp = true;
-    } else if (kind in summary) {
+    } else if (kind !== "rescan_credits" && kind in summary) {
       summary[kind as keyof typeof summary] += Math.max(0, row.credits - row.consumed);
     }
   }
@@ -143,6 +117,10 @@ export async function getCreditsSummary(
   return {
     ...summary,
     unlimited_export: hasUnlimitedExp,
+    scan_included: scanCredits?.included || 0,
+    scan_purchased: scanCredits?.purchased || 0,
+    scan_weekly_allowance: scanCredits?.weeklyAllowance || 0,
+    scan_refresh_at: scanCredits?.refreshAt || null,
   };
 }
 
@@ -158,6 +136,10 @@ export async function consumeCredit(
   if (kind === "export" && (await hasUnlimitedExports(userId))) {
     return true;
   }
+
+  // Full scans use multi-unit atomic reservations in scan-credits.ts. Keep
+  // this legacy function limited to the fixed-price export/mutual add-ons.
+  if (kind === "rescan_credits") return false;
 
   const supabase = createServerClient();
   const { data: purchases } = await supabase

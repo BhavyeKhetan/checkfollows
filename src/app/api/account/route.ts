@@ -25,7 +25,7 @@ export async function GET() {
   const { data: subs, error: subsError } = await supabase
     .from("subscriptions")
     .select(
-      "id, target_id, plan, tier, active, user_paused, removed_at, stripe_subscription_id, created_at, updated_at"
+      "id, target_id, plan, tier, active, user_paused, removed_at, stripe_subscription_id, scan_credit_auto_limit, scan_credit_consent_at, scan_credit_blocked_at, scan_credit_required, created_at, updated_at"
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
@@ -52,7 +52,15 @@ export async function GET() {
       user: { id: user.id, email: user.email },
       hasActiveSubscription: false,
       subscriptions: [],
-      credits: { export: 0, rescan_credits: 0, mutuals: 0 },
+      credits: {
+        export: 0,
+        rescan_credits: 0,
+        mutuals: 0,
+        scan_included: 0,
+        scan_purchased: 0,
+        scan_weekly_allowance: 0,
+        scan_refresh_at: null,
+      },
       spikeThreshold: 5,
       lockedTrackedAccountCount: targetIds.length,
       canRenew: paidSubs.length > 0,
@@ -96,6 +104,10 @@ export async function GET() {
     tier: s.tier,
     active: s.active,
     user_paused: s.user_paused,
+    scan_credit_auto_limit: s.scan_credit_auto_limit,
+    scan_credit_consent_at: s.scan_credit_consent_at,
+    scan_credit_blocked_at: s.scan_credit_blocked_at,
+    scan_credit_required: s.scan_credit_required,
     created_at: s.created_at,
     updated_at: s.updated_at,
     target: s.target_id

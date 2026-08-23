@@ -44,6 +44,8 @@ export async function POST(request: Request) {
 
     const targetId = typeof body.targetId === "string" ? body.targetId : undefined;
     const username = typeof body.username === "string" ? body.username : undefined;
+    const requestedReturnPath =
+      typeof body.returnPath === "string" ? body.returnPath : "";
 
     let bundle: RescanBundle | undefined;
     let exportTier: ExportOptionTier | undefined;
@@ -101,9 +103,17 @@ export async function POST(request: Request) {
     if (targetId) metadata.target_id = targetId;
     if (username) metadata.username = username;
 
-    const returnPath = username
-      ? `/track/${encodeURIComponent(username.replace(/^@/, ""))}`
-      : "/dashboard";
+    const returnPath = requestedReturnPath.startsWith("/app/add-account")
+      ? requestedReturnPath
+      : username
+        ? `/track/${encodeURIComponent(username.replace(/^@/, ""))}`
+        : "/dashboard";
+    const successUrl = new URL(returnPath, baseUrl);
+    successUrl.searchParams.set("purchase", kind);
+    successUrl.searchParams.set("success", "true");
+    const cancelUrl = new URL(returnPath, baseUrl);
+    cancelUrl.searchParams.set("purchase", kind);
+    cancelUrl.searchParams.set("canceled", "true");
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -117,8 +127,8 @@ export async function POST(request: Request) {
       payment_intent_data: customerId
         ? { setup_future_usage: "on_session" }
         : undefined,
-      success_url: `${baseUrl}${returnPath}?purchase=${kind}&success=true`,
-      cancel_url: `${baseUrl}${returnPath}?purchase=${kind}&canceled=true`,
+      success_url: successUrl.toString(),
+      cancel_url: cancelUrl.toString(),
       metadata,
     });
 

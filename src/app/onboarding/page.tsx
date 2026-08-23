@@ -37,7 +37,7 @@ const RELATIONSHIP_OPTIONS = [
 
 const FEATURES = [
   "Complete chronological following list",
-  "Every-other-day monitoring with automatic rescan",
+  "Free every-other-day Instagram count checks",
   "New-follow & unfollow change alerts",
   "Full history timeline per account",
   "No Instagram login required",
@@ -47,7 +47,7 @@ const FEATURES = [
 const PAYWALL_FAQS = [
   {
     q: "How does it work?",
-    a: "We scan the account you searched and save it as a baseline, then automatically rescan every 48 hours to detect new follows and unfollows.",
+    a: "After payment, you review the account's current following count and exact complete-scan credit cost. Free count checks run every 48 hours; complete scans use your pooled credits only when needed.",
   },
   {
     q: "Will they know I checked?",
@@ -59,8 +59,8 @@ const PAYWALL_FAQS = [
   },
 ];
 
-const BASE_PRICES: Record<Cadence, number> = { weekly: 9.99, quarterly: 49.99 };
-const PREMIUM_PRICES: Record<Cadence, number> = { weekly: 12.99, quarterly: 64.99 };
+const BASE_PRICES: Record<Cadence, number> = { weekly: 9.99, quarterly: 99 };
+const PREMIUM_PRICES: Record<Cadence, number> = { weekly: 12.99, quarterly: 129 };
 const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
 const PERIOD: Record<Cadence, string> = { weekly: "/week", quarterly: "/week" };
 
@@ -140,14 +140,22 @@ function OnboardingContent() {
   // After payment: signed-in users go straight to their account; everyone
   // else completes a quick signup so we can tie the subscription to them.
   const redirectAfterPayment = async (params: URLSearchParams) => {
+    const paidUsername = params.get("username") || "";
+    const paidTargetId = params.get("targetId") || "";
+    const confirmationPath =
+      paidUsername && paidTargetId
+        ? `/app/add-account?username=${encodeURIComponent(paidUsername)}&targetId=${encodeURIComponent(paidTargetId)}&postPurchase=1`
+        : "/dashboard?subscribed=1";
     try {
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        track("post_purchase_redirect", { destination: "dashboard" });
-        router.replace("/dashboard");
+        track("post_purchase_redirect", {
+          destination: paidTargetId ? "scan_confirmation" : "dashboard",
+        });
+        router.replace(confirmationPath);
         return;
       }
     } catch {
@@ -776,7 +784,7 @@ function PaywallStep({
           >
             Quarterly
             <span className="text-[10px] font-bold bg-[#E7F256] text-[#121212] px-1.5 py-0.5 rounded-full">
-              Save 62%
+              Save 24%
             </span>
           </button>
         </div>
@@ -801,7 +809,7 @@ function PaywallStep({
           </div>
           <div className="flex items-center gap-1.5">
             <Badge variant="lime" size="sm">
-              <Zap className="w-3 h-3" /> {cadence === "quarterly" ? "SAVE 62%" : "60% OFF"}
+              <Zap className="w-3 h-3" /> {cadence === "quarterly" ? "SAVE 24%" : "60% OFF"}
             </Badge>
             {cadence === "quarterly" && (
               <Badge variant="lime" size="sm">
@@ -897,6 +905,12 @@ function PaywallStep({
 
         {/* Features */}
         <ul className="mt-5 space-y-2.5 border-t border-[#E2E2DC] pt-5">
+          <li className="flex items-start gap-2.5 text-sm text-[#555555]">
+            <span className="w-5 h-5 rounded-full bg-[#E7F256] border border-black/10 flex items-center justify-center shrink-0 mt-0.5">
+              <Check className="w-3 h-3 text-[#121212]" strokeWidth={3} />
+            </span>
+            <span><strong>{tier === "premium" ? 18 : 12} scan credits included every week</strong></span>
+          </li>
           {FEATURES.map((f) => (
             <li key={f} className="flex items-start gap-2.5 text-sm text-[#555555]">
               <span className="w-5 h-5 rounded-full bg-[#E7F256] border border-black/10 flex items-center justify-center shrink-0 mt-0.5">

@@ -5,15 +5,21 @@ import {
   ownsTarget,
 } from "@/lib/supabase/auth";
 import { scanFollowing } from "@/lib/monitoring";
-import { getRemainingCredits, consumeCredit } from "@/lib/purchases";
+import {
+  completeScanCreditReservation,
+  getScanCreditSummary,
+  refundScanCreditReservation,
+  reserveUserScanCredits,
+  scanCreditsForFollowingCount,
+} from "@/lib/scan-credits";
 
 /**
  * POST /api/instagram/rescan
  * Body: { targetId }
  *
- * Runs an immediate scan of the tracked account, consuming a one-time rescan
- * credit. Requires an active subscription. The credit must exist before the
- * (paid) Apify scan is triggered.
+ * Runs an immediate full scan. The server calculates the account-size cost,
+ * atomically reserves that many pooled scan credits, and refunds the exact
+ * reservation if the provider does not return a complete trusted snapshot.
  */
 export async function POST(request: Request) {
   try {
@@ -30,6 +36,10 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const targetId = typeof body.targetId === "string" ? body.targetId : "";
+    const requestId =
+      typeof body.requestId === "string" && /^[a-zA-Z0-9_-]{8,100}$/.test(body.requestId)
+        ? body.requestId
+        : crypto.randomUUID();
     if (!targetId) {
       return NextResponse.json({ error: "targetId is required" }, { status: 400 });
     }
@@ -52,7 +62,7 @@ export async function POST(request: Request) {
 
     const { data: targetRow } = await supabase
       .from("instagram_targets")
-      .select("monitoring_enabled")
+      .select("monitoring_enabled, following_count, follower_count")
       .eq("id", targetId)
       .maybeSingle();
 
@@ -66,25 +76,120 @@ export async function POST(request: Request) {
       );
     }
 
-    // Consume the credit BEFORE the paid scan.
-    if ((await getRemainingCredits(user.id, "rescan_credits")) <= 0) {
+    if (!targetRow) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    const requiredCredits = scanCreditsForFollowingCount(
+      targetRow.following_count
+    );
+    const quotedScanCredits = Number.isInteger(body.quotedScanCredits)
+      ? body.quotedScanCredits
+      : null;
+    const credits = await getScanCreditSummary(user.id);
+    const quote = {
+      followingCount: targetRow.following_count,
+      followerCount: targetRow.follower_count,
+      requiredScanCredits: requiredCredits,
+      credits,
+      canAfford: (credits?.total || 0) >= requiredCredits,
+    };
+
+    if (body.scanCreditsConfirmed !== true || quotedScanCredits !== requiredCredits) {
       return NextResponse.json(
         {
-          error: "On-demand rescans are a paid add-on. Please purchase a rescan to continue.",
+          error:
+            quotedScanCredits !== null && quotedScanCredits !== requiredCredits
+              ? "This account's following count changed. Review the updated scan cost."
+              : "Confirm the scan credit cost before rescanning.",
+          needsScanConfirmation: true,
+          quote,
+        },
+        { status: 409 }
+      );
+    }
+
+    const { data: runningScan } = await supabase
+      .from("scans")
+      .select("id")
+      .eq("target_id", targetId)
+      .eq("status", "running")
+      .limit(1)
+      .maybeSingle();
+    if (runningScan) {
+      return NextResponse.json(
+        { error: "A complete scan is already running for this account." },
+        { status: 409 }
+      );
+    }
+
+    if (!credits || credits.total < requiredCredits) {
+      return NextResponse.json(
+        {
+          error: `This scan needs ${requiredCredits} scan credits. Add credits to continue.`,
           needsPurchase: true,
+          quote,
         },
         { status: 402 }
       );
     }
-    await consumeCredit(user.id, "rescan_credits");
 
-    const result = await scanFollowing(targetId);
+    const reservation = await reserveUserScanCredits({
+      userId: user.id,
+      targetId,
+      units: requiredCredits,
+      reason: "manual",
+      idempotencyKey: `manual:${user.id}:${requestId}`,
+    });
+    if (!reservation.reserved || !reservation.reservationId) {
+      if (reservation.reservationId) {
+        return NextResponse.json(
+          { error: "This scan request is already running or was already processed." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        {
+          error: `This scan needs ${requiredCredits} scan credits. Add credits to continue.`,
+          needsPurchase: true,
+          quote: { ...quote, credits: await getScanCreditSummary(user.id) },
+        },
+        { status: 402 }
+      );
+    }
+
+    let result;
+    try {
+      result = await scanFollowing(targetId);
+      if (result.status === "completed") {
+        await completeScanCreditReservation(
+          reservation.reservationId,
+          result.scanId
+        );
+      } else {
+        await refundScanCreditReservation(
+          reservation.reservationId,
+          result.status === "suspect" ? "scan_incomplete" : "scan_failed"
+        );
+      }
+    } catch (scanError) {
+      await refundScanCreditReservation(
+        reservation.reservationId,
+        "scan_exception"
+      );
+      throw scanError;
+    }
+
+    const updatedCredits = await getScanCreditSummary(user.id);
 
     return NextResponse.json({
       success: result.status === "completed",
       status: result.status,
       events: result.events,
       error: result.error,
+      chargedCredits: result.status === "completed" ? requiredCredits : 0,
+      refundedCredits: result.status === "completed" ? 0 : requiredCredits,
+      credits: updatedCredits,
     });
   } catch (error) {
     console.error("Rescan error:", error);

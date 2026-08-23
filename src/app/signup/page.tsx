@@ -18,6 +18,7 @@ function SignupContent() {
 
   const prefillEmail = searchParams.get("email") || "";
   const username = searchParams.get("username") || "";
+  const targetId = searchParams.get("targetId") || "";
 
   const [email, setEmail] = useState(prefillEmail);
   const [password, setPassword] = useState("");
@@ -101,7 +102,13 @@ function SignupContent() {
         });
       }
 
-      router.replace("/dashboard");
+      if (username && targetId) {
+        router.replace(
+          `/app/add-account?username=${encodeURIComponent(username)}&targetId=${encodeURIComponent(targetId)}&postPurchase=1`
+        );
+      } else {
+        router.replace("/dashboard?subscribed=1");
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       track("signup_error", { error: "network" });

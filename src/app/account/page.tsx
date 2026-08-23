@@ -388,6 +388,9 @@ export default function AccountPage() {
                   <p className="text-xs text-[#777777] mt-1">
                     Pause any tracked account to free its slot. Add as many concurrent slots as you need.
                   </p>
+                  <p className="text-xs font-semibold text-[#777777] mt-1">
+                    Additional slots share your existing scan-credit balance; they do not add scan credits.
+                  </p>
                 </div>
               </div>
 
@@ -470,20 +473,22 @@ export default function AccountPage() {
           </div>
         </Card>
 
-        {/* One-time add-ons (credits) */}
+        {/* Scan balance + one-time add-ons */}
         <Card variant="subtle" padding="lg">
-          <h2 className="text-base font-extrabold text-[#121212] mb-1">One-time add-ons</h2>
+          <h2 className="text-base font-extrabold text-[#121212] mb-1">Credits and add-ons</h2>
           <p className="text-xs text-[#555555] mb-4">
-            Buy and use add-ons from any tracked account&apos;s page. Remaining balance:
+            Scan credits are shared across every tracked account. Included credits refresh weekly; purchased credits never expire.
           </p>
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-[#121212] shrink-0" />
               <div>
                 <div className="text-sm font-extrabold text-[#121212]">
-                  {data?.credits?.rescan_credits ?? 0} left
+                  {data?.credits?.rescan_credits ?? 0} available
                 </div>
-                <div className="text-xs text-[#555555]">On-demand rescans</div>
+                <div className="text-xs text-[#555555]">
+                  Scan credits · {data?.credits?.scan_weekly_allowance ?? 0} included weekly
+                </div>
               </div>
             </div>
             <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
@@ -569,8 +574,8 @@ function LockedAccount({
   const cycleLabel = cadence === "weekly" ? "first week" : "first 3-month billing cycle";
   const basePrice =
     tier === "premium"
-      ? cadence === "weekly" ? 12.99 : 64.99
-      : cadence === "weekly" ? 9.99 : 49.99;
+      ? cadence === "weekly" ? 12.99 : 129
+      : cadence === "weekly" ? 9.99 : 99;
   const alertsPrice = emailAlerts ? (cadence === "weekly" ? 2 : 10) : 0;
   const total = basePrice + alertsPrice;
 

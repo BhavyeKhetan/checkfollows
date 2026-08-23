@@ -104,6 +104,7 @@ async function runMonitor(request: Request) {
       unchanged: result.unchanged,
       failed: result.failed,
       suspect: result.suspect,
+      creditBlocked: result.creditBlocked,
       emailsSent,
       timestamp: new Date().toISOString(),
     });
