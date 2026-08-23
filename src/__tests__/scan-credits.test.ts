@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
+import {
+  availableScanCredits,
+  scanCreditsForFollowingCount,
+} from "@/lib/scan-credit-policy";
 
 describe("scan credit pricing", () => {
   it("charges one credit for accounts following up to 1,000 profiles", () => {
@@ -18,5 +21,13 @@ describe("scan credit pricing", () => {
   it("handles invalid counts without producing free scans", () => {
     expect(scanCreditsForFollowingCount(Number.NaN)).toBe(1);
     expect(scanCreditsForFollowingCount(-10)).toBe(1);
+  });
+
+  it("keeps purchased rescan credits separate from the automatic plan pool", () => {
+    const balances = { included: 18, purchased: 1 };
+
+    expect(availableScanCredits(balances, "manual")).toBe(1);
+    expect(availableScanCredits(balances, "automatic")).toBe(19);
+    expect(availableScanCredits(balances, "baseline")).toBe(19);
   });
 });

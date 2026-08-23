@@ -97,8 +97,9 @@ export default function TermsPage() {
           accounts. One scan credit covers up to 1,000 following profiles in a
           successful complete scan. The current cost is shown before you approve
           an account or request a rescan. Failed or incomplete scans are refunded.
-          Included credits refresh weekly and do not roll over; separately
-          purchased scan credits do not expire while your account remains open.
+          Included credits refresh weekly and do not roll over. On-demand
+          rescans use separately purchased credits, which do not expire while
+          your account remains open.
         </p>
       </LegalSection>
 

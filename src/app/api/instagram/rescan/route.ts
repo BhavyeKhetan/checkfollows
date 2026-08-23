@@ -6,6 +6,7 @@ import {
 } from "@/lib/supabase/auth";
 import { scanFollowing } from "@/lib/monitoring";
 import {
+  availableCreditsForReason,
   completeScanCreditReservation,
   getScanCreditSummary,
   refundScanCreditReservation,
@@ -18,7 +19,7 @@ import {
  * Body: { targetId }
  *
  * Runs an immediate full scan. The server calculates the account-size cost,
- * atomically reserves that many pooled scan credits, and refunds the exact
+ * atomically reserves that many purchased rescan credits, and refunds the exact
  * reservation if the provider does not return a complete trusted snapshot.
  */
 export async function POST(request: Request) {
@@ -92,7 +93,9 @@ export async function POST(request: Request) {
       followerCount: targetRow.follower_count,
       requiredScanCredits: requiredCredits,
       credits,
-      canAfford: (credits?.total || 0) >= requiredCredits,
+      canAfford:
+        !!credits &&
+        availableCreditsForReason(credits, "manual") >= requiredCredits,
     };
 
     if (body.scanCreditsConfirmed !== true || quotedScanCredits !== requiredCredits) {
@@ -123,7 +126,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!credits || credits.total < requiredCredits) {
+    if (
+      !credits ||
+      availableCreditsForReason(credits, "manual") < requiredCredits
+    ) {
       return NextResponse.json(
         {
           error: `This scan needs ${requiredCredits} scan credits. Add credits to continue.`,

@@ -3,10 +3,14 @@ import "server-only";
 import { createServerClient } from "@/lib/supabase/server";
 import type { PlanTier } from "@/lib/stripe";
 import {
+  availableScanCredits,
   INCLUDED_WEEKLY_SCAN_CREDITS,
 } from "@/lib/scan-credit-policy";
 
-export { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
+export {
+  availableScanCredits,
+  scanCreditsForFollowingCount,
+} from "@/lib/scan-credit-policy";
 
 export type ScanCreditReason = "baseline" | "automatic" | "manual";
 
@@ -17,6 +21,13 @@ export interface ScanCreditSummary {
   weeklyAllowance: number;
   refreshAt: string;
   tier: PlanTier;
+}
+
+export function availableCreditsForReason(
+  summary: Pick<ScanCreditSummary, "included" | "purchased">,
+  reason: ScanCreditReason
+): number {
+  return availableScanCredits(summary, reason);
 }
 
 export interface ScanCreditReservation {

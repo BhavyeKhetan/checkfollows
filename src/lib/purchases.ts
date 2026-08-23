@@ -58,7 +58,7 @@ export async function getRemainingCredits(
   kind: "export" | "rescan_credits" | "mutuals"
 ): Promise<number> {
   if (kind === "rescan_credits") {
-    return (await getScanCreditSummary(userId))?.total || 0;
+    return (await getScanCreditSummary(userId))?.purchased || 0;
   }
   if (kind === "export" && (await hasUnlimitedExports(userId))) {
     return 999999;
@@ -101,7 +101,9 @@ export async function getCreditsSummary(
   let hasUnlimitedExp = false;
   const summary: Record<"export" | "rescan_credits" | "mutuals", number> = {
     export: 0,
-    rescan_credits: scanCredits?.total || 0,
+    // On-demand rescans use purchased credits only. The weekly included pool
+    // remains available for automatic monitoring and must not inflate this UI.
+    rescan_credits: scanCredits?.purchased || 0,
     mutuals: 0,
   };
 

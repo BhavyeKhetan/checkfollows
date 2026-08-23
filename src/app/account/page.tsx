@@ -477,17 +477,17 @@ export default function AccountPage() {
         <Card variant="subtle" padding="lg">
           <h2 className="text-base font-extrabold text-[#121212] mb-1">Credits and add-ons</h2>
           <p className="text-xs text-[#555555] mb-4">
-            Scan credits are shared across every tracked account. Included credits refresh weekly; purchased credits never expire.
+            Automatic monitoring uses the weekly plan pool. Purchased rescan credits are separate and never expire.
           </p>
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="rounded-xl border border-[#E2E2DC] bg-white p-4 flex items-center gap-3">
               <RefreshCw className="w-5 h-5 text-[#121212] shrink-0" />
               <div>
                 <div className="text-sm font-extrabold text-[#121212]">
-                  {data?.credits?.rescan_credits ?? 0} available
+                  {data?.credits?.rescan_credits ?? 0} {(data?.credits?.rescan_credits ?? 0) === 1 ? "credit" : "credits"}
                 </div>
                 <div className="text-xs text-[#555555]">
-                  Scan credits · {data?.credits?.scan_weekly_allowance ?? 0} included weekly
+                  On-demand rescans
                 </div>
               </div>
             </div>

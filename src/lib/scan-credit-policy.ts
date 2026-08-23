@@ -6,6 +6,15 @@ export const INCLUDED_WEEKLY_SCAN_CREDITS: Record<PlanTier, number> = {
   premium: 18,
 };
 
+export function availableScanCredits(
+  balances: { included: number; purchased: number },
+  reason: "baseline" | "automatic" | "manual"
+): number {
+  return reason === "manual"
+    ? balances.purchased
+    : balances.included + balances.purchased;
+}
+
 export function scanCreditsForFollowingCount(followingCount: number): number {
   const normalized = Number.isFinite(followingCount)
     ? Math.max(0, Math.floor(followingCount))

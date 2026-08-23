@@ -443,7 +443,7 @@ export default function TrackPageClient({
       if (data.credits) {
         setCredits((c) => ({
           ...c,
-          rescan_credits: data.credits.total,
+          rescan_credits: data.credits.purchased,
           scan_included: data.credits.included,
           scan_purchased: data.credits.purchased,
           scan_weekly_allowance: data.credits.weeklyAllowance,
@@ -848,7 +848,7 @@ export default function TrackPageClient({
                     </Badge>
                   ) : credits.rescan_credits >= requiredScanCredits ? (
                     <Badge variant="lime" size="sm">
-                      {credits.rescan_credits} credits
+                      {credits.rescan_credits} {credits.rescan_credits === 1 ? "credit" : "credits"}
                     </Badge>
                   ) : null}
                 </div>

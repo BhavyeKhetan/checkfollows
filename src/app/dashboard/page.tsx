@@ -267,8 +267,9 @@ export default function DashboardPage() {
                   concurrent slots in use
                 </p>
                 <p className="text-xs font-semibold text-[var(--muted-foreground)]">
-                  <strong className="text-[var(--foreground)]">{data.credits.rescan_credits}</strong>{" "}
-                  scan credits available · {data.credits.scan_weekly_allowance} included weekly
+                  <strong className="text-[var(--foreground)]">{data.credits.scan_included}</strong>{" "}
+                  automatic scan credits left this week · {data.credits.rescan_credits}{" "}
+                  {data.credits.rescan_credits === 1 ? "rescan credit" : "rescan credits"}
                 </p>
               </div>
               <Link
