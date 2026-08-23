@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,6 +16,7 @@ import {
 import { Avatar, Badge, Button, Card } from "@/design-system";
 import { AppShell } from "@/components/app/app-shell";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
+import { DeleteTrackedAccountModal } from "@/components/tracking/delete-tracked-account-modal";
 import { identify, track } from "@/lib/mixpanel";
 import {
   formatRelative,
@@ -32,9 +33,10 @@ export default function DashboardPage() {
   const { data, loading, error: loadError, refresh, update } = useAccountData();
   const [error, setError] = useState("");
   const [targetAction, setTargetAction] = useState<string | null>(null);
-  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
+  const [targetToRemove, setTargetToRemove] = useState<TrackedTarget | null>(null);
   const [justSubscribed, setJustSubscribed] = useState(false);
   const trackedView = useRef(false);
+  const closeRemoveDialog = useCallback(() => setTargetToRemove(null), []);
 
   useEffect(() => {
     if (!(loadError instanceof AccountDataRequestError)) return;
@@ -175,7 +177,7 @@ export default function DashboardPage() {
         setError(json.error || "This account could not be removed.");
         return;
       }
-      setConfirmRemoveId(null);
+      closeRemoveDialog();
       update((current) => ({
               ...current,
               removal: json.removal || current.removal,
@@ -419,52 +421,32 @@ export default function DashboardPage() {
                         </Button>
                       </Link>
 
-                      {confirmRemoveId === t.id ? (
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            isLoading={targetAction === t.id}
-                            onClick={() => removeTrackedAccount(t)}
-                          >
-                            Delete
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setConfirmRemoveId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                          disabled={data.removal?.canRemove === false}
-                          onClick={() => {
-                            if (data.removal?.canRemove === false) {
-                              setError(
-                                data.removal.nextRemoveAt
-                                  ? `Basic can remove a tracked account once every 7 days. Next removal on ${new Date(
-                                      data.removal.nextRemoveAt
-                                    ).toLocaleDateString(undefined, {
-                                      month: "short",
-                                      day: "numeric",
-                                    })}.`
-                                  : "Basic can remove a tracked account once every 7 days."
-                              );
-                              return;
-                            }
-                            setConfirmRemoveId(t.id);
-                          }}
-                          className="text-[var(--muted-foreground)] hover:text-red-500 shrink-0 px-2 sm:px-3"
-                          title="Delete tracked account"
-                        >
-                          <span className="hidden sm:inline">Delete</span>
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                        disabled={data.removal?.canRemove === false}
+                        onClick={() => {
+                          if (data.removal?.canRemove === false) {
+                            setError(
+                              data.removal.nextRemoveAt
+                                ? `Basic can remove a tracked account once every 7 days. Next removal on ${new Date(
+                                    data.removal.nextRemoveAt
+                                  ).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                  })}.`
+                                : "Basic can remove a tracked account once every 7 days."
+                            );
+                            return;
+                          }
+                          setTargetToRemove(t);
+                        }}
+                        className="text-[var(--muted-foreground)] hover:text-red-500 shrink-0 px-2 sm:px-3"
+                        title="Delete tracked account"
+                      >
+                        <span className="hidden sm:inline">Delete</span>
+                      </Button>
                     </div>
                   </Card>
                 ))}
@@ -539,6 +521,15 @@ export default function DashboardPage() {
           </Card>
         )}
       </main>
+      <DeleteTrackedAccountModal
+        open={targetToRemove !== null}
+        username={targetToRemove?.username || "this account"}
+        loading={targetAction === targetToRemove?.id}
+        onClose={closeRemoveDialog}
+        onConfirm={() => {
+          if (targetToRemove) void removeTrackedAccount(targetToRemove);
+        }}
+      />
     </AppShell>
   );
 }
