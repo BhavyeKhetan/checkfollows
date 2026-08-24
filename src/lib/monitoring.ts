@@ -648,6 +648,16 @@ export async function scanFollowers(targetId: string): Promise<ScanResult> {
     };
   }
 
+  if (target.is_private) {
+    return {
+      scanId: "",
+      targetId,
+      status: "failed",
+      events: [],
+      error: "Private accounts cannot be scanned",
+    };
+  }
+
   const { data: scan } = await supabase
     .from("scans")
     .insert({
@@ -1454,6 +1464,7 @@ export async function fullBaselineScan(username: string): Promise<{
 }> {
   const provider = getMonitoringProvider();
   const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
+  const eligibility = await previewLookup(cleanUsername);
 
   const result = await provider.batchScan({
     usernames: [cleanUsername],
@@ -1476,18 +1487,10 @@ export async function fullBaselineScan(username: string): Promise<{
   // Owner identity must come from the profile scrape — never from the
   // following list. entries[0] is someone this account follows (e.g. a
   // brand), not the account being tracked.
-  let ownerProfile = null;
-  try {
-    const previewProvider = getPreviewProvider();
-    ownerProfile = await previewProvider.fetchProfile(cleanUsername);
-  } catch {
-    /* Keep existing identity if the profile actor is down. */
-  }
-
   const target = await upsertInstagramTarget(
     ownerIdentityFromScan({
       username: cleanUsername,
-      ownerProfile,
+      ownerProfile: eligibility.profile,
       followingCount: entries.length,
     })
   );
