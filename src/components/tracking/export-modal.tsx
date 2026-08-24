@@ -28,7 +28,7 @@ export function ExportModal({
   onSelectOption,
   loading = false,
 }: ExportModalProps) {
-  // Default to Unlimited Pass ($9.99)
+  // Default to Unlimited Forever ($10 / $9.99 Stripe)
   const [selectedTier, setSelectedTier] = useState<ExportOptionTier>("unlimited");
   const [card, setCard] = useState<SavedCard | null>(null);
 
@@ -115,15 +115,17 @@ export function ExportModal({
                   <div
                     key={option.tier}
                     onClick={() => !loading && setSelectedTier(option.tier)}
-                    className={`relative rounded-xl border-2 p-4 cursor-pointer transition-all flex items-center justify-between ${
+                    className={`relative rounded-xl border-2 p-4 cursor-pointer transition-all flex items-center justify-between gap-3 ${
                       isSelected
-                        ? "border-[#121212] bg-[#F9F9F7] shadow-sm"
+                        ? option.tier === "unlimited"
+                          ? "border-[#121212] bg-[#F9F9F7] shadow-sm ring-2 ring-[#E7F256]/70"
+                          : "border-[#121212] bg-[#F9F9F7] shadow-sm"
                         : "border-[#E2E2DC] bg-white hover:border-[#CCCCCC]"
                     }`}
                   >
-                    <div className="flex items-center gap-3.5">
+                    <div className="flex items-center gap-3.5 min-w-0">
                       <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
                           isSelected
                             ? "border-[#121212] bg-[#121212]"
                             : "border-[#CCCCCC] bg-white"
@@ -133,28 +135,43 @@ export function ExportModal({
                           <div className="w-2 h-2 rounded-full bg-[#E7F256]" />
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-extrabold text-[#121212]">
-                            {option.label}
-                          </span>
-                          {option.badge && (
-                            <span className="px-2 py-0.5 rounded-full bg-[#E7F256] text-[#121212] text-[10px] font-extrabold border border-black/10">
-                              {option.badge}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-[#666666] mt-0.5">
-                          {option.description}
-                        </div>
+                      <div className="min-w-0">
+                        {option.tier === "unlimited" ? (
+                          <>
+                            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#555555]">
+                              Unlimited
+                            </div>
+                            <div className="mt-0.5 inline-flex items-center px-2 py-[3px] rounded-md bg-[#E7F256] text-[#121212] text-xl font-black tracking-tight leading-none border border-black/10">
+                              FOREVER
+                            </div>
+                            <div className="text-xs text-[#666666] mt-1.5">
+                              {option.description}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-extrabold text-[#121212]">
+                                {option.label}
+                              </span>
+                            </div>
+                            <div className="text-xs text-[#666666] mt-0.5">
+                              {option.description}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-lg font-black text-[#121212]">
-                        ${option.price.toFixed(2)}
+                    <div className="text-right shrink-0">
+                      <div
+                        className={`font-black text-[#121212] leading-none ${
+                          option.tier === "unlimited" ? "text-2xl" : "text-lg"
+                        }`}
+                      >
+                        {option.tier === "unlimited" ? "$10" : `$${option.price.toFixed(2)}`}
                       </div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#777777]">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#777777] mt-1">
                         one-time
                       </div>
                     </div>
@@ -209,10 +226,12 @@ export function ExportModal({
               {card ? (
                 <span className="flex items-center justify-center gap-1.5">
                   <Sparkles className="w-4 h-4 fill-current" />
-                  1-Click Buy &mdash; ${currentOption.price.toFixed(2)}
+                  1-Click Buy
                 </span>
+              ) : currentOption.tier === "unlimited" ? (
+                "Get Unlimited Forever"
               ) : (
-                `Get ${currentOption.label} — $${currentOption.price.toFixed(2)}`
+                `Get ${currentOption.label}`
               )}
             </Button>
             <p className="text-center text-[11px] text-[#777777]">

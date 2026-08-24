@@ -29,6 +29,7 @@ import { track } from "@/lib/mixpanel";
 import { RESCAN_BUNDLES, type RescanBundle, type ExportOptionTier } from "@/lib/stripe";
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 import { ExportModal } from "@/components/tracking/export-modal";
+import { MutualsModal } from "@/components/tracking/mutuals-modal";
 import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
 import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
@@ -198,6 +199,9 @@ export default function TrackPageClient({
   const [purchasingExport, setPurchasingExport] = useState(false);
   const [mutualUsername, setMutualUsername] = useState("");
   const [mutualLoading, setMutualLoading] = useState(false);
+  const [purchasingMutuals, setPurchasingMutuals] = useState(false);
+  const [showMutualsModal, setShowMutualsModal] = useState(false);
+  const [mutualsHasCredit, setMutualsHasCredit] = useState(false);
   const [mutualError, setMutualError] = useState("");
   const [mutualResult, setMutualResult] = useState<{
     otherUsername: string;
@@ -568,23 +572,30 @@ export default function TrackPageClient({
     }
   };
 
-  const handleMutuals = async () => {
+  const handleMutuals = () => {
     const other = extractInstagramUsername(mutualUsername);
-    if (!target || !other || mutualLoading) return;
+    if (!target || !other || showMutualsModal) return;
+    if (other.toLowerCase() === target.username.toLowerCase()) {
+      setMutualError("Enter a different account to compare.");
+      return;
+    }
     setMutualUsername(other);
+    setMutualError("");
+    setMutualResult(null);
     track("mutuals_clicked", {
       username: target.username,
       other,
       has_credit: credits.mutuals > 0,
     });
-    if (credits.mutuals <= 0) {
-      const confirmBuy = window.confirm(
-        `Mutual Follows Report is a $4.99 add-on. Purchase now to compare @${target.username} and @${other}?`
-      );
-      if (!confirmBuy) return;
+    setMutualsHasCredit(credits.mutuals > 0);
+    setShowMutualsModal(true);
+  };
 
-      setMutualLoading(true);
-      try {
+  const purchaseMutuals = async (changePaymentMethod = false): Promise<boolean> => {
+    if (!target) return false;
+    setPurchasingMutuals(true);
+    try {
+      if (!changePaymentMethod) {
         const chargeRes = await fetch("/api/stripe/one-click-charge", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -597,17 +608,22 @@ export default function TrackPageClient({
         const chargeData = await chargeRes.json();
         if (chargeData.success) {
           setCredits((c) => ({ ...c, mutuals: c.mutuals + 1 }));
-        } else {
-          await purchaseOneTime("mutuals", target.id);
-          return;
+          return true;
         }
-      } catch {
-        await purchaseOneTime("mutuals", target.id);
-        return;
-      } finally {
-        setMutualLoading(false);
       }
+      await purchaseOneTime("mutuals", target.id);
+      return false;
+    } catch {
+      await purchaseOneTime("mutuals", target.id);
+      return false;
+    } finally {
+      setPurchasingMutuals(false);
     }
+  };
+
+  const runMutualsReport = async (): Promise<string | null> => {
+    const other = extractInstagramUsername(mutualUsername);
+    if (!target || !other) return "Enter a username to compare.";
     setMutualLoading(true);
     setMutualError("");
     setMutualResult(null);
@@ -622,12 +638,12 @@ export default function TrackPageClient({
       });
       const data = await res.json();
       if (res.status === 402 && data.needsPurchase) {
-        await purchaseOneTime("mutuals", target.id);
-        return;
+        return "Purchase is required to unlock this report.";
       }
       if (!res.ok) {
-        setMutualError(data.error || "Failed to calculate mutual follows");
-        return;
+        const message = data.error || "Failed to calculate mutual follows";
+        setMutualError(message);
+        return message;
       }
       setCredits((c) => ({
         ...c,
@@ -636,9 +652,14 @@ export default function TrackPageClient({
       setMutualResult(data);
       track("mutuals_completed", {
         username: target.username,
+        other,
+        has_credit: true,
+        mutual_count: data.mutualCount,
       });
+      return null;
     } catch {
       setMutualError("Network error");
+      return "Network error";
     } finally {
       setMutualLoading(false);
     }
@@ -962,7 +983,7 @@ export default function TrackPageClient({
                   <Download className="w-5 h-5 text-[#121212]" />
                   {credits.unlimited_export ? (
                     <Badge variant="lime" size="sm">
-                      Unlimited Pass
+                      Unlimited Forever
                     </Badge>
                   ) : credits.export > 0 ? (
                     <Badge variant="lime" size="sm">
@@ -985,7 +1006,7 @@ export default function TrackPageClient({
                   fullWidth
                 >
                   {credits.unlimited_export
-                    ? "Download CSV (Unlimited)"
+                    ? "Download CSV (Forever)"
                     : credits.export > 0
                     ? `Export CSV (${credits.export} left)`
                     : "Export CSV"}
@@ -996,7 +1017,7 @@ export default function TrackPageClient({
                     onClick={() => setShowExportModal(true)}
                     className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-0.5"
                   >
-                    {credits.export > 0 ? "+ Upgrade to Unlimited Pass ($9.99)" : "From $4.99 · Unlimited pass $9.99"}
+                    {credits.export > 0 ? "+ Upgrade to Unlimited Forever" : "Get Unlimited Forever"}
                   </button>
                 )}
               </div>
@@ -1013,6 +1034,12 @@ export default function TrackPageClient({
                 <input
                   value={mutualUsername}
                   onChange={(e) => setMutualUsername(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleMutuals();
+                    }
+                  }}
                   placeholder="@username"
                   className="min-w-0 flex-1 rounded-lg border border-[#E2E2DC] bg-white px-3 py-2 text-base font-medium text-[#121212] placeholder:text-[#999999] outline-none focus:border-[#121212]"
                 />
@@ -1020,7 +1047,7 @@ export default function TrackPageClient({
                   variant={credits.mutuals > 0 ? "primary" : "secondary"}
                   size="sm"
                   onClick={handleMutuals}
-                  isLoading={mutualLoading}
+                  isLoading={showMutualsModal}
                 >
                   Go
                 </Button>
@@ -1239,6 +1266,19 @@ export default function TrackPageClient({
         username={target?.username || username}
         onSelectOption={handleSelectExportOption}
         loading={purchasingExport}
+      />
+      <MutualsModal
+        open={showMutualsModal}
+        onClose={() => {
+          if (mutualLoading || purchasingMutuals) return;
+          setShowMutualsModal(false);
+        }}
+        username={target?.username || username}
+        otherUsername={mutualUsername}
+        hasCredit={mutualsHasCredit}
+        onPurchase={purchaseMutuals}
+        onRunReport={runMutualsReport}
+        loading={purchasingMutuals || mutualLoading}
       />
     </AppShell>
   );

@@ -143,9 +143,9 @@ export const EXPORT_OPTIONS: ExportOption[] = [
   {
     tier: "unlimited",
     price: 9.99,
-    label: "Unlimited Pass",
-    description: "Unlimited CSV downloads forever across all tracked accounts",
-    badge: "BEST VALUE",
+    label: "Unlimited Forever",
+    description: "CSV downloads across every tracked account",
+    badge: "FOREVER",
     highlighted: true,
   },
 ];

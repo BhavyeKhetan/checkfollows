@@ -495,7 +495,7 @@ export default function AccountPage() {
               <div>
                 <div className="text-sm font-extrabold text-[#121212]">
                   {data?.credits?.unlimited_export
-                    ? "Unlimited Pass"
+                    ? "Unlimited Forever"
                     : `${data?.credits?.export ?? 0} left`}
                 </div>
                 <div className="text-xs text-[#555555]">History exports</div>
@@ -652,7 +652,7 @@ function LockedAccount({
                 onClick={onRenew}
                 rightIcon={<ArrowRight className="w-4 h-4" />}
               >
-                Renew for ${total.toFixed(2)}{cadence === "weekly" ? "/week" : "/quarter"}
+                Renew subscription
               </Button>
               {!showWinback && (
                 <button

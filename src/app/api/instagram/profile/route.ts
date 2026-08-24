@@ -67,22 +67,23 @@ export async function GET(request: Request) {
       const isFresh = Date.now() - lastUpdated < 12 * 60 * 60 * 1000; // 12 hours
       const avatarExpired = isInstagramUrlExpired(cachedTarget.avatar_url);
 
-      if (isFresh && !avatarExpired && cachedTarget.avatar_url) {
+      if (isFresh && !avatarExpired && cachedTarget.avatar_url && !cachedTarget.is_private) {
         return NextResponse.json({
           success: true,
           cached: true,
+          isPrivate: false,
           profile: {
             id: cachedTarget.id,
             instagramId: cachedTarget.instagram_id,
             username: cachedTarget.username,
             fullName: cachedTarget.full_name,
             avatarUrl: cachedTarget.avatar_url,
-            followerCount: cachedTarget.follower_count || 1080,
-            followingCount: cachedTarget.following_count || 603,
-            isPrivate: cachedTarget.is_private || false,
+            followerCount: cachedTarget.follower_count || 0,
+            followingCount: cachedTarget.following_count || 0,
+            isPrivate: false,
             isVerified: cachedTarget.is_verified || false,
-            biography: cachedTarget.biography || "Don't be shy with it :) 📍 SF",
-            postsCount: cachedTarget.posts_count || 12,
+            biography: cachedTarget.biography || null,
+            postsCount: cachedTarget.posts_count || 0,
           },
         });
       }
@@ -94,9 +95,8 @@ export async function GET(request: Request) {
 
     if (profile.isPrivate) {
       return NextResponse.json({
-        success: false,
+        success: true,
         isPrivate: true,
-        error: "private_account",
         profile: {
           username: profile.username,
           fullName: profile.fullName,
@@ -106,6 +106,7 @@ export async function GET(request: Request) {
           followerCount: profile.followerCount,
           followingCount: profile.followingCount,
           biography: profile.biography,
+          postsCount: profile.postsCount ?? 0,
         },
       });
     }
@@ -143,7 +144,23 @@ export async function GET(request: Request) {
 
     if (message.includes("private") || message.includes("This account is private")) {
       return NextResponse.json(
-        { success: false, isPrivate: true, error: "private_account" },
+        {
+          success: true,
+          isPrivate: true,
+          profile: cachedTarget
+            ? {
+                username: cachedTarget.username,
+                fullName: cachedTarget.full_name,
+                avatarUrl: cachedTarget.avatar_url,
+                isPrivate: true,
+                isVerified: cachedTarget.is_verified || false,
+                followerCount: cachedTarget.follower_count || 0,
+                followingCount: cachedTarget.following_count || 0,
+                biography: cachedTarget.biography || null,
+                postsCount: cachedTarget.posts_count || 0,
+              }
+            : { username: cleanUsername, isPrivate: true },
+        },
         { status: 200 }
       );
     }

@@ -355,15 +355,21 @@ export default function Home() {
 
     try {
       // Client-side cache hit — skip the network call entirely
-      const cachedProfile = readCachedProfile(username);
+      const cachedProfile = readCachedProfile(username) as InstagramProfile | null;
       if (cachedProfile) {
-        track("profile_searched", { username, found: true, cached: true });
+        const cachedPrivate = Boolean(cachedProfile.isPrivate);
+        track("profile_searched", {
+          username,
+          found: !cachedPrivate,
+          cached: true,
+          is_private: cachedPrivate,
+        });
         setLoadingStep(3);
         setTimeout(() => {
           setSearchState((prev) => ({
             ...prev,
-            status: "profile",
-            profile: cachedProfile as InstagramProfile,
+            status: cachedPrivate ? "private" : "profile",
+            profile: cachedProfile,
             error: null,
           }));
         }, 350);
@@ -379,16 +385,21 @@ export default function Home() {
       );
       const profileData = await profileRes.json();
 
+      const isPrivate = Boolean(profileData.isPrivate || profileData.profile?.isPrivate);
+      if (isPrivate && profileData.profile) {
+        writeCachedProfile(username, { ...profileData.profile, isPrivate: true });
+        track("profile_searched", { username, found: false, is_private: true, cached: false });
+        setSearchState((prev) => ({
+          ...prev,
+          status: "private",
+          profile: profileData.profile,
+          error: null,
+        }));
+        return;
+      }
+
       if (!profileRes.ok || !profileData.success) {
-        if (profileData.isPrivate) {
-          track("profile_searched", { username, found: false, is_private: true });
-          setSearchState((prev) => ({
-            ...prev,
-            status: "private",
-            profile: profileData.profile,
-            error: null,
-          }));
-        } else if (profileData.notFound) {
+        if (profileData.notFound) {
           track("profile_searched", { username, found: false, not_found: true });
           setSearchState((prev) => ({ ...prev, status: "not_found", error: null }));
         } else {
@@ -574,15 +585,43 @@ export default function Home() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="w-full max-w-lg mx-auto mt-8 text-left"
+          className="w-full max-w-lg mx-auto mt-8 text-left space-y-4"
         >
+          {profile && (
+            <Card padding="md" className="bg-[#FFFFFF] shadow-md">
+              <div className="flex items-start gap-4">
+                <Avatar
+                  src={profile.avatarUrl}
+                  username={profile.username}
+                  isVerified={profile.isVerified}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-extrabold text-lg text-[#121212] truncate">
+                    {profile.username}
+                  </h3>
+                  {profile.fullName && (
+                    <p className="text-sm font-medium text-[#555555]">{profile.fullName}</p>
+                  )}
+                  {profile.biography && (
+                    <p className="mt-1 text-sm text-[#121212] whitespace-pre-line">
+                      {profile.biography}
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs font-semibold text-[#777777]">
+                    {(profile.followerCount || 0).toLocaleString()} followers · {(profile.followingCount || 0).toLocaleString()} following
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
           <Card padding="md" className="bg-[#FFFFFF] border-amber-200 shadow-md text-center">
             <div className="w-12 h-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-3 text-[#B45309]">
               <Lock className="w-6 h-6" />
             </div>
             <h3 className="font-extrabold text-lg text-[#121212] mb-1">This account is private</h3>
             <p className="text-sm text-[#555555]">
-              CheckFollows only works with public Instagram accounts, so we can&apos;t inspect this profile.
+              Privacy law and Instagram&apos;s terms restrict access to non-public follower and following lists, so CheckFollows cannot monitor this profile. The public details Instagram already shows are above.
             </p>
           </Card>
         </motion.div>

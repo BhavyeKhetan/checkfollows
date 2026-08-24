@@ -224,10 +224,10 @@ export function RescanBundleModal({
               {card ? (
                 <span className="flex items-center justify-center gap-1.5">
                   <Sparkles className="w-4 h-4 fill-current" />
-                  1-Click Buy &mdash; ${currentOption.price}
+                  1-Click Buy
                 </span>
               ) : (
-                `Get ${currentOption.credits} Credits — $${currentOption.price}`
+                `Get ${currentOption.credits} credits`
               )}
             </Button>
             <p className="text-center text-[11px] text-[#777777]">
