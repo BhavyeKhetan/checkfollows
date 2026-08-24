@@ -26,13 +26,13 @@ import type {
   InstagramProfile,
 } from "@/lib/instagram/provider";
 import { ownerIdentityFromScan } from "@/lib/target-profile";
-import { shouldRunAutomatedFollowingScan } from "@/lib/monitoring-policy";
 import {
   completeScanCreditReservation,
   refundScanCreditReservation,
   reserveUserScanCredits,
   scanCreditsForFollowingCount,
 } from "@/lib/scan-credits";
+import { decideAutomatedFollowingAction } from "@/lib/instagram/account-eligibility";
 
 // ─── Config ───────────────────────────────────────────────
 
@@ -545,6 +545,16 @@ export async function scanFollowing(targetId: string): Promise<ScanResult> {
     };
   }
 
+  if (target.is_private) {
+    return {
+      scanId: "",
+      targetId,
+      status: "failed",
+      events: [],
+      error: "Private accounts cannot be scanned",
+    };
+  }
+
   const { data: scan } = await supabase
     .from("scans")
     .insert({
@@ -937,13 +947,73 @@ export async function processDueScans(): Promise<{
         continue;
       }
 
-      if (
-        targetsWithBaseline.has(target.id) &&
-        !shouldRunAutomatedFollowingScan(
-          target.following_count,
-          profile.followingCount
-        )
-      ) {
+      const automatedAction = decideAutomatedFollowingAction({
+        isPrivate: profile.isPrivate,
+        hasBaseline: targetsWithBaseline.has(target.id),
+        storedFollowingCount: target.following_count,
+        observedFollowingCount: profile.followingCount,
+      });
+
+      if (automatedAction === "stop_private") {
+        const stoppedAt = new Date().toISOString();
+        const [{ error: targetUpdateError }, { error: subscriptionUpdateError }] =
+          await Promise.all([
+            supabase
+              .from("instagram_targets")
+              .update({
+                is_private: true,
+                monitoring_enabled: false,
+                following_count: profile.followingCount,
+                follower_count: profile.followerCount,
+                next_scan_at: null,
+                updated_at: stoppedAt,
+              })
+              .eq("id", target.id),
+            supabase
+              .from("subscriptions")
+              .update({ user_paused: true, updated_at: stoppedAt })
+              .eq("target_id", target.id)
+              .eq("active", true)
+              .eq("user_paused", false),
+          ]);
+
+        if (targetUpdateError || subscriptionUpdateError) {
+          console.error("Monitoring: failed to stop a private target", {
+            targetId: target.id,
+            targetError: targetUpdateError?.message,
+            subscriptionError: subscriptionUpdateError?.message,
+          });
+        }
+
+        const { data: privateScan } = await supabase
+          .from("scans")
+          .insert({
+            target_id: target.id,
+            status: "failed",
+            started_at: stoppedAt,
+            completed_at: stoppedAt,
+            provider: previewProvider.name,
+            error_message: "Account is private; monitoring stopped before full scan",
+            api_cost: PROFILE_CHECK_COST_USD,
+            target_count: batch.length,
+            profiles_returned: 1,
+            suspect: false,
+          })
+          .select("id")
+          .maybeSingle();
+
+        results.push({
+          scanId: privateScan?.id || "",
+          targetId: target.id,
+          status: "failed",
+          events: [],
+          error: "Account is private; monitoring stopped before full scan",
+        });
+        failed++;
+        continue;
+      }
+
+      if (automatedAction === "skip_unchanged") {
         const nextCheckAt = new Date(
           Date.now() +
             (target.monitoring_interval_hours || DEFAULT_INTERVAL_HOURS) *
@@ -955,6 +1025,7 @@ export async function processDueScans(): Promise<{
         const { error: targetUpdateError } = await supabase
           .from("instagram_targets")
           .update({
+            is_private: false,
             follower_count: profile.followerCount,
             next_scan_at: nextCheckAt,
             updated_at: new Date().toISOString(),
@@ -1000,6 +1071,7 @@ export async function processDueScans(): Promise<{
       const { error: countRefreshError } = await supabase
         .from("instagram_targets")
         .update({
+          is_private: false,
           follower_count: profile.followerCount,
           updated_at: new Date().toISOString(),
         })
@@ -1310,12 +1382,41 @@ export async function previewLookup(username: string): Promise<{
   // Fetch profile using the cheap preview actor — profile data only, no follow lists
   const profile = await previewProvider.fetchProfile(cleanUsername);
 
-  if (profile.isPrivate) {
-    throw new Error("This account is private");
-  }
-
   // Upsert target (or update existing) so we have a record
   const target = await upsertInstagramTarget(profile);
+
+  if (profile.isPrivate) {
+    if (target) {
+      const stoppedAt = new Date().toISOString();
+      const supabase = createServerClient();
+      const [{ error: targetError }, { error: subscriptionError }] =
+        await Promise.all([
+          supabase
+            .from("instagram_targets")
+            .update({
+              is_private: true,
+              monitoring_enabled: false,
+              next_scan_at: null,
+              updated_at: stoppedAt,
+            })
+            .eq("id", target.id),
+          supabase
+            .from("subscriptions")
+            .update({ user_paused: true, updated_at: stoppedAt })
+            .eq("target_id", target.id)
+            .eq("active", true)
+            .eq("user_paused", false),
+        ]);
+      if (targetError || subscriptionError) {
+        console.error("Preview: failed to fully stop a private target", {
+          targetId: target.id,
+          targetError: targetError?.message,
+          subscriptionError: subscriptionError?.message,
+        });
+      }
+    }
+    throw new Error("This account is private");
+  }
 
   // Follow/follower membership lists are never fetched for public preview.
   // Complete following lists are restricted to server-enforced credit paths.

@@ -30,6 +30,7 @@ import { RESCAN_BUNDLES, type RescanBundle, type ExportOptionTier } from "@/lib/
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 import { ExportModal } from "@/components/tracking/export-modal";
 import { scanCreditsForFollowingCount } from "@/lib/scan-credit-policy";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -568,8 +569,9 @@ export default function TrackPageClient({
   };
 
   const handleMutuals = async () => {
-    const other = mutualUsername.replace(/^@/, "").trim();
+    const other = extractInstagramUsername(mutualUsername);
     if (!target || !other || mutualLoading) return;
+    setMutualUsername(other);
     track("mutuals_clicked", {
       username: target.username,
       other,

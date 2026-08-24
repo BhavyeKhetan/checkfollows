@@ -7,6 +7,7 @@ import {
 import { createServerClient } from "@/lib/supabase/server";
 import { getMonitoringProvider } from "@/lib/instagram/provider";
 import { getRemainingCredits, consumeCredit } from "@/lib/purchases";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 /**
  * POST /api/instagram/mutuals
@@ -31,12 +32,8 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const targetId = typeof body.targetId === "string" ? body.targetId : "";
-    const otherUsername = (
-      typeof body.username === "string" ? body.username : ""
-    )
-      .replace(/^@/, "")
-      .trim()
-      .toLowerCase();
+    const rawUsername = typeof body.username === "string" ? body.username : "";
+    const otherUsername = extractInstagramUsername(rawUsername);
 
     if (!targetId || !otherUsername) {
       return NextResponse.json(

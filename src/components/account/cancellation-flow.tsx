@@ -25,6 +25,8 @@ const REASONS = [
 
 export function CancellationFlow({
   open,
+  cadence,
+  currentTier,
   currentPeriodEnd,
   discountUsed,
   pauseUsed,
@@ -33,6 +35,8 @@ export function CancellationFlow({
   onOpenPlan,
 }: {
   open: boolean;
+  cadence: "weekly" | "quarterly";
+  currentTier: "base" | "premium";
   currentPeriodEnd: string | null;
   discountUsed: boolean;
   pauseUsed: boolean;
@@ -118,17 +122,7 @@ export function CancellationFlow({
       >
         <div className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--card)] px-5 py-4 sm:px-6">
           <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-extrabold tracking-wide text-[var(--muted-foreground)]">
-                STEP {step} OF 5
-              </div>
-              <div className="mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-[var(--badge-bg)]">
-                <div
-                  className="h-full rounded-full bg-[#E7F256] transition-all"
-                  style={{ width: `${step * 20}%` }}
-                />
-              </div>
-            </div>
+            <h1 className="text-sm font-extrabold text-[var(--foreground)]">Cancel subscription</h1>
             <button
               type="button"
               onClick={closeFlow}
@@ -213,29 +207,59 @@ export function CancellationFlow({
               <button type="button" onClick={() => setStep(2)} className="mb-4 flex items-center gap-1 text-xs font-bold text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                 <ArrowLeft className="h-3.5 w-3.5" /> Back
               </button>
-              <h2 className="text-2xl font-extrabold text-[var(--foreground)]">A smaller plan may fit better</h2>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Change tier, billing schedule, or remove email alerts without losing your tracking history.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  track("cancellation_plan_change_opened");
-                  onOpenPlan();
-                  closeFlow();
-                }}
-                className="mt-5 flex w-full items-center gap-4 rounded-2xl border-2 border-[#E7F256] bg-[var(--ramp-lime-subtle)] hover:bg-[var(--ramp-lime-subtle-hover)] p-4 text-left text-[var(--foreground)] transition-colors"
-              >
-                <CreditCard className="h-6 w-6 shrink-0 text-[#E7F256]" />
-                <span className="flex-1">
-                  <span className="block font-extrabold text-[var(--foreground)]">Change or downgrade my plan</span>
-                  <span className="block text-xs font-medium text-[var(--muted-foreground)]">See Basic, Premium, weekly, and quarterly options</span>
-                </span>
-                <ArrowRight className="h-4 w-4 text-[var(--foreground)]" />
-              </button>
-              <Button variant="secondary" size="lg" className="mt-4 w-full" onClick={closeFlow}>
-                Keep my current plan
-              </Button>
+              {currentTier === "premium" ? (
+                <>
+                  <h2 className="text-2xl font-extrabold text-[var(--foreground)]">Need a different billing schedule?</h2>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Switch weekly or every 3 months, or adjust email alerts, without losing your tracking history.
+                  </p>
+                  <Button variant="primary" size="lg" className="mt-5 w-full" onClick={closeFlow}>
+                    Keep my current plan
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      track("cancellation_plan_change_opened");
+                      onOpenPlan();
+                      closeFlow();
+                    }}
+                    className="mt-4 flex w-full items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] p-4 text-left text-[var(--foreground)] transition-colors"
+                  >
+                    <CreditCard className="h-6 w-6 shrink-0 text-[var(--muted-foreground)]" />
+                    <span className="flex-1">
+                      <span className="block font-extrabold text-[var(--foreground)]">Change billing schedule</span>
+                      <span className="block text-xs font-medium text-[var(--muted-foreground)]">Weekly or every 3 months — same Premium access</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-[var(--foreground)]" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-extrabold text-[var(--foreground)]">Upgrade instead of leaving</h2>
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    Premium is still on your launch price — extra slots, extra credits, and delete anytime. Or switch to every 3 months and pay less per week.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      track("cancellation_plan_change_opened");
+                      onOpenPlan();
+                      closeFlow();
+                    }}
+                    className="mt-5 flex w-full items-center gap-4 rounded-2xl border-2 border-[#E7F256] bg-[var(--ramp-lime-subtle)] hover:bg-[var(--ramp-lime-subtle-hover)] p-4 text-left text-[var(--foreground)] transition-colors"
+                  >
+                    <CreditCard className="h-6 w-6 shrink-0 text-[#E7F256]" />
+                    <span className="flex-1">
+                      <span className="block font-extrabold text-[var(--foreground)]">See my launch price</span>
+                      <span className="block text-xs font-medium text-[var(--muted-foreground)]">Upgrade to Premium or switch to every 3 months</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 text-[var(--foreground)]" />
+                  </button>
+                  <Button variant="secondary" size="lg" className="mt-4 w-full" onClick={closeFlow}>
+                    Keep my current plan
+                  </Button>
+                </>
+              )}
               {continueButton(4)}
             </div>
           )}
@@ -324,7 +348,7 @@ export function CancellationFlow({
             </div>
           )}
 
-          {step < 5 && (
+          {step < 5 && cadence === "weekly" && (
             <button
               type="button"
               onClick={() => {

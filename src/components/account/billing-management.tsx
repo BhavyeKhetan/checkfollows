@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   ArrowRight,
   CalendarDays,
   Check,
@@ -10,6 +11,7 @@ import {
   FileText,
   RefreshCw,
   Settings2,
+  Zap,
 } from "lucide-react";
 import { Badge, Button, Card } from "@/design-system";
 import { track } from "@/lib/mixpanel";
@@ -18,6 +20,27 @@ import { useBillingData } from "@/lib/billing-data-client";
 
 type Cadence = "weekly" | "quarterly";
 type Tier = "base" | "premium";
+
+const BASE_PRICE: Record<Cadence, number> = { weekly: 9.99, quarterly: 99 };
+const PREMIUM_PRICE: Record<Cadence, number> = { weekly: 12.99, quarterly: 129 };
+const ALERTS_ADDON: Record<Cadence, number> = { weekly: 2, quarterly: 10 };
+
+function livePrice(cadence: Cadence, emailAlerts: boolean, planTier: Tier): number {
+  const base = planTier === "premium" ? PREMIUM_PRICE[cadence] : BASE_PRICE[cadence];
+  return base + (emailAlerts ? ALERTS_ADDON[cadence] : 0);
+}
+
+function anchorPrice(cadence: Cadence, emailAlerts: boolean, planTier: Tier): string {
+  if (cadence === "quarterly") {
+    const weeklyPrice =
+      planTier === "premium" ? (emailAlerts ? 14.99 : 12.99) : (emailAlerts ? 11.99 : 9.99);
+    return `$${weeklyPrice.toFixed(2)}`;
+  }
+  if (planTier === "premium") {
+    return emailAlerts ? "$37.49" : "$32.49";
+  }
+  return emailAlerts ? "$29.99" : "$24.99";
+}
 
 export function BillingManagement({
   onPlanChanged,
@@ -41,13 +64,22 @@ export function BillingManagement({
   const tier = tierOverride ?? billing?.tier ?? "base";
   const emailAlerts = emailAlertsOverride ?? billing?.emailAlerts ?? false;
 
-  const price = useMemo(() => {
-    const base =
-      tier === "premium"
-        ? cadence === "weekly" ? 12.99 : 129
-        : cadence === "weekly" ? 9.99 : 99;
-    return base + (emailAlerts ? (cadence === "weekly" ? 2 : 10) : 0);
-  }, [cadence, tier, emailAlerts]);
+  const price = useMemo(
+    () => livePrice(cadence, emailAlerts, tier),
+    [cadence, tier, emailAlerts]
+  );
+  const currentTier = billing?.tier ?? "base";
+  const currentCadence = billing?.cadence ?? "weekly";
+  const currentEmailAlerts = billing?.emailAlerts ?? false;
+  const isUnchanged =
+    tier === currentTier && cadence === currentCadence && emailAlerts === currentEmailAlerts;
+  const isDowngrade = currentTier === "premium" && tier === "base";
+  const isUpgrade = currentTier === "base" && tier === "premium";
+  const isCadenceUpgrade = currentCadence === "weekly" && cadence === "quarterly";
+  const isCadenceDowngrade = currentCadence === "quarterly" && cadence === "weekly";
+  const showLaunchDiscount =
+    currentTier === "base" && (tier === "premium" || cadence === "quarterly");
+  const frameAsCheaper = cadence === "quarterly" && !isDowngrade;
 
   const manageAction = async (
     action: "change_plan" | "reactivate",
@@ -71,6 +103,9 @@ export function BillingManagement({
         track("subscription_plan_changed", { cadence, tier, email_alerts: emailAlerts });
         setNotice("Your subscription plan has been updated.");
         setShowPlan(false);
+        setCadence(null);
+        setTier(null);
+        setEmailAlerts(null);
         onPlanChanged?.({ cadence, tier, emailAlerts });
       } else {
         track("subscription_reactivated");
@@ -170,8 +205,14 @@ export function BillingManagement({
             >
               <Settings2 className="h-5 w-5 text-[var(--foreground)]" />
               <span className="flex-1">
-                <span className="block text-sm font-extrabold text-[var(--foreground)]">Change subscription</span>
-                <span className="block text-xs text-[var(--muted-foreground)]">Upgrade, downgrade, or change billing</span>
+                <span className="block text-sm font-extrabold text-[var(--foreground)]">
+                  {billing.tier === "base" ? "Upgrade your subscription" : "Change subscription"}
+                </span>
+                <span className="block text-xs text-[var(--muted-foreground)]">
+                  {billing.tier === "base"
+                    ? "Premium is still on your launch price"
+                    : "Change billing cadence or email alerts"}
+                </span>
               </span>
               <ArrowRight className="h-4 w-4 text-[var(--muted-foreground)]" />
             </button>
@@ -197,46 +238,213 @@ export function BillingManagement({
 
         {showPlan && (
           <div className="mt-5 rounded-2xl border-2 border-[var(--border)] bg-[var(--background-subtle)] p-4 sm:p-5 text-[var(--foreground)]">
-            <h3 className="font-extrabold text-[var(--foreground)]">Choose your subscription</h3>
-            <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">
-              Stripe applies prorated charges or credits when the change takes effect.
-            </p>
+            {currentTier === "base" ? (
+              <>
+                <h3 className="font-extrabold text-[var(--foreground)]">Upgrade to Premium</h3>
+                <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">
+                  Your launch price is still on. More slots, more credits, delete anytime — without looking like a new customer.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="font-extrabold text-[var(--foreground)]">You&apos;re on Premium</h3>
+                <p className="mt-1 text-xs font-medium text-[var(--muted-foreground)]">
+                  Keep the extra slots, credits, and delete-anytime access. Basic is a worse plan.
+                </p>
+              </>
+            )}
+
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <OptionGroup
-                label="Plan"
-                value={tier}
-                options={[["base", "Basic"], ["premium", "Premium"]]}
-                onChange={(value) => setTier(value as Tier)}
+              <PlanCard
+                plan="premium"
+                selected={tier === "premium"}
+                current={currentTier === "premium"}
+                mode={currentTier === "base" ? "upgrade" : "downgrade"}
+                cadence={cadence}
+                emailAlerts={emailAlerts}
+                onSelect={() => {
+                  setTier("premium");
+                  track("plan_tier_selected", { tier: "premium", source: "account" });
+                }}
               />
-              <OptionGroup
-                label="Billing"
-                value={cadence}
-                options={[["weekly", "Weekly"], ["quarterly", "Every 3 months"]]}
-                onChange={(value) => setCadence(value as Cadence)}
+              <PlanCard
+                plan="base"
+                selected={tier === "base"}
+                current={currentTier === "base"}
+                mode={currentTier === "base" ? "upgrade" : "downgrade"}
+                cadence={cadence}
+                emailAlerts={emailAlerts}
+                onSelect={() => {
+                  setTier("base");
+                  track("plan_tier_selected", { tier: "base", source: "account" });
+                }}
               />
             </div>
-            <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm font-bold text-[var(--foreground)]">
+
+            {currentTier === "base" && (
+              <div className="mt-3 rounded-xl border border-[#E7F256]/50 bg-[#E7F256]/10 p-3">
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-[var(--muted-foreground)]">
+                  What you gain on Premium
+                </p>
+                <ul className="mt-1.5 space-y-1.5 text-xs font-semibold text-[var(--foreground)]">
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--foreground)]" />
+                    Upgrade for ${cadence === "weekly" ? "3 more per week" : "30 more every 3 months"}
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--foreground)]" />
+                    2 extra account slots (5 vs 3) and 18 vs 12 weekly scan credits
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--foreground)]" />
+                    Pause, resume, or delete anytime — no 7-day wait
+                  </li>
+                </ul>
+              </div>
+            )}
+
+            {isDowngrade && (
+              <div className="mt-3 rounded-xl border border-rose-400/50 bg-rose-500/10 p-3">
+                <p className="flex items-start gap-2 text-sm font-extrabold text-rose-800 dark:text-rose-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  Basic is a worse plan. You keep paying, you just get less.
+                </p>
+                <ul className="mt-2 space-y-1 pl-6 text-xs font-semibold text-rose-800/90 dark:text-rose-300/90">
+                  <li>5 → 3 concurrent accounts</li>
+                  <li>18 → 12 weekly scan credits</li>
+                  <li>Delete anytime → once every 7 days</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[var(--muted-foreground)]">
+                Billing
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <CadenceOption
+                  cadence="weekly"
+                  selected={cadence === "weekly"}
+                  current={currentCadence}
+                  onSelect={() => {
+                    setCadence("weekly");
+                    track("billing_cadence_selected", { cadence: "weekly", source: "account" });
+                  }}
+                />
+                <CadenceOption
+                  cadence="quarterly"
+                  selected={cadence === "quarterly"}
+                  current={currentCadence}
+                  onSelect={() => {
+                    setCadence("quarterly");
+                    track("billing_cadence_selected", { cadence: "quarterly", source: "account" });
+                  }}
+                />
+              </div>
+              {isCadenceUpgrade && (
+                <p className="mt-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                  Save ~24% vs weekly. This is cheaper than paying every week.
+                </p>
+              )}
+              {isCadenceDowngrade && (
+                <p className="mt-2 text-xs font-bold text-rose-700 dark:text-rose-400">
+                  Weekly costs more per week. Worse value than every 3 months.
+                </p>
+              )}
+            </div>
+
+            <label className="mt-4 flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm font-bold text-[var(--foreground)]">
               <input
                 type="checkbox"
                 checked={emailAlerts}
-                onChange={(event) => setEmailAlerts(event.target.checked)}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setEmailAlerts(next);
+                  track("email_alerts_toggled", {
+                    state: next ? "on" : "off",
+                    cadence,
+                    source: "account",
+                  });
+                }}
                 className="h-4 w-4 accent-[#E7F256]"
               />
               Include email change alerts
+              <span className="ml-auto text-xs font-bold text-[var(--muted-foreground)]">
+                {cadence === "weekly" ? "+$2/week" : "+$10/3 months"}
+              </span>
             </label>
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <span className="text-2xl font-extrabold text-[var(--foreground)]">${price.toFixed(2)}</span>
-                <span className="ml-1 text-xs font-bold text-[var(--muted-foreground)]">{cadence === "weekly" ? "/week" : "/3 months"}</span>
+                {showLaunchDiscount && (
+                  <div className="mb-1 text-[10px] font-extrabold uppercase tracking-widest text-[var(--muted-foreground)]">
+                    Your launch price · 60% off
+                  </div>
+                )}
+                <div className="flex flex-wrap items-baseline gap-2">
+                  {showLaunchDiscount && (
+                    <span className="text-sm font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
+                      {anchorPrice(cadence, emailAlerts, tier)}
+                      {cadence === "quarterly" ? "/week" : ""}
+                    </span>
+                  )}
+                  <span className="text-2xl font-extrabold text-[var(--foreground)]">
+                    {frameAsCheaper ? `$${(price / 13).toFixed(2)}` : `$${price.toFixed(2)}`}
+                  </span>
+                  <span className="text-xs font-bold text-[var(--muted-foreground)]">
+                    {frameAsCheaper || cadence === "weekly" ? "/week" : "/3 months"}
+                  </span>
+                </div>
+                {cadence === "quarterly" && (
+                  <p className="mt-0.5 text-xs font-semibold text-[var(--muted-foreground)]">
+                    ${price.toFixed(2)} billed every 3 months
+                    {isCadenceUpgrade ? " · save ~24% vs weekly" : ""}
+                  </p>
+                )}
               </div>
-              <Button
-                variant="primary"
-                isLoading={actionLoading === "change_plan"}
-                onClick={() => manageAction("change_plan", { cadence, tier, email_alerts: emailAlerts })}
-              >
-                Confirm plan change
-              </Button>
+
+              {isDowngrade ? (
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+                  <Button
+                    variant="primary"
+                    className="w-full sm:w-auto"
+                    onClick={() => setTier(null)}
+                  >
+                    Stay on Premium
+                  </Button>
+                  <button
+                    type="button"
+                    disabled={actionLoading === "change_plan"}
+                    onClick={() =>
+                      manageAction("change_plan", { cadence, tier, email_alerts: emailAlerts })
+                    }
+                    className="w-full rounded-full px-4 py-2.5 text-sm font-bold text-rose-700 underline decoration-rose-400/50 underline-offset-4 hover:text-rose-800 disabled:opacity-60 sm:w-auto dark:text-rose-300 dark:hover:text-rose-200"
+                  >
+                    {actionLoading === "change_plan" ? "Downgrading…" : "Downgrade to Basic anyway"}
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="primary"
+                  className="w-full sm:w-auto"
+                  disabled={isUnchanged}
+                  isLoading={actionLoading === "change_plan"}
+                  onClick={() =>
+                    manageAction("change_plan", { cadence, tier, email_alerts: emailAlerts })
+                  }
+                >
+                  {confirmLabel({
+                    isUpgrade,
+                    isCadenceUpgrade,
+                    isCadenceDowngrade,
+                    emailAlertsChanged: emailAlerts !== currentEmailAlerts,
+                  })}
+                </Button>
+              )}
             </div>
+            <p className="mt-3 text-[11px] font-medium text-[var(--muted-foreground)]">
+              Stripe applies prorated charges or credits when the change takes effect.
+            </p>
           </div>
         )}
 
@@ -285,6 +493,8 @@ export function BillingManagement({
 
       <CancellationFlow
         open={showCancel}
+        cadence={billing.cadence}
+        currentTier={billing.tier}
         currentPeriodEnd={billing.currentPeriodEnd}
         discountUsed={billing.retentionDiscountUsed}
         pauseUsed={billing.pauseOfferUsed}
@@ -299,38 +509,184 @@ export function BillingManagement({
   );
 }
 
-function OptionGroup({
-  label,
-  value,
-  options,
-  onChange,
+function confirmLabel({
+  isUpgrade,
+  isCadenceUpgrade,
+  isCadenceDowngrade,
+  emailAlertsChanged,
 }: {
-  label: string;
-  value: string;
-  options: ReadonlyArray<readonly [string, string]>;
-  onChange: (value: string) => void;
+  isUpgrade: boolean;
+  isCadenceUpgrade: boolean;
+  isCadenceDowngrade: boolean;
+  emailAlertsChanged: boolean;
+}): string {
+  if (isUpgrade && isCadenceUpgrade) return "Upgrade to Premium · every 3 months";
+  if (isUpgrade) return "Upgrade to Premium";
+  if (isCadenceUpgrade) return "Switch to every 3 months";
+  if (isCadenceDowngrade) return "Switch to weekly billing";
+  if (emailAlertsChanged) return "Update email alerts";
+  return "Confirm plan change";
+}
+
+function PlanCard({
+  plan,
+  selected,
+  current,
+  mode,
+  cadence,
+  emailAlerts,
+  onSelect,
+}: {
+  plan: Tier;
+  selected: boolean;
+  current: boolean;
+  mode: "upgrade" | "downgrade";
+  cadence: Cadence;
+  emailAlerts: boolean;
+  onSelect: () => void;
 }) {
+  const isPremium = plan === "premium";
+  const amount = livePrice(cadence, emailAlerts, plan);
+  const period = cadence === "weekly" ? "/week" : "/3 months";
+  const upgradeHighlight = mode === "upgrade" && isPremium;
+  const downgradeMute = mode === "downgrade" && !isPremium;
+
+  let cardClass =
+    "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]";
+  if (mode === "upgrade" && isPremium) {
+    cardClass = selected
+      ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)] shadow-[0_4px_20px_rgba(231,242,86,0.28)]"
+      : "border-[#E7F256]/55 bg-[var(--surface)] text-[var(--foreground)] hover:bg-[#E7F256]/10";
+  } else if (mode === "upgrade" && !isPremium) {
+    cardClass = selected
+      ? "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)]"
+      : "border-[var(--border)] bg-[var(--background-subtle)] text-[var(--muted-foreground)] opacity-80 hover:opacity-100";
+  } else if (mode === "downgrade" && isPremium) {
+    cardClass = selected
+      ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)]"
+      : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]";
+  } else {
+    cardClass = selected
+      ? "border-rose-400/60 bg-rose-500/5 text-[var(--foreground)]"
+      : "border-[var(--border)] bg-[var(--background-subtle)] text-[var(--muted-foreground)] opacity-80 hover:opacity-100";
+  }
+
   return (
-    <div>
-      <div className="mb-2 text-xs font-extrabold uppercase tracking-wide text-[var(--muted-foreground)]">{label}</div>
-      <div className="grid grid-cols-2 gap-2">
-        {options.map(([option, text]) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            className={`flex items-center justify-between rounded-xl border p-3 text-sm font-bold transition-colors ${
-              value === option
-                ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)]"
-                : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-            }`}
-          >
-            {text}
-            {value === option && <Check className="h-4 w-4 text-[var(--foreground)]" />}
-          </button>
-        ))}
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`relative flex flex-col rounded-xl border-2 p-3.5 text-left transition-colors ${cardClass}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`text-sm font-extrabold ${downgradeMute ? "text-[var(--muted-foreground)]" : "text-[var(--foreground)]"}`}>
+              {isPremium ? "Premium" : "Basic"}
+            </span>
+            {current && (
+              <Badge variant="muted" size="sm">Current</Badge>
+            )}
+          </div>
+          {upgradeHighlight && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              <Badge variant="lime" size="sm">
+                <Zap className="h-3 w-3" /> Best value
+              </Badge>
+              <Badge variant="lime" size="sm">60% off</Badge>
+            </div>
+          )}
+        </div>
+        {selected && (
+          <Check className={`h-4 w-4 shrink-0 ${downgradeMute ? "text-rose-500" : "text-[var(--foreground)]"}`} />
+        )}
       </div>
-    </div>
+
+      <div className="mt-3 flex flex-wrap items-baseline gap-1.5">
+        {upgradeHighlight && (
+          <span className="text-xs font-bold text-[#999999] line-through decoration-[#B91C1C]/70">
+            {anchorPrice(cadence, emailAlerts, plan)}
+            {cadence === "quarterly" ? "/wk" : ""}
+          </span>
+        )}
+        <span className={`text-xl font-extrabold ${downgradeMute ? "text-[var(--muted-foreground)]" : "text-[var(--foreground)]"}`}>
+          {cadence === "quarterly" && upgradeHighlight
+            ? `$${(amount / 13).toFixed(2)}`
+            : `$${amount.toFixed(2)}`}
+        </span>
+        <span className="text-[11px] font-bold text-[var(--muted-foreground)]">
+          {cadence === "quarterly" && upgradeHighlight ? "/week" : period}
+        </span>
+      </div>
+      {upgradeHighlight && cadence === "quarterly" && (
+        <p className="mt-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+          ${amount.toFixed(2)} / 3 months · save ~24% vs weekly
+        </p>
+      )}
+      {upgradeHighlight && cadence === "weekly" && (
+        <p className="mt-0.5 text-[11px] font-bold text-[var(--muted-foreground)]">Your launch price</p>
+      )}
+
+      <ul className={`mt-3 space-y-1 text-[11px] font-semibold ${downgradeMute ? "text-[var(--muted-foreground)]" : "text-[var(--foreground)]"}`}>
+        {isPremium ? (
+          <>
+            <li>5 concurrent accounts</li>
+            <li>18 scan credits / week</li>
+            <li>Pause, resume, or delete anytime</li>
+          </>
+        ) : (
+          <>
+            <li>3 concurrent accounts</li>
+            <li>12 scan credits / week</li>
+            <li>Delete a tracked account once every 7 days</li>
+          </>
+        )}
+      </ul>
+    </button>
+  );
+}
+
+function CadenceOption({
+  cadence,
+  selected,
+  current,
+  onSelect,
+}: {
+  cadence: Cadence;
+  selected: boolean;
+  current: Cadence;
+  onSelect: () => void;
+}) {
+  const isQuarterly = cadence === "quarterly";
+  const isDeal = isQuarterly;
+  const isWorse = !isQuarterly && current === "quarterly";
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex items-center justify-between rounded-xl border p-3 text-sm font-bold transition-colors ${
+        selected && isDeal
+          ? "border-[#E7F256] bg-[#E7F256]/20 text-[var(--foreground)]"
+          : selected
+            ? "border-[var(--foreground)]/40 bg-[var(--surface)] text-[var(--foreground)]"
+            : "border-[var(--border)] bg-[var(--surface)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
+      }`}
+    >
+      <span className="flex flex-col items-start gap-0.5">
+        <span>{isQuarterly ? "Every 3 months" : "Weekly"}</span>
+        {isDeal && (
+          <span className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Save ~24%
+          </span>
+        )}
+        {isWorse && (
+          <span className="text-[10px] font-extrabold uppercase tracking-wide text-[var(--muted-foreground)]">
+            More expensive
+          </span>
+        )}
+      </span>
+      {selected && <Check className="h-4 w-4 shrink-0 text-[var(--foreground)]" />}
+    </button>
   );
 }
 

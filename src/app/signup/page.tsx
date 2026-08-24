@@ -7,6 +7,7 @@ import { Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { Button, Input, Badge, Logo } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { track, identify } from "@/lib/mixpanel";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 function isValidEmail(val: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val.trim());
@@ -17,7 +18,8 @@ function SignupContent() {
   const router = useRouter();
 
   const prefillEmail = searchParams.get("email") || "";
-  const username = searchParams.get("username") || "";
+  const rawUsername = searchParams.get("username") || searchParams.get("q") || "";
+  const username = extractInstagramUsername(rawUsername);
   const targetId = searchParams.get("targetId") || "";
 
   const [email, setEmail] = useState(prefillEmail);

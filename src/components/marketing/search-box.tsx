@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Input, Button } from "@/design-system";
 import { track } from "@/lib/mixpanel";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 export function SearchBox({
   placeholder = "Enter Instagram handle... (e.g. alex)",
@@ -14,7 +15,7 @@ export function SearchBox({
   const [loading, setLoading] = useState(false);
 
   const submit = () => {
-    const username = value.replace(/^@/, "").trim();
+    const username = extractInstagramUsername(value);
     if (!username || loading) return;
     track("search_submitted", { username, source: "seo_page" });
     setLoading(true);

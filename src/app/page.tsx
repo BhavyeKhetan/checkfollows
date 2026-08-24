@@ -38,6 +38,10 @@ import {
 } from "@/design-system";
 import { createClient } from "@/lib/supabase/client";
 import { track } from "@/lib/mixpanel";
+import {
+  extractInstagramUsername,
+  isValidInstagramUsername,
+} from "@/lib/instagram/normalize";
 
 function isInstagramUrlExpired(url: string | null | undefined): boolean {
   if (!url) return true;
@@ -313,9 +317,7 @@ export default function Home() {
     targetId?: string,
     source = "locked_preview"
   ) => {
-    const username = (
-      targetUsername || searchInput.replace(/^@/, "").trim() || ""
-    ).replace(/^@/, "");
+    const username = extractInstagramUsername(targetUsername || searchInput);
     track("funnel_cta_clicked", { username: username || undefined, source });
     const params = new URLSearchParams();
     if (username) params.set("username", username);
@@ -341,10 +343,12 @@ export default function Home() {
     router.push(`/onboarding?${params.toString()}`);
   };
 
-  const handleSearch = async () => {
-    const username = searchInput.replace(/^@/, "").trim();
+  const handleSearch = async (overrideQuery?: unknown) => {
+    const raw = typeof overrideQuery === "string" ? overrideQuery : searchInput;
+    const username = extractInstagramUsername(raw);
     if (!username) return;
 
+    setSearchInput(username);
     track("search_submitted", { username });
     setSearchState({ status: "loading", profile: null, recentFollowing: null, recentFollowers: null, error: null });
     setLoadingStep(1);
@@ -516,6 +520,22 @@ export default function Home() {
     })();
   }, [router]);
 
+  // Automatically handle incoming search query (e.g. from SEO search box or shared link)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const incomingQuery = params.get("q") || params.get("username");
+    if (incomingQuery) {
+      const clean = extractInstagramUsername(incomingQuery);
+      if (clean) {
+        const timer = setTimeout(() => {
+          setSearchInput(clean);
+          void handleSearch(clean);
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, []);
+
   const renderResultSection = () => {
     if (
       searchState.status === "idle" ||
@@ -527,6 +547,7 @@ export default function Home() {
 
     // ── Edge states: never show fake results for a real search ─────
     if (searchState.status === "not_found") {
+      const displayHandle = extractInstagramUsername(searchInput);
       return (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -540,7 +561,7 @@ export default function Home() {
             </div>
             <h3 className="font-extrabold text-lg text-[#121212] mb-1">Profile not found</h3>
             <p className="text-sm text-[#555555]">
-              We couldn&apos;t find &quot;@{searchInput.replace(/^@/, "").trim()}&quot; on Instagram. Double-check the handle and try again.
+              We couldn&apos;t find &quot;@{displayHandle}&quot; on Instagram. Double-check the handle and try again.
             </p>
           </Card>
         </motion.div>
@@ -588,7 +609,7 @@ export default function Home() {
     }
 
     // ── Locked preview: only picture, name & bio are readable ──────
-    const targetUser = profile?.username || searchInput.replace(/^@/, "");
+    const targetUser = profile?.username || extractInstagramUsername(searchInput);
 
     // Fake, made-up entries shown blurred behind the lock (never real data)
     const displayEntries = activeTab === "followers" ? DEMO_FOLLOWERS : DEMO_FOLLOWING;

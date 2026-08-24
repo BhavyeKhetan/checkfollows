@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getPreviewProvider } from "@/lib/instagram/provider";
 import { upsertInstagramTarget } from "@/lib/monitoring";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get("url");
-  const username = searchParams.get("username")?.replace(/^@/, "").trim().toLowerCase();
+  const rawUsername = searchParams.get("username");
+  const username = rawUsername ? extractInstagramUsername(rawUsername) : null;
 
   if (!imageUrl && !username) {
     return new NextResponse("Image URL or username is required", { status: 400 });

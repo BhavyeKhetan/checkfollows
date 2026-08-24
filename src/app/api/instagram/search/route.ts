@@ -12,6 +12,14 @@
 
 import { NextResponse } from "next/server";
 import { previewLookup } from "@/lib/monitoring";
+import {
+  PRIVATE_ACCOUNT_CODE,
+  PRIVATE_ACCOUNT_MESSAGE,
+} from "@/lib/instagram/account-eligibility";
+import {
+  extractInstagramUsername,
+  isValidInstagramUsername,
+} from "@/lib/instagram/normalize";
 
 export async function POST(request: Request) {
   try {
@@ -24,9 +32,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const cleanUsername = String(username).replace(/^@/, "").trim();
+    const cleanUsername = extractInstagramUsername(String(username));
 
-    if (!/^[a-zA-Z0-9._]{1,30}$/.test(cleanUsername)) {
+    if (!isValidInstagramUsername(cleanUsername)) {
       return NextResponse.json(
         { success: false, error: "Invalid Instagram username" },
         { status: 400 }
@@ -72,7 +80,11 @@ export async function POST(request: Request) {
 
     if (message.includes("private")) {
       return NextResponse.json(
-        { success: false, error: "private_account" },
+        {
+          success: false,
+          code: PRIVATE_ACCOUNT_CODE,
+          error: PRIVATE_ACCOUNT_MESSAGE,
+        },
         { status: 403 }
       );
     }

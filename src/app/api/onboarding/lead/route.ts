@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -21,7 +22,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
 
-    const username = typeof body.username === "string" ? body.username : null;
+    const rawUsername = typeof body.username === "string" ? body.username : null;
+    const username = rawUsername ? extractInstagramUsername(rawUsername) || null : null;
     const targetId = typeof body.targetId === "string" ? body.targetId : null;
     const relationship =
       typeof body.relationship === "string" ? body.relationship : null;

@@ -6,6 +6,10 @@ import {
 } from "@/lib/supabase/auth";
 import { getTrackingTimeline } from "@/lib/tracking-data";
 import { createServerClient } from "@/lib/supabase/server";
+import {
+  extractInstagramUsername,
+  isValidInstagramUsername,
+} from "@/lib/instagram/normalize";
 
 export async function GET(request: Request) {
   // Paid data: require an authenticated user with an active subscription.
@@ -25,10 +29,11 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const username = searchParams.get("username");
+  const rawUsername = searchParams.get("username");
   const limit = parseInt(searchParams.get("limit") || "50", 10);
+  const cleanUsername = extractInstagramUsername(rawUsername);
 
-  if (!username || !/^[a-zA-Z0-9._]{1,30}$/.test(username.replace(/^@/, "").trim())) {
+  if (!isValidInstagramUsername(cleanUsername)) {
     return NextResponse.json(
       { success: false, error: "A valid username is required" },
       { status: 400 }
@@ -36,7 +41,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const timeline = await getTrackingTimeline(username, limit);
+    const timeline = await getTrackingTimeline(cleanUsername, limit);
     if (!timeline) {
       return NextResponse.json({ success: false, error: "Target not found" }, { status: 404 });
     }

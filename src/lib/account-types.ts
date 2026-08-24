@@ -3,6 +3,7 @@ export interface TrackedTarget {
   username: string;
   full_name: string | null;
   avatar_url: string | null;
+  is_private: boolean;
   is_verified: boolean;
   monitoring_enabled: boolean;
   last_scanned_at: string | null;

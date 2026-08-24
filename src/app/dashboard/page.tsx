@@ -348,7 +348,11 @@ export default function DashboardPage() {
                           >
                             @{t.username}
                           </Link>
-                          {t.monitoring_enabled ? (
+                          {t.is_private ? (
+                            <Badge variant="mono" size="sm" className="shrink-0">
+                              Private
+                            </Badge>
+                          ) : t.monitoring_enabled ? (
                             <Badge
                               variant="lime"
                               size="sm"
@@ -369,6 +373,11 @@ export default function DashboardPage() {
                           <span className="text-[var(--border)]">·</span>
                           <span>Last full scan {formatRelative(t.last_scanned_at)}</span>
                         </p>
+                        {t.is_private && (
+                          <p className="mt-1 text-xs font-bold text-amber-700">
+                            This account became private, so monitoring stopped and no scans will run.
+                          </p>
+                        )}
                         {data.subscriptions.find((subscription) => subscription.target?.id === t.id)?.scan_credit_blocked_at && (
                           <p className="mt-1 text-xs font-bold text-amber-700">
                             Full scan waiting for {data.subscriptions.find((subscription) => subscription.target?.id === t.id)?.scan_credit_required || 1} scan credits or updated approval ·{" "}
@@ -389,6 +398,7 @@ export default function DashboardPage() {
                         variant="secondary"
                         size="sm"
                         isLoading={targetAction === t.id}
+                        disabled={t.is_private}
                         leftIcon={
                           t.monitoring_enabled ? (
                             <Pause className="h-3.5 w-3.5" />
@@ -399,7 +409,11 @@ export default function DashboardPage() {
                         onClick={() => toggleTrackedAccount(t)}
                         className="flex-1 sm:flex-initial"
                       >
-                        {t.monitoring_enabled ? "Pause" : "Resume"}
+                        {t.is_private
+                          ? "Unavailable"
+                          : t.monitoring_enabled
+                            ? "Pause"
+                            : "Resume"}
                       </Button>
 
                       <Link

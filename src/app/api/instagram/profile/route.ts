@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getPreviewProvider } from "@/lib/instagram/provider";
 import { createServerClient } from "@/lib/supabase/server";
 import { upsertInstagramTarget } from "@/lib/monitoring";
+import {
+  extractInstagramUsername,
+  isValidInstagramUsername,
+} from "@/lib/instagram/normalize";
 
 function isInstagramUrlExpired(url: string | null | undefined): boolean {
   if (!url) return true;
@@ -33,9 +37,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const cleanUsername = username.replace(/^@/, "").trim().toLowerCase();
+  const cleanUsername = extractInstagramUsername(username);
 
-  if (!/^[a-zA-Z0-9._]{1,30}$/.test(cleanUsername)) {
+  if (!isValidInstagramUsername(cleanUsername)) {
     return NextResponse.json(
       { success: false, error: "Invalid Instagram username" },
       { status: 400 }

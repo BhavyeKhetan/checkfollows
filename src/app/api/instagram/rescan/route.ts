@@ -13,6 +13,7 @@ import {
   reserveUserScanCredits,
   scanCreditsForFollowingCount,
 } from "@/lib/scan-credits";
+import { PRIVATE_ACCOUNT_MESSAGE } from "@/lib/instagram/account-eligibility";
 
 /**
  * POST /api/instagram/rescan
@@ -63,9 +64,16 @@ export async function POST(request: Request) {
 
     const { data: targetRow } = await supabase
       .from("instagram_targets")
-      .select("monitoring_enabled, following_count, follower_count")
+      .select("monitoring_enabled, following_count, follower_count, is_private")
       .eq("id", targetId)
       .maybeSingle();
+
+    if (targetRow?.is_private === true) {
+      return NextResponse.json(
+        { error: PRIVATE_ACCOUNT_MESSAGE, isPrivate: true },
+        { status: 403 }
+      );
+    }
 
     if (sub?.user_paused === true || targetRow?.monitoring_enabled === false) {
       return NextResponse.json(

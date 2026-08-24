@@ -83,7 +83,7 @@ export async function GET() {
     ? supabase
         .from("instagram_targets")
         .select(
-          "id, username, full_name, avatar_url, is_verified, monitoring_enabled, last_scanned_at, next_scan_at, following_count, follower_count"
+          "id, username, full_name, avatar_url, is_private, is_verified, monitoring_enabled, last_scanned_at, next_scan_at, following_count, follower_count"
         )
         .in("id", targetIds)
     : Promise.resolve({ data: [], error: null });

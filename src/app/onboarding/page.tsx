@@ -22,6 +22,7 @@ import { Button, Input, Card, Badge, Logo } from "@/design-system";
 import EmbeddedCheckout from "@/components/checkout/embedded-checkout";
 import { createClient } from "@/lib/supabase/client";
 import { track } from "@/lib/mixpanel";
+import { extractInstagramUsername } from "@/lib/instagram/normalize";
 
 type Step = "email" | "relationship" | "scanning" | "paywall";
 type Cadence = "weekly" | "quarterly";
@@ -101,7 +102,8 @@ function isValidEmail(val: string): boolean {
 function OnboardingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const username = (searchParams.get("username") || "").replace(/^@/, "");
+  const rawParam = searchParams.get("username") || searchParams.get("q") || "";
+  const username = extractInstagramUsername(rawParam);
   const targetId = searchParams.get("targetId") || "";
 
   const [step, setStep] = useState<Step>("email");

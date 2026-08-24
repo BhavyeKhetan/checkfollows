@@ -9,6 +9,14 @@ import { track } from "@/lib/mixpanel";
 import { RescanBundleModal } from "@/components/tracking/rescan-bundle-modal";
 import type { RescanBundle } from "@/lib/stripe";
 import { refreshAccountData } from "@/lib/account-data-client";
+import {
+  PRIVATE_ACCOUNT_CODE,
+  PRIVATE_ACCOUNT_MESSAGE,
+} from "@/lib/instagram/account-eligibility";
+import {
+  extractInstagramUsername,
+  isValidInstagramUsername,
+} from "@/lib/instagram/normalize";
 
 interface PreviewTarget {
   id: string;
@@ -68,11 +76,12 @@ export default function AddAccountClient({
   }, []);
 
   const performSearch = useCallback(async (rawUsername: string) => {
-    const clean = rawUsername.replace(/^@/, "").trim().toLowerCase();
-    if (!/^[a-zA-Z0-9._]{1,30}$/.test(clean)) {
+    const clean = extractInstagramUsername(rawUsername);
+    if (!isValidInstagramUsername(clean)) {
       setError("Enter a valid Instagram username.");
       return;
     }
+    setUsername(clean);
     setLoading(true);
     setError("");
     setTarget(null);
@@ -87,7 +96,11 @@ export default function AddAccountClient({
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok || !json.success || !json.target?.id) {
-        setError(json.error || "That Instagram account could not be found.");
+        setError(
+          json.code === PRIVATE_ACCOUNT_CODE || json.error === PRIVATE_ACCOUNT_CODE
+            ? PRIVATE_ACCOUNT_MESSAGE
+            : json.error || "That Instagram account could not be found."
+        );
         return;
       }
       setTarget(json.target);

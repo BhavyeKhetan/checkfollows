@@ -208,11 +208,7 @@ export function createPreviewProvider(): PreviewProvider {
       if (profiles.length === 0) {
         throw new Error("Account not found");
       }
-      const profile = profiles[0];
-      if (profile.isPrivate) {
-        throw new Error("This account is private");
-      }
-      return profile;
+      return profiles[0];
     },
 
     fetchProfiles,
