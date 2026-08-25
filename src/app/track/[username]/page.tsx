@@ -8,6 +8,9 @@ import {
   type TrackingTarget,
 } from "@/lib/tracking-data";
 import { createServerClient } from "@/lib/supabase/server";
+import { getPrivateScanResult } from "@/app/api/private-scan/[jobId]/route";
+import type { TrackedEvent } from "./track-page-client";
+import type { PrivateScanResult } from "@/lib/private-scan/contracts";
 
 export const metadata: Metadata = {
   title: "Private tracking dashboard | CheckFollows",
@@ -39,7 +42,7 @@ export default async function TrackPage({
     supabase
       .from("instagram_targets")
       .select(
-        "id, instagram_id, username, full_name, avatar_url, is_verified, following_count, follower_count, last_scanned_at, next_scan_at, monitoring_enabled, monitoring_interval_hours"
+        "id, instagram_id, username, full_name, avatar_url, is_private, is_verified, following_count, follower_count, last_scanned_at, next_scan_at, monitoring_enabled, monitoring_interval_hours"
       )
       .eq("username", cleanUsername)
       .maybeSingle(),
@@ -73,22 +76,58 @@ export default async function TrackPage({
   if (!ownershipRow) notFound();
 
   // Fetch private timeline data only after the ownership check passes.
-  const [timeline, credits] = await Promise.all([
-    getTrackingTimelineForTarget(target),
+  const targetIsPrivate = target.is_private === true;
+
+  const [credits] = await Promise.all([
     getCreditsSummary(user.id),
   ]);
+
+  let timeline: { target: TrackingTarget; events: TrackedEvent[] } | null = null;
+  let privateScanResult: PrivateScanResult | null = null;
+  let privateEvents: TrackedEvent[] = [];
+
+  if (targetIsPrivate) {
+    // Private target: fetch from private scan tables
+    const [scanResult, eventsResult] = await Promise.all([
+      getPrivateScanResult(user.id, target.id),
+      supabase
+        .from("private_follow_events")
+        .select(
+          "id, event_type, instagram_id, username, full_name, avatar_url, is_verified, detected_at, confirmed"
+        )
+        .eq("user_id", user.id)
+        .eq("target_id", target.id)
+        .order("detected_at", { ascending: false })
+        .limit(200),
+    ]);
+    privateScanResult = scanResult;
+    privateEvents = (eventsResult.data || []) as TrackedEvent[];
+    timeline = {
+      target: {
+        ...target,
+        monitoring_enabled: false, // private targets never auto-monitor
+      },
+      events: [],
+    };
+  } else {
+    timeline = await getTrackingTimelineForTarget(target);
+  }
 
   return (
     <TrackPageClient
       username={username}
       userEmail={user.email || ""}
       initialTarget={{
-        ...timeline.target,
-        monitoring_enabled:
-          timeline.target.monitoring_enabled && ownershipRow.user_paused !== true,
+        ...(timeline?.target ?? target),
+        monitoring_enabled: !targetIsPrivate
+          ? (timeline?.target.monitoring_enabled && ownershipRow.user_paused !== true)
+          : false,
       }}
-      initialEvents={timeline.events}
+      initialEvents={timeline?.events ?? []}
       initialCredits={credits}
+      isPrivate={targetIsPrivate}
+      privateScanData={privateScanResult}
+      initialPrivateEvents={privateEvents}
     />
   );
 }

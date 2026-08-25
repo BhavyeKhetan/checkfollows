@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -23,6 +23,13 @@ import {
   Clock,
   Download,
   Users,
+  Scan,
+  Smartphone,
+  Copy,
+  Check,
+  Share2,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { Button, Badge, Card, Avatar, Tabs, StatCard } from "@/design-system";
 import { track } from "@/lib/mixpanel";
@@ -60,6 +67,7 @@ export interface TargetProfile {
   next_scan_at: string | null;
   monitoring_enabled: boolean;
   monitoring_interval_hours: number;
+  is_private?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -174,6 +182,19 @@ interface TrackPageClientProps {
     scan_weekly_allowance: number;
     scan_refresh_at: string | null;
   };
+  /** True when the target Instagram account is private */
+  isPrivate?: boolean;
+  /** Private scan result summary from the server */
+  privateScanData?: {
+    lastScanAt: string | null;
+    lastScanJobId: string | null;
+    lastScanStatus: "completed" | "failed" | null;
+    hasBaseline: boolean;
+    followerSnapshotMemberCount: number;
+    followingSnapshotMemberCount: number;
+  } | null;
+  /** Private scan events (when target is private) */
+  initialPrivateEvents?: TrackedEvent[];
 }
 
 export default function TrackPageClient({
@@ -182,6 +203,9 @@ export default function TrackPageClient({
   initialTarget,
   initialEvents,
   initialCredits,
+  isPrivate = false,
+  privateScanData = null,
+  initialPrivateEvents = [],
 }: TrackPageClientProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -215,15 +239,59 @@ export default function TrackPageClient({
     }>;
   } | null>(null);
 
+  // ─── Private scan state ─────────────────────────────
+  const [privateScanStatus, setPrivateScanStatus] = useState<
+    "idle" | "starting" | "active" | "polling" | "completed" | "error"
+  >("idle");
+  const [privateScanJobId, setPrivateScanJobId] = useState<string | null>(null);
+  const [privateScanError, setPrivateScanError] = useState("");
+  const [privateScanPollCount, setPrivateScanPollCount] = useState(0);
+  const [privateEvents, setPrivateEvents] = useState<TrackedEvent[]>(initialPrivateEvents);
+  const [privateScanDataState, setPrivateScanDataState] = useState(privateScanData);
+  const [showMobileInstructions, setShowMobileInstructions] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const instagramWindowRef = useRef<Window | null>(null);
+
   // Authentication and paid access are enforced by the parent Server
   // Component before any timeline HTML is rendered.
   useEffect(() => {
     track("tracking_page_viewed", {
       username,
       monitoring_enabled: initialTarget.monitoring_enabled,
-      events_count: initialEvents.length,
+      events_count: isPrivate ? initialPrivateEvents.length : initialEvents.length,
     });
-  }, [username, initialTarget.monitoring_enabled, initialEvents.length]);
+  }, [username, initialTarget.monitoring_enabled, initialEvents.length, isPrivate, initialPrivateEvents.length]);
+
+  // ─── Private scan: handle post-scan redirect with query params ───
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const scanJobId = params.get("privateScan");
+    const completed = params.get("completed");
+
+    if (scanJobId && completed === "true") {
+      track("private_scan_results_viewed", {
+        username,
+        job_id: scanJobId,
+      });
+
+      // Clean params and refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete("privateScan");
+      url.searchParams.delete("completed");
+      window.history.replaceState({}, "", url.toString());
+      loadPrivateScanData();
+    }
+  }, []);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!username) return;
@@ -255,6 +323,168 @@ export default function TrackPageClient({
       setLoading(false);
     }
   }, [username, router]);
+
+  // ─── Private scan: refresh data ────────────────────
+  const loadPrivateScanData = useCallback(async () => {
+    // After a scan completes, the server component re-renders with fresh data.
+    // We just reload the page to get the freshest state from the server.
+    window.location.reload();
+  }, []);
+
+  // ─── Private scan: start a new scan ─────────────────
+  const handleStartPrivateScan = async (retry = false) => {
+    if (!target || privateScanStatus === "starting") return;
+
+    track(retry ? "private_scan_setup_confirmed" : "private_scan_started", {
+      username: target.username,
+    });
+
+    setPrivateScanStatus("starting");
+    setPrivateScanError("");
+    setShowMobileInstructions(false);
+    setCopiedToken(false);
+
+    try {
+      const res = await fetch("/api/private-scan/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetId: target.id,
+          requestedLists: ["followers", "following"],
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPrivateScanError(data.error || "Failed to start scan");
+        setPrivateScanStatus("error");
+        return;
+      }
+
+      const { scanToken, instagramUrl, jobId } = data;
+      setPrivateScanJobId(jobId);
+
+      // Copy token to clipboard
+      try {
+        await navigator.clipboard.writeText(scanToken);
+        setCopiedToken(true);
+      } catch {
+        // Clipboard may fail — user can still paste manually
+      }
+
+      // Open Instagram in a new tab/window
+      if (!retry) {
+        track("private_scan_instagram_handoff_started", {
+          username: target.username,
+        });
+        instagramWindowRef.current = window.open(
+          instagramUrl,
+          "_blank",
+          "noopener"
+        );
+      }
+
+      setPrivateScanStatus("active");
+
+      // Show mobile instructions and track view
+      setShowMobileInstructions(true);
+      track("private_scan_setup_viewed", {
+        username: target.username,
+      });
+
+      // Start polling
+      pollJobStatus(jobId);
+    } catch {
+      setPrivateScanError("Network error");
+      setPrivateScanStatus("error");
+    }
+  };
+
+  // ─── Private scan: poll job status ──────────────────
+  const pollJobStatus = (jobId: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+
+    setPrivateScanPollCount(0);
+
+    pollingRef.current = setInterval(async () => {
+      setPrivateScanPollCount((c) => c + 1);
+
+      try {
+        const res = await fetch(`/api/private-scan/${jobId}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        if (data.status === "completed") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPrivateScanStatus("completed");
+          setShowMobileInstructions(false);
+
+          // Refresh data
+          await loadPrivateScanData();
+
+          track("private_scan_completed", {
+            username: target?.username,
+            has_events: data.hasEvents,
+            event_count: data.eventCount,
+          });
+
+          // Auto-close Instagram tab after a beat if it's still open
+          setTimeout(() => {
+            if (instagramWindowRef.current) {
+              try {
+                instagramWindowRef.current.close();
+              } catch {
+                // Cross-origin close may be blocked
+              }
+            }
+          }, 2000);
+        } else if (data.status === "failed") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPrivateScanStatus("error");
+          setPrivateScanError(
+            data.errorDetailSafe || "Scan failed. Please try again."
+          );
+
+          track("private_scan_failed", {
+            username: target?.username,
+            error_code: data.errorCode,
+          });
+        } else if (data.status === "expired") {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPrivateScanStatus("error");
+          setPrivateScanError("Scan request expired. Start a new scan.");
+        }
+
+        // Stop polling after 10 minutes (job TTL is 30 min, but user shouldn't wait that long)
+        if (setPrivateScanPollCount.length > 120) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          setPrivateScanStatus("error");
+          setPrivateScanError("Scan is taking too long. You can check back later.");
+        }
+      } catch {
+        // Network errors during polling are OK — keep trying
+      }
+    }, 5000); // Poll every 5 seconds
+  };
+
+  // ─── Private scan: cancel / reset ───────────────────
+  const handleCancelPrivateScan = () => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    setPrivateScanStatus("idle");
+    setPrivateScanJobId(null);
+    setShowMobileInstructions(false);
+    setPrivateScanError("");
+  };
+
+  // ─── Private scan: copy scan token (for manual sharing) ──
+  const handleCopyScanToken = async () => {
+    if (!privateScanJobId) return;
+    // The token was already copied on start — this just confirms
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
 
   const handleToggleMonitoring = async () => {
     if (!target) return;
@@ -792,6 +1022,495 @@ export default function TrackPageClient({
     );
   }
 
+  // ─── PRIVATE TARGET RENDER ──────────────────────────────────────
+  if (isPrivate) {
+    const privateEventsCount = privateEvents.length;
+    const privateConfirmed = privateEvents.filter((e) => e.confirmed);
+    const newFollows = privateConfirmed.filter((e) => e.event_type === "NEW_FOLLOWING").length;
+    const unfollows = privateConfirmed.filter((e) => e.event_type === "STOPPED_FOLLOWING").length;
+    const newFollowers = privateConfirmed.filter((e) => e.event_type === "NEW_FOLLOWER").length;
+    const lostFollowers = privateConfirmed.filter((e) => e.event_type === "LOST_FOLLOWER").length;
+    const lastScanTime = privateScanDataState?.lastScanAt;
+    const hasBaseline = privateScanDataState?.hasBaseline ?? false;
+    const isScanning = privateScanStatus === "starting" || privateScanStatus === "active" || privateScanStatus === "polling";
+    const scanJustCompleted = privateScanStatus === "completed";
+
+    return (
+      <AppShell maxWidth="max-w-6xl">
+        {/* ── Profile Hero ── */}
+        <section className="border-b border-[#E2E2DC] bg-[#F9F9F7] ramp-grid-bg">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col sm:flex-row items-start sm:items-center gap-5"
+            >
+              <Avatar
+                src={target.avatar_url}
+                username={target.username}
+                isVerified={target.is_verified}
+                size="xl"
+                limeHalo
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-[#121212]">
+                    @{target.username}
+                  </h1>
+                  {target.is_verified && (
+                    <CheckCircle2 className="w-5 h-5 text-blue-500 fill-blue-500 stroke-white" />
+                  )}
+                  <Badge variant="mono" size="sm" className="ml-1">
+                    Private
+                  </Badge>
+                </div>
+                {target.full_name &&
+                target.full_name.replace(/^@/, "").toLowerCase() !==
+                  target.username.toLowerCase() ? (
+                  <p className="font-medium text-[#555555]">{target.full_name}</p>
+                ) : null}
+                <p className="text-xs text-[#555555] mt-1.5">
+                  This account is private. Use the iPhone Shortcut to scan.
+                </p>
+              </div>
+
+              {/* Scan now button */}
+              <div className="flex flex-col items-end gap-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  leftIcon={
+                    isScanning ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Scan className="w-4 h-4" />
+                    )
+                  }
+                  onClick={() => handleStartPrivateScan()}
+                  isLoading={privateScanStatus === "starting"}
+                  disabled={isScanning}
+                >
+                  {isScanning
+                    ? "Scanning..."
+                    : scanJustCompleted
+                    ? "Scan complete!"
+                    : "Scan now"}
+                </Button>
+                {lastScanTime && (
+                  <span className="text-[11px] font-semibold text-[#777777]">
+                    Last scan: {formatRelativeTime(lastScanTime)}
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ── Scanning instructions / status ── */}
+        {(isScanning || showMobileInstructions || scanJustCompleted || privateScanError) && (
+          <section className="border-b border-[#E2E2DC] bg-[#FFFDF5]">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-5">
+              {isScanning && showMobileInstructions && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border-2 border-[#E7F256] bg-[#F9F9F7] p-5"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="shrink-0 w-10 h-10 rounded-xl bg-[#E7F256] flex items-center justify-center">
+                      <Smartphone className="w-5 h-5 text-[#121212]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-extrabold text-[#121212] mb-1.5">
+                        Continue the scan on your iPhone
+                      </h3>
+                      <ol className="text-xs text-[#555555] space-y-1.5 list-decimal list-inside">
+                        <li>
+                          Instagram opened in a new tab.{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (instagramWindowRef.current?.closed === false) {
+                                instagramWindowRef.current.focus();
+                              } else {
+                                window.open(
+                                  `https://www.instagram.com/${target.username}/`,
+                                  "_blank"
+                                );
+                              }
+                            }}
+                            className="underline font-bold text-[#121212] hover:text-[#555555]"
+                          >
+                            Reopen Instagram
+                          </button>
+                        </li>
+                        <li>Tap the <strong>Share</strong> button in Safari</li>
+                        <li>Tap <strong>CheckFollows Scan</strong> in the share sheet</li>
+                        <li>The Shortcut runs automatically — no scrolling needed</li>
+                        <li>Come back here when it&apos;s done</li>
+                      </ol>
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="text-[10px] font-bold text-[#777777] uppercase tracking-wide">
+                          Scan token copied to clipboard
+                        </div>
+                        {copiedToken ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5 text-[#777777]" />
+                        )}
+                      </div>
+
+                      {/* Polling indicator */}
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-[#E7F256] animate-pulse" />
+                        <span className="text-[11px] font-semibold text-[#777777]">
+                          Waiting for scan to complete{privateScanPollCount > 0 ? ` (${(privateScanPollCount * 5)}s)` : "..."}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelPrivateScan}
+                      className="text-[11px] font-bold text-[#777777] hover:text-[#B91C1C] transition-colors"
+                    >
+                      Cancel scan
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {scanJustCompleted && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border-2 border-emerald-200 bg-emerald-50 p-5"
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                    <div>
+                      <h3 className="text-sm font-extrabold text-[#121212]">
+                        Scan complete!
+                      </h3>
+                      <p className="text-xs text-[#555555] mt-0.5">
+                        {hasBaseline && privateEventsCount > 0
+                          ? `${privateEventsCount} change${privateEventsCount === 1 ? "" : "s"} detected.`
+                          : hasBaseline
+                          ? "No changes detected."
+                          : "Baseline saved. Changes will appear after your next scan."}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrivateScanStatus("idle");
+                      window.location.reload();
+                    }}
+                    className="mt-2 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 transition-colors"
+                  >
+                    Refresh to see results
+                  </button>
+                </motion.div>
+              )}
+
+              {privateScanError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-rose-200 bg-rose-50 p-4"
+                >
+                  <p className="text-sm font-semibold text-[#B91C1C]">{privateScanError}</p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStartPrivateScan(true)}
+                      className="text-[11px] font-bold text-[#121212] hover:underline"
+                    >
+                      Try again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelPrivateScan}
+                      className="text-[11px] font-bold text-[#777777] hover:underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Baseline state ── */}
+        {!isScanning && !scanJustCompleted && !hasBaseline && !privateScanError && (
+          <section className="border-b border-[#E2E2DC] bg-[#FFFFFF]">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#F9F9F7] border border-[#E2E2DC] mb-4">
+                <Scan className="w-8 h-8 text-[#121212]" />
+              </div>
+              <h2 className="text-lg font-extrabold text-[#121212] mb-1.5">
+                No scan yet
+              </h2>
+              <p className="text-sm text-[#555555] max-w-sm mx-auto mb-6">
+                Tap <strong>Scan now</strong> to run your first private scan from
+                iPhone Safari. This establishes a baseline — changes will appear
+                after your next scan.
+              </p>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#F9F9F7] border border-[#E2E2DC]">
+                <Smartphone className="w-4 h-4 text-[#121212]" />
+                <span className="text-xs font-bold text-[#121212]">
+                  Requires iPhone + Safari + CheckFollows Shortcut
+                </span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── Freshness Bar ── */}
+        {hasBaseline && (
+          <section className="border-b border-[#E2E2DC] bg-[#FFFFFF]">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 flex-wrap text-xs">
+              <div className="flex items-center gap-1.5 text-[#555555] font-semibold">
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    scanJustCompleted
+                      ? "bg-emerald-500 animate-pulse"
+                      : lastScanTime
+                      ? "bg-emerald-500"
+                      : "bg-[#E2E2DC]"
+                  }`}
+                />
+                <span>
+                  Last private scan:{" "}
+                  <strong className="text-[#121212]">
+                    {scanJustCompleted
+                      ? "Just now"
+                      : formatRelativeTime(lastScanTime ?? null)}
+                  </strong>
+                </span>
+              </div>
+              {privateScanDataState?.followerSnapshotMemberCount ? (
+                <>
+                  <span className="text-[#E2E2DC]">·</span>
+                  <span className="text-[#555555] font-semibold">
+                    {privateScanDataState.followerSnapshotMemberCount.toLocaleString()}{" "}
+                    followers ·{" "}
+                    {privateScanDataState.followingSnapshotMemberCount.toLocaleString()}{" "}
+                    following
+                  </span>
+                </>
+              ) : null}
+              {hasBaseline && !privateScanDataState?.lastScanAt && (
+                <div className="flex items-center gap-1.5 text-[#555555] font-bold ml-auto">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Baseline established — scan again to see changes
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Export (still available for private accounts) ── */}
+        <section className="max-w-4xl mx-auto px-4 sm:px-6 py-6 w-full">
+          <Card padding="lg">
+            <h2 className="text-base font-extrabold text-[#121212]">Export timeline</h2>
+            <p className="text-xs text-[#555555] mt-0.5 mb-5">
+              Download your private scan history as a CSV spreadsheet.
+            </p>
+            <div className="max-w-xs">
+              <div className="flex items-center justify-between mb-2">
+                <Download className="w-5 h-5 text-[#121212]" />
+                {credits.unlimited_export ? (
+                  <Badge variant="lime" size="sm">Unlimited Forever</Badge>
+                ) : credits.export > 0 ? (
+                  <Badge variant="lime" size="sm">{credits.export} available</Badge>
+                ) : null}
+              </div>
+              <p className="text-xs text-[#555555] mb-3">
+                Download the full follow/unfollow history as a CSV.
+              </p>
+              <Button
+                variant={hasExportAccess ? "primary" : "secondary"}
+                size="sm"
+                onClick={hasExportAccess ? handleExport : () => setShowExportModal(true)}
+                isLoading={exporting}
+                fullWidth
+              >
+                {credits.unlimited_export
+                  ? "Download CSV (Forever)"
+                  : credits.export > 0
+                  ? `Export CSV (${credits.export} left)`
+                  : "Export CSV"}
+              </Button>
+              {!credits.unlimited_export && (
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(true)}
+                  className="w-full text-center text-[11px] font-bold text-[#555555] hover:text-[#121212] transition-colors py-1 mt-1"
+                >
+                  {credits.export > 0 ? "+ Upgrade to Unlimited Forever" : "Get Unlimited Forever"}
+                </button>
+              )}
+            </div>
+          </Card>
+        </section>
+
+        {/* ── Timeline ── */}
+        <section className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 py-8 w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-extrabold text-[#121212]">Activity Timeline</h2>
+              <p className="text-xs text-[#555555] mt-0.5">
+                {privateEventsCount} total events · {privateConfirmed.length} confirmed
+              </p>
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          {privateEventsCount > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              <StatCard
+                label="New Follows"
+                value={newFollows}
+                icon={<UserPlus className="w-4 h-4" />}
+                changeType="positive"
+              />
+              <StatCard
+                label="Unfollows"
+                value={unfollows}
+                icon={<UserMinus className="w-4 h-4" />}
+                changeType={unfollows > 0 ? "negative" : "neutral"}
+              />
+              <StatCard
+                label="New Followers"
+                value={newFollowers}
+                icon={<TrendingUp className="w-4 h-4" />}
+                changeType="positive"
+              />
+              <StatCard
+                label="Lost Followers"
+                value={lostFollowers}
+                icon={<TrendingUp className="w-4 h-4 rotate-180" />}
+                changeType={lostFollowers > 0 ? "negative" : "neutral"}
+              />
+            </div>
+          )}
+
+          {/* Event list */}
+          {privateEventsCount === 0 ? (
+            <Card variant="subtle" className="text-center py-12">
+              <Calendar className="w-10 h-10 text-[#555555] mx-auto mb-3" />
+              <h3 className="font-bold text-[#121212] mb-1">
+                {hasBaseline ? "No changes detected" : "Run your first scan"}
+              </h3>
+              <p className="text-sm text-[#555555] max-w-sm mx-auto">
+                {hasBaseline
+                  ? "Tap Scan now to check for new changes."
+                  : "After your first scan establishes a baseline, changes will appear here after the next scan."}
+              </p>
+            </Card>
+          ) : (
+            <div className="relative">
+              <div className="absolute left-5 top-0 bottom-0 w-px bg-[#E2E2DC]" />
+              <div className="space-y-1">
+                {privateEvents.map((event, idx) => {
+                  const isAddition =
+                    event.event_type === "NEW_FOLLOWING" ||
+                    event.event_type === "NEW_FOLLOWER";
+
+                  return (
+                    <motion.div
+                      key={event.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.02 }}
+                      className="relative pl-12 py-3"
+                    >
+                      <div
+                        className={`absolute left-[14px] top-4 w-3 h-3 rounded-full border-2 border-[#FFFFFF] shadow-sm ${
+                          event.confirmed
+                            ? isAddition
+                              ? "bg-emerald-500"
+                              : "bg-rose-500"
+                            : "bg-[#E2E2DC] border-dashed"
+                        }`}
+                      />
+                      <Card hoverable className="bg-[#FFFFFF]">
+                        <div className="flex items-center gap-3">
+                          <div className="shrink-0 p-2 rounded-xl bg-[#F9F9F7] border border-[#E2E2DC]">
+                            {eventIcon(event.event_type, "sm")}
+                          </div>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Avatar
+                              src={event.avatar_url}
+                              username={event.username}
+                              isVerified={event.is_verified}
+                              size="md"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-sm text-[#121212] truncate">
+                                  @{event.username}
+                                </span>
+                                {event.full_name && (
+                                  <span className="text-xs text-[#555555]">
+                                    {event.full_name}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-[#555555]">
+                                  {eventLabel(event.event_type)}
+                                </span>
+                                <span className="text-[#E2E2DC] text-[10px]">·</span>
+                                <span className="text-xs text-[#777777]">
+                                  {formatRelativeTime(event.detected_at)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── Footer ── */}
+        <footer className="py-8 px-4 sm:px-6 bg-[#FFFFFF] border-t border-[#E2E2DC]">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="flex items-center justify-center gap-4 text-[10px] text-[#777777] font-medium">
+              <Link href="/dashboard" className="hover:text-[#121212] transition-colors">
+                Dashboard
+              </Link>
+              <span>·</span>
+              <Link href="/account" className="hover:text-[#121212] transition-colors">
+                Account
+              </Link>
+            </div>
+          </div>
+        </footer>
+
+        {/* ── Modals ── */}
+        <ExportModal
+          open={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          username={target.username}
+          onSelectOption={handleSelectExportOption}
+          loading={purchasingExport}
+        />
+      </AppShell>
+    );
+  }
+
+  // ─── PUBLIC TARGET RENDER (existing) ──────────────────────────
   return (
     <AppShell
       maxWidth="max-w-6xl"

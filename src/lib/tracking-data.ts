@@ -20,6 +20,7 @@ export interface TrackingTarget {
   username: string;
   full_name: string | null;
   avatar_url: string | null;
+  is_private: boolean;
   is_verified: boolean;
   following_count: number;
   follower_count: number;
@@ -44,7 +45,7 @@ export async function getTrackingTimeline(
   const { data: target, error: targetError } = await supabase
     .from("instagram_targets")
     .select(
-      "id, instagram_id, username, full_name, avatar_url, is_verified, following_count, follower_count, last_scanned_at, next_scan_at, monitoring_enabled, monitoring_interval_hours"
+      "id, instagram_id, username, full_name, avatar_url, is_private, is_verified, following_count, follower_count, last_scanned_at, next_scan_at, monitoring_enabled, monitoring_interval_hours"
     )
     .eq("username", cleanUsername)
     .maybeSingle();

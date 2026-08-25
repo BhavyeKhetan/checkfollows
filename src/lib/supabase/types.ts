@@ -390,6 +390,210 @@ export interface Database {
         };
         Relationships: [];
       };
+      private_scan_jobs: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_id: string;
+          status: "open" | "completed" | "failed" | "expired";
+          requested_lists: string[];
+          viewer_instagram_id: string | null;
+          viewer_username: string | null;
+          shortcut_version: string | null;
+          adapter_version: string | null;
+          started_at: string;
+          completed_at: string | null;
+          expires_at: string;
+          error_code: string | null;
+          error_detail_safe: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_id: string;
+          status?: "open" | "completed" | "failed" | "expired";
+          requested_lists?: string[];
+          viewer_instagram_id?: string | null;
+          viewer_username?: string | null;
+          shortcut_version?: string | null;
+          adapter_version?: string | null;
+          started_at?: string;
+          completed_at?: string | null;
+          expires_at: string;
+          error_code?: string | null;
+          error_detail_safe?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          target_id?: string;
+          status?: "open" | "completed" | "failed" | "expired";
+          requested_lists?: string[];
+          viewer_instagram_id?: string | null;
+          viewer_username?: string | null;
+          shortcut_version?: string | null;
+          adapter_version?: string | null;
+          started_at?: string;
+          completed_at?: string | null;
+          expires_at?: string;
+          error_code?: string | null;
+          error_detail_safe?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      private_scan_pages: {
+        Row: {
+          id: string;
+          job_id: string;
+          user_id: string;
+          target_id: string;
+          list_type: "followers" | "following";
+          page_index: number;
+          request_cursor_hash: string | null;
+          next_cursor_hash: string | null;
+          terminal: boolean;
+          raw_count: number;
+          unique_count: number;
+          page_hash: string;
+          members: Json;
+          received_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          user_id: string;
+          target_id: string;
+          list_type: "followers" | "following";
+          page_index: number;
+          request_cursor_hash?: string | null;
+          next_cursor_hash?: string | null;
+          terminal?: boolean;
+          raw_count?: number;
+          unique_count?: number;
+          page_hash: string;
+          members?: Json;
+          received_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          user_id?: string;
+          target_id?: string;
+          list_type?: "followers" | "following";
+          page_index?: number;
+          request_cursor_hash?: string | null;
+          next_cursor_hash?: string | null;
+          terminal?: boolean;
+          raw_count?: number;
+          unique_count?: number;
+          page_hash?: string;
+          members?: Json;
+          received_at?: string;
+        };
+        Relationships: [];
+      };
+      private_follow_snapshots: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_id: string;
+          job_id: string;
+          snapshot_type: "followers" | "following";
+          account_ids: string[];
+          account_usernames: string[];
+          set_hash: string;
+          manifest: Json;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_id: string;
+          job_id: string;
+          snapshot_type: "followers" | "following";
+          account_ids?: string[];
+          account_usernames?: string[];
+          set_hash: string;
+          manifest?: Json;
+          captured_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          target_id?: string;
+          job_id?: string;
+          snapshot_type?: "followers" | "following";
+          account_ids?: string[];
+          account_usernames?: string[];
+          set_hash?: string;
+          manifest?: Json;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      private_follow_events: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_id: string;
+          event_type:
+            | "NEW_FOLLOWING"
+            | "STOPPED_FOLLOWING"
+            | "NEW_FOLLOWER"
+            | "LOST_FOLLOWER";
+          instagram_id: string;
+          username: string;
+          full_name: string | null;
+          avatar_url: string | null;
+          is_verified: boolean;
+          confirmed: boolean;
+          previous_snapshot_id: string | null;
+          current_snapshot_id: string;
+          detected_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_id: string;
+          event_type:
+            | "NEW_FOLLOWING"
+            | "STOPPED_FOLLOWING"
+            | "NEW_FOLLOWER"
+            | "LOST_FOLLOWER";
+          instagram_id: string;
+          username: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          is_verified?: boolean;
+          confirmed?: boolean;
+          previous_snapshot_id?: string | null;
+          current_snapshot_id: string;
+          detected_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          target_id?: string;
+          event_type?:
+            | "NEW_FOLLOWING"
+            | "STOPPED_FOLLOWING"
+            | "NEW_FOLLOWER"
+            | "LOST_FOLLOWER";
+          instagram_id?: string;
+          username?: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          is_verified?: boolean;
+          confirmed?: boolean;
+          previous_snapshot_id?: string | null;
+          current_snapshot_id?: string;
+          detected_at?: string;
+        };
+        Relationships: [];
+      };
       scan_credit_ledger: {
         Row: {
           id: string;
