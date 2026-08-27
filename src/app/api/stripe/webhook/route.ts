@@ -10,6 +10,10 @@ import { grantPurchasedScanCredits } from "@/lib/scan-credits";
 import { trackServer } from "@/lib/mixpanel-server";
 import { collapseDuplicateStripeSubscription } from "@/lib/subscription-management";
 import type Stripe from "stripe";
+import {
+  recordCheckFollowsChargeLifecycle,
+  recordCheckFollowsInvoiceCommission,
+} from "@/lib/creator-affiliate-webhook";
 
 /**
  * Fire a server-side Mixpanel lifecycle event for a subscription, resolving
@@ -419,6 +423,7 @@ export async function POST(request: Request) {
 
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
+        await recordCheckFollowsInvoiceCommission(event, invoice, getStripe());
         const paidSubId = (invoice as unknown as Record<string, unknown>)
           .subscription as string | undefined;
         if (paidSubId) {
@@ -481,6 +486,14 @@ export async function POST(request: Request) {
         const dispute = event.data.object as Stripe.Dispute;
         const chargeId = dispute.charge as string;
         if (chargeId) {
+          const charge = await getStripe().charges.retrieve(chargeId);
+          await recordCheckFollowsChargeLifecycle(
+            event,
+            charge,
+            "dispute",
+            dispute.amount,
+            getStripe()
+          );
           try {
             await getStripe().refunds.create({ charge: chargeId });
             console.log("[Webhook] Refunded charge after dispute:", chargeId);
@@ -488,6 +501,36 @@ export async function POST(request: Request) {
             console.error("[Webhook] Dispute refund failed:", err);
           }
           trackServer("dispute_created", { charge_id: chargeId });
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        if (charge.amount_refunded > 0) {
+          await recordCheckFollowsChargeLifecycle(
+            event,
+            charge,
+            "refund",
+            charge.amount_refunded,
+            getStripe()
+          );
+        }
+        break;
+      }
+
+      case "charge.dispute.closed": {
+        const dispute = event.data.object as Stripe.Dispute;
+        if (dispute.status === "won") {
+          const chargeId = dispute.charge as string;
+          const charge = await getStripe().charges.retrieve(chargeId);
+          await recordCheckFollowsChargeLifecycle(
+            event,
+            charge,
+            "dispute_reversal",
+            dispute.amount,
+            getStripe()
+          );
         }
         break;
       }
