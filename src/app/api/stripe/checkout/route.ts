@@ -11,6 +11,10 @@ import {
   ALREADY_SUBSCRIBED_MESSAGE,
   findLiveCustomerSubscription,
 } from "@/lib/subscription-management";
+import {
+  creatorAttributionToStripeMetadata,
+  readCreatorAttributionCookie,
+} from "@/lib/creator-link-attribution";
 
 export async function POST(request: Request) {
   try {
@@ -79,12 +83,16 @@ export async function POST(request: Request) {
 
     // "pro" plan = email alerts enabled (add-on). "basic" = monitoring only.
     const plan = emailAlerts ? "pro" : "basic";
+    const creatorAttributionMetadata = creatorAttributionToStripeMetadata(
+      await readCreatorAttributionCookie()
+    );
     const sharedMetadata = {
       product: "checkfollows",
       cadence,
       tier,
       plan,
       email_alerts: String(emailAlerts),
+      ...creatorAttributionMetadata,
       ...targetMeta,
     };
 

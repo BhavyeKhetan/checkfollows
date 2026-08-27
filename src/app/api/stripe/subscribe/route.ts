@@ -13,6 +13,10 @@ import {
   isManageableSubscription,
   type BillingCadence,
 } from "@/lib/subscription-management";
+import {
+  creatorAttributionToStripeMetadata,
+  readCreatorAttributionCookie,
+} from "@/lib/creator-link-attribution";
 
 export async function POST(request: Request) {
   try {
@@ -84,6 +88,9 @@ export async function POST(request: Request) {
       lineItems.push({ price: getEmailAlertsPriceId(cadence), quantity: 1 });
     }
 
+    const creatorAttributionMetadata = creatorAttributionToStripeMetadata(
+      await readCreatorAttributionCookie()
+    );
     const metadata = {
       product: "checkfollows",
       source: "app_paywall",
@@ -93,6 +100,7 @@ export async function POST(request: Request) {
       tier,
       plan: emailAlerts ? "pro" : "basic",
       email_alerts: String(emailAlerts),
+      ...creatorAttributionMetadata,
     };
     const origin = appReturnOrigin(request);
     const session = await stripe.checkout.sessions.create({

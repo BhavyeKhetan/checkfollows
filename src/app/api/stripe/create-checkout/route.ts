@@ -13,6 +13,10 @@ import {
   findLiveCustomerSubscription,
   findReusableIncompleteSubscription,
 } from "@/lib/subscription-management";
+import {
+  creatorAttributionToStripeMetadata,
+  readCreatorAttributionCookie,
+} from "@/lib/creator-link-attribution";
 
 const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
@@ -51,6 +55,9 @@ export async function POST(request: Request) {
     }
 
     const plan = emailAlerts ? "pro" : "basic";
+    const creatorAttributionMetadata = creatorAttributionToStripeMetadata(
+      await readCreatorAttributionCookie()
+    );
 
     const authUser = await getAuthUser();
     if (authUser && (await hasActiveSubscription(authUser.id))) {
@@ -69,7 +76,11 @@ export async function POST(request: Request) {
     if (!customer) {
       customer = await stripe.customers.create({
         email,
-        metadata: { product: "checkfollows" },
+        metadata: { product: "checkfollows", ...creatorAttributionMetadata },
+      });
+    } else if (Object.keys(creatorAttributionMetadata).length > 0) {
+      customer = await stripe.customers.update(customer.id, {
+        metadata: { ...customer.metadata, ...creatorAttributionMetadata },
       });
     }
 
@@ -87,6 +98,7 @@ export async function POST(request: Request) {
       plan,
       email,
       email_alerts: String(emailAlerts),
+      ...creatorAttributionMetadata,
     };
     if (username) metadata.username = username;
     if (targetId) metadata.target_id = targetId;
@@ -119,6 +131,12 @@ export async function POST(request: Request) {
         !reusable.latest_invoice.confirmation_secret?.client_secret
       ) {
         withSecret = await stripe.subscriptions.retrieve(reusable.id, {
+          expand: ["latest_invoice.confirmation_secret"],
+        });
+      }
+      if (Object.keys(creatorAttributionMetadata).length > 0) {
+        withSecret = await stripe.subscriptions.update(withSecret.id, {
+          metadata: { ...withSecret.metadata, ...creatorAttributionMetadata },
           expand: ["latest_invoice.confirmation_secret"],
         });
       }
