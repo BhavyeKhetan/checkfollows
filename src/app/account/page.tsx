@@ -14,13 +14,13 @@ import {
   RefreshCw,
   Users,
   CreditCard,
-  Sparkles,
 } from "lucide-react";
 import { Button, Badge, Card } from "@/design-system";
 import { track, identify } from "@/lib/mixpanel";
 import { BillingManagement } from "@/components/account/billing-management";
 import { AccountSkeleton } from "@/components/account/account-skeleton";
 import { AppShell } from "@/components/app/app-shell";
+import { SubscriptionPlanPicker } from "@/components/subscription/subscription-plan-picker";
 import {
   AccountDataRequestError,
   useAccountData,
@@ -68,6 +68,21 @@ export default function AccountPage() {
       has_active_subscription: data.hasActiveSubscription,
     });
   }, [data]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("renewal_canceled") !== "1") return;
+
+    const revealOffer = window.setTimeout(() => {
+      setShowWinbackOffer(true);
+      track("renewal_offer_revealed", {
+        offer: "winback_50",
+        source: "checkout_abandoned",
+      });
+      window.history.replaceState({}, "", "/account#renew-subscription");
+    }, 0);
+    return () => window.clearTimeout(revealOffer);
+  }, []);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -523,9 +538,22 @@ export default function AccountPage() {
             showWinback={showWinbackOffer}
             loading={renewalLoading}
             error={renewalError}
-            onCadenceChange={setRenewalCadence}
-            onTierChange={setRenewalTier}
-            onEmailAlertsChange={setRenewalEmailAlerts}
+            onCadenceChange={(value) => {
+              setRenewalCadence(value);
+              track("billing_cadence_selected", { cadence: value, source: "renewal" });
+            }}
+            onTierChange={(value) => {
+              setRenewalTier(value);
+              track("plan_tier_selected", { tier: value, source: "renewal" });
+            }}
+            onEmailAlertsChange={(value) => {
+              setRenewalEmailAlerts(value);
+              track("email_alerts_toggled", {
+                state: value ? "on" : "off",
+                cadence: renewalCadence,
+                source: "renewal",
+              });
+            }}
             onRenew={() => startRenewal("standard")}
             onDecline={() => {
               setShowWinbackOffer(true);
@@ -601,98 +629,62 @@ function LockedAccount({
 
   return (
     <section id="renew-subscription" className="space-y-5 scroll-mt-24">
-      <Card variant="highlight" padding="lg">
-        <div className="flex items-start gap-4">
-          <div className="w-11 h-11 rounded-xl bg-[#121212] text-[#E7F256] flex items-center justify-center shrink-0">
-            <CreditCard className="w-5 h-5" />
-          </div>
-          <div className="flex-1">
-            <Badge variant="lime" size="sm" className="mb-2">REACTIVATE YOUR ACCOUNT</Badge>
-            <h2 className="text-xl font-extrabold">Renew your subscription</h2>
-            <p className="text-sm text-[#555555] mt-1">
-              Your history is preserved. Renewal reveals it again and resumes every-other-day monitoring.
-            </p>
-
-            <div className="grid sm:grid-cols-2 gap-3 mt-5">
-              <ChoiceGroup
-                label="Plan"
-                value={tier}
-                options={[
-                  { value: "base", label: "Basic" },
-                  { value: "premium", label: "Premium" },
-                ]}
-                onChange={(value) => onTierChange(value as RenewalTier)}
-              />
-              <ChoiceGroup
-                label="Billing"
-                value={cadence}
-                options={[
-                  { value: "weekly", label: "Weekly" },
-                  { value: "quarterly", label: "Quarterly" },
-                ]}
-                onChange={(value) => onCadenceChange(value as RenewalCadence)}
-              />
-            </div>
-
-            <label className="mt-4 flex items-center gap-3 text-sm font-bold cursor-pointer">
-              <input
-                type="checkbox"
-                checked={emailAlerts}
-                onChange={(event) => onEmailAlertsChange(event.target.checked)}
-                className="h-4 w-4 accent-[#121212]"
-              />
-              Include email change alerts
-            </label>
-
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Button
-                variant="primary"
-                size="lg"
-                isLoading={loading === "standard"}
-                onClick={onRenew}
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                Renew subscription
-              </Button>
-              {!showWinback && (
-                <button
-                  type="button"
-                  onClick={onDecline}
-                  className="text-sm font-bold text-[#555555] underline underline-offset-2"
-                >
-                  Not right now
-                </button>
-              )}
-            </div>
-            {error && <p className="text-xs font-semibold text-[#B91C1C] mt-3">{error}</p>}
-          </div>
+      <div className="mx-auto max-w-xl text-center">
+        <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#121212] text-[#E7F256]">
+          <CreditCard className="h-5 w-5" />
         </div>
-      </Card>
+        <Badge variant="lime" size="sm" className="mb-3">
+          {showWinback ? "ONE-TIME RETURN OFFER" : "REACTIVATE YOUR ACCOUNT"}
+        </Badge>
+        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+          {showWinback ? "Come back for 50% off" : "Renew your subscription"}
+        </h1>
+        <p className="mx-auto mt-3 max-w-lg text-sm font-medium text-[#555555] sm:text-base">
+          {showWinback
+            ? `Choose the plan you want and pay half price for your ${cycleLabel}. Your saved history and monitoring resume immediately.`
+            : "Your history is preserved. Choose what you need, then renewal reveals it again and resumes every-other-day monitoring."}
+        </p>
+      </div>
 
-      {showWinback && (
-        <Card padding="lg" className="border-2 border-[#E7F256] bg-[#FBFDDC]">
-          <div className="flex items-start gap-4">
-            <Sparkles className="w-7 h-7 text-[#121212] shrink-0 mt-1" />
-            <div className="flex-1">
-              <Badge variant="mono" size="sm" className="mb-2">ONE-TIME RETURN OFFER</Badge>
-              <h2 className="text-xl font-extrabold">Come back for 50% off</h2>
-              <p className="text-sm text-[#555555] mt-1">
-                Pay ${(total / 2).toFixed(2)} for your {cycleLabel}. After that, renewal returns to the regular ${total.toFixed(2)} rate.
-              </p>
-              <Button
-                variant="dark"
-                size="lg"
-                className="mt-4"
-                isLoading={loading === "winback_50"}
-                onClick={onWinback}
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                Claim 50% off
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
+      <SubscriptionPlanPicker
+        cadence={cadence}
+        tier={tier}
+        emailAlerts={emailAlerts}
+        discountPercent={showWinback ? 50 : undefined}
+        onTierChange={onTierChange}
+        onCadenceChange={onCadenceChange}
+        onEmailAlertsChange={onEmailAlertsChange}
+      >
+        {error ? (
+          <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full sm:flex-1"
+            isLoading={loading === (showWinback ? "winback_50" : "standard")}
+            onClick={showWinback ? onWinback : onRenew}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            {showWinback ? `Renew for $${(total / 2).toFixed(2)} · 50% off` : "Continue to secure checkout"}
+          </Button>
+          {!showWinback ? (
+            <button
+              type="button"
+              onClick={onDecline}
+              className="px-3 text-sm font-bold text-[#555555] underline underline-offset-2"
+            >
+              Not right now
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs font-medium text-[#6B6B66]">
+          <Lock className="h-3.5 w-3.5" /> Cancel anytime from your account. Payments handled by Stripe.
+        </p>
+      </SubscriptionPlanPicker>
 
       <LockedPreview trackedCount={trackedCount} />
     </section>
@@ -740,39 +732,5 @@ function LockedPreview({
           </div>
         </div>
       </div>
-  );
-}
-
-function ChoiceGroup({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted-foreground)] mb-2">{label}</p>
-      <div className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] p-1">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={`rounded-full px-4 py-2 text-xs font-bold transition-colors ${
-              value === option.value
-                ? "bg-[#121212] text-white dark:bg-white dark:text-[#121212]"
-                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
