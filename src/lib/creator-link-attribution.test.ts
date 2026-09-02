@@ -4,6 +4,7 @@ import {
   creatorAttributionFromStripeMetadata,
   creatorAttributionToStripeMetadata,
   safeCreatorDestination,
+  sanitizeCreatorPlatform,
   signCreatorAttributionCookie,
   verifyCreatorAttributionCookie,
   type CreatorLinkAttribution,
@@ -23,6 +24,14 @@ const attribution: CreatorLinkAttribution = {
 };
 
 describe("CheckFollows creator attribution", () => {
+  it("preserves Facebook and YouTube attribution platforms", () => {
+    expect(sanitizeCreatorPlatform("Facebook", "direct")).toBe("facebook");
+    expect(sanitizeCreatorPlatform("youtube", "direct")).toBe("youtube");
+    for (const [platform, source] of [["facebook", "facebook_bio"], ["facebook", "facebook_dm"], ["youtube", "youtube"]]) {
+      const tagged = { ...attribution, referral_link_platform: platform, referral_link_source: source };
+      expect(creatorAttributionFromStripeMetadata(creatorAttributionToStripeMetadata(tagged))).toEqual(tagged);
+    }
+  });
   it("signs and verifies an HttpOnly-cookie payload", () => {
     const token = signCreatorAttributionCookie(attribution, "secret");
     expect(verifyCreatorAttributionCookie(token, "secret", now)).toEqual(attribution);
