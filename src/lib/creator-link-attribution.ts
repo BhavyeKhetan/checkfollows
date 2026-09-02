@@ -13,7 +13,7 @@ export const CREATOR_ATTRIBUTION_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 
 const COOKIE_DOMAIN = "checkfollows-creator-attribution:v1:";
 const SAFE_VALUE = /^[a-zA-Z0-9._:-]{1,160}$/;
-const CREATOR_PLATFORMS = new Set(["instagram", "tiktok", "youtube", "other", "direct"]);
+const CREATOR_PLATFORMS = new Set(["instagram", "facebook", "tiktok", "youtube", "other", "direct"]);
 
 export type CreatorLinkAttribution = {
   referral_link_id: string;
